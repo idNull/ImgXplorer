@@ -1,0 +1,7 @@
+/target
+node_modules/
+/ui/dist
+/ui/src/lib/wasm/pkg
+/src-tauri/gen/schemas
+.DS_Store
+*.log

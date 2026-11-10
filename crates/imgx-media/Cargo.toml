@@ -1,0 +1,9 @@
+[package]
+name = "imgx-media"
+description = "Fuentes de imágenes (carpetas y comprimidos), decodificación y caché."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
