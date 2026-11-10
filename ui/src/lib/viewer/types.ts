@@ -9,4 +9,8 @@ export interface ViewerStatus {
   fps: number;
   maxTexture: number;
   error: string | null;
+  /** Teselas en GPU (1 = imagen en una sola textura). */
+  tiles: number;
+  /** Tiempo hasta tener la imagen lista (lectura + decodificación), ms. */
+  loadMs: number;
 }

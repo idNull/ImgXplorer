@@ -6,4 +6,17 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff", "tga", "ico", "qoi", "exr", "hdr", "pnm", "dds", "rayon"] }
+jxl-oxide = { version = "0.12", features = ["image"] }
+kamadak-exif = "0.6"
+libheif-rs = "3"
+log = "0.4.35"
+psd = "0.3"
+resvg = "0.49"
+sevenz-rust2 = "0.25"
 thiserror.workspace = true
+unrar = "0.5"
+zip = { version = "9", default-features = false, features = ["deflate", "deflate64", "bzip2", "lzma", "zstd"] }
+
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate"] }

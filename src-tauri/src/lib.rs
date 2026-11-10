@@ -2,17 +2,18 @@
 
 mod diagnostics;
 mod gestures;
+mod serve;
 
-use imgx_media::{FolderSource, Source};
+use imgx_media::{Source, SourceKind};
 use serde::Serialize;
 use std::sync::{Arc, RwLock};
-use tauri::http::{Response, StatusCode};
 use tauri::{Manager, RunEvent, State};
 
 #[derive(Default)]
-struct AppState {
+pub(crate) struct AppState {
     /// Fuente abierta y su "generación" (cambia en cada apertura para invalidar cachés del webview).
     source: RwLock<Option<(u64, Arc<dyn Source>)>>,
+    thumbs: serve::ThumbCache,
 }
 
 #[derive(Serialize)]
@@ -20,6 +21,8 @@ struct AppState {
 struct EntryInfo {
     name: String,
     size: u64,
+    /// El webview no sabe mostrarla: se sirve como RGBA decodificado en Rust.
+    decoded: bool,
 }
 
 #[derive(Serialize)]
@@ -27,68 +30,52 @@ struct EntryInfo {
 struct SourceInfo {
     generation: u64,
     title: String,
+    path: String,
+    kind: &'static str,
+    /// Imagen en la que situarse al abrir (la pedida, si se abrió una imagen suelta).
+    start: usize,
     entries: Vec<EntryInfo>,
 }
 
 #[tauri::command]
-fn open_source(path: String, state: State<'_, AppState>) -> Result<SourceInfo, String> {
-    let path = std::path::PathBuf::from(path);
-    // Fase 0: solo carpetas. Una imagen suelta abre su carpeta (TODO: posicionarse en ella).
-    let dir = if path.is_file() { path.parent().map(|p| p.to_path_buf()).unwrap_or(path) } else { path };
-    let src = FolderSource::open(&dir).map_err(|e| {
-        log::warn!("no se pudo abrir {}: {e}", dir.display());
-        e.to_string()
-    })?;
-    log::info!("abierta {} ({} imágenes)", dir.display(), src.entries().len());
+async fn open_source(path: String, state: State<'_, AppState>) -> Result<SourceInfo, String> {
+    let requested = std::path::PathBuf::from(&path);
+    // Listar un comprimido grande puede tardar: fuera del hilo principal.
+    let opened = tauri::async_runtime::spawn_blocking(move || imgx_media::open_path(&requested))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            log::warn!("no se pudo abrir {path}: {e}");
+            e.to_string()
+        })?;
+    let src = opened.source;
+    log::info!("abierta {} ({:?}, {} imágenes, inicio {})", opened.path.display(), opened.kind, src.entries().len(), opened.start);
     let mut guard = state.source.write().unwrap();
     let generation = guard.as_ref().map_or(1, |(g, _)| g + 1);
     let info = SourceInfo {
         generation,
         title: src.title().to_owned(),
-        entries: src.entries().iter().map(|e| EntryInfo { name: e.name.clone(), size: e.size }).collect(),
+        path: opened.path.display().to_string(),
+        kind: match opened.kind {
+            SourceKind::Folder => "folder",
+            SourceKind::Archive => "archive",
+        },
+        start: opened.start,
+        entries: src
+            .entries()
+            .iter()
+            .map(|e| EntryInfo { name: e.name.clone(), size: e.size, decoded: imgx_media::needs_decode(&e.name) })
+            .collect(),
     };
-    *guard = Some((generation, Arc::new(src)));
+    *guard = Some((generation, src));
+    state.thumbs.clear();
     Ok(info)
 }
 
-/// `imgx://localhost/<generación>_<índice>` → bytes de la imagen.
-fn serve(app: &tauri::AppHandle, path: &str) -> Response<Vec<u8>> {
-    let not_found = |msg: String| {
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("Access-Control-Allow-Origin", "*")
-            .body(msg.into_bytes())
-            .unwrap()
-    };
-    let Some((generation, index)) = path
-        .trim_start_matches('/')
-        .split_once('_')
-        .and_then(|(g, i)| Some((g.parse::<u64>().ok()?, i.parse::<usize>().ok()?)))
-    else {
-        log::warn!("imgx://: ruta inválida {path}");
-        return not_found(format!("ruta inválida: {path}"));
-    };
-    let state = app.state::<AppState>();
-    let source = {
-        let guard = state.source.read().unwrap();
-        match guard.as_ref() {
-            Some((g, s)) if *g == generation => s.clone(),
-            _ => return not_found("fuente cerrada".into()),
-        }
-    };
-    let Some(entry) = source.entries().get(index) else { return not_found(format!("índice {index}")) };
-    match source.read(index) {
-        Ok(bytes) => Response::builder()
-            .header("Content-Type", imgx_media::mime_for(&entry.name))
-            .header("Access-Control-Allow-Origin", "*")
-            .header("Cache-Control", "max-age=31536000, immutable")
-            .body(bytes)
-            .unwrap(),
-        Err(e) => {
-            log::warn!("error leyendo {}: {e}", entry.name);
-            not_found(e.to_string())
-        }
-    }
+/// Ruta pasada por línea de comandos (`imgxplorer <carpeta|comprimido|imagen>`).
+#[tauri::command]
+fn initial_path() -> Option<String> {
+    std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).find(|a| !a.starts_with('-'))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -102,11 +89,12 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             let path = request.uri().path().to_owned();
-            // Leer fuera del hilo principal: los comprimidos pueden tardar.
-            std::thread::spawn(move || responder.respond(serve(&app, &path)));
+            // Leer y decodificar fuera del hilo principal: comprimidos y RAW pueden tardar.
+            std::thread::spawn(move || responder.respond(serve::handle(&app, &path)));
         })
         .invoke_handler(tauri::generate_handler![
             open_source,
+            initial_path,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])

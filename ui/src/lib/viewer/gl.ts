@@ -1,14 +1,28 @@
-// Renderizador WebGL2: un quad con la imagen, transformado por la matriz de cámara.
+// Renderizador WebGL2: la imagen como uno o varios quads (teselas), transformados por la
+// matriz de cámara. Se tesela cuando la imagen supera MAX_TEXTURE_SIZE de la GPU.
 import type { Affine, Size } from "../core";
+import type { Picture } from "./picture";
+
+/** Lado de tesela cuando hace falta teselar (más pequeña que el máximo: menos memoria desperdiciada). */
+const TILE = 4096;
+
+interface Tile {
+  tex: WebGLTexture;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 const VS = `#version 300 es
 in vec2 a_unit;              // 0..1
-uniform vec2 u_img;          // tamaño de imagen (px)
+uniform vec2 u_off;          // origen de la tesela en la imagen (px)
+uniform vec2 u_size;         // tamaño de la tesela (px)
 uniform vec2 u_vp;           // tamaño de viewport (px CSS)
 uniform mat3 u_m;            // imagen → viewport
 out vec2 v_uv;
 void main() {
-  vec2 p = (u_m * vec3(a_unit * u_img, 1.0)).xy;
+  vec2 p = (u_m * vec3(u_off + a_unit * u_size, 1.0)).xy;
   vec2 clip = p / u_vp * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
   v_uv = a_unit;
@@ -33,7 +47,7 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 export class GlViewer {
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
-  private tex: WebGLTexture | null = null;
+  private tiles: Tile[] = [];
   private loc: Record<string, WebGLUniformLocation | null> = {};
   readonly maxTexture: number;
   private aniso: { ext: EXT_texture_filter_anisotropic; max: number } | null = null;
@@ -52,7 +66,7 @@ export class GlViewer {
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) ?? "link");
     this.prog = prog;
-    for (const n of ["u_img", "u_vp", "u_m", "u_tex", "u_alpha"]) this.loc[n] = gl.getUniformLocation(prog, n);
+    for (const n of ["u_off", "u_size", "u_vp", "u_m", "u_tex", "u_alpha"]) this.loc[n] = gl.getUniformLocation(prog, n);
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -66,24 +80,65 @@ export class GlViewer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
-  /** Sube la imagen como textura con mipmaps. Devuelve false si excede el tamaño máximo. */
-  setImage(source: TexImageSource, size: Size): boolean {
+  /** Sube la imagen como textura(s) con mipmaps; tesela si supera el máximo de la GPU. */
+  setImage(pic: Picture): void {
+    this.clear();
+    const { w, h } = pic;
+    const step = w <= this.maxTexture && h <= this.maxTexture ? Math.max(w, h) : Math.min(TILE, this.maxTexture);
+    for (let y = 0; y < h; y += step) {
+      for (let x = 0; x < w; x += step) {
+        const tw = Math.min(step, w - x);
+        const th = Math.min(step, h - y);
+        this.tiles.push({ tex: this.upload(pic, x, y, tw, th), x, y, w: tw, h: th });
+      }
+    }
+  }
+
+  get tileCount(): number {
+    return this.tiles.length;
+  }
+
+  clear(): void {
+    for (const t of this.tiles) this.gl.deleteTexture(t.tex);
+    this.tiles = [];
+  }
+
+  private upload(pic: Picture, x: number, y: number, w: number, h: number): WebGLTexture {
     const gl = this.gl;
-    if (this.tex) gl.deleteTexture(this.tex);
-    this.tex = null;
-    if (size.w > this.maxTexture || size.h > this.maxTexture) return false; // TODO fase 1: teselado
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    const src = pic.source;
+    if (src instanceof HTMLImageElement) {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      if (w === pic.w && h === pic.h) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      } else {
+        // Recorte vía canvas 2D: más fiable en WebKit que UNPACK_SKIP_* con elementos DOM.
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        c.getContext("2d")!.drawImage(src, x, y, w, h, 0, 0, w, h);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      }
+    } else {
+      // RGBA de Rust: ya viene premultiplicado.
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.pixelStorei(gl.UNPACK_ROW_LENGTH, pic.w);
+      gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x);
+      gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, src.data);
+      gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+      gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+      gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+    }
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     if (this.aniso) gl.texParameterf(gl.TEXTURE_2D, this.aniso.ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, this.aniso.max));
-    this.tex = tex;
-    return true;
+    return tex;
   }
 
   /** Ajusta el canvas al tamaño CSS × devicePixelRatio. Devuelve el viewport en px CSS. */
@@ -99,20 +154,23 @@ export class GlViewer {
     return { w, h };
   }
 
-  draw(m: Affine, img: Size, vp: Size): void {
+  draw(m: Affine, vp: Size): void {
     const gl = this.gl;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0.043, 0.051, 0.063, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (!this.tex) return;
+    if (!this.tiles.length) return;
     gl.useProgram(this.prog);
-    gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    gl.uniform2f(this.loc.u_img, img.w, img.h);
     gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
     // mat3 por columnas: [a b 0 | c d 0 | e f 1]
     gl.uniformMatrix3fv(this.loc.u_m, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
     gl.uniform1i(this.loc.u_tex, 0);
     gl.uniform1f(this.loc.u_alpha, 1);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    for (const t of this.tiles) {
+      gl.bindTexture(gl.TEXTURE_2D, t.tex);
+      gl.uniform2f(this.loc.u_off, t.x, t.y);
+      gl.uniform2f(this.loc.u_size, t.w, t.h);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
   }
 }

@@ -5,14 +5,16 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { open } from "@tauri-apps/plugin-dialog";
   import Viewer from "./lib/viewer/Viewer.svelte";
+  import Thumbs from "./lib/Thumbs.svelte";
   import type { ViewerStatus } from "./lib/viewer/types";
+  import type { PictureRef } from "./lib/viewer/picture";
   import { coreVersion } from "./lib/core";
   import { t } from "./lib/i18n";
   import { log } from "./lib/log";
 
   interface DiagnosticsInfo {
     logDir: string | null;
-    previousCrash: { pid: number; started: number } | null;
+    previousCrash: { pid: number; started: number; reason: string } | null;
     os: string;
     sessionType: string | null;
   }
@@ -20,38 +22,72 @@
   interface SourceInfo {
     generation: number;
     title: string;
-    entries: { name: string; size: number }[];
+    path: string;
+    kind: "folder" | "archive";
+    start: number;
+    entries: { name: string; size: number; decoded: boolean }[];
   }
+
+  const ARCHIVES = ["zip", "cbz", "7z", "cb7", "rar", "cbr"];
+  const IMAGES = ["jpg", "jpeg", "jfif", "png", "apng", "gif", "webp", "bmp", "avif", "svg", "svgz", "heic", "heif", "hif", "jxl", "psd",
+    "tif", "tiff", "tga", "ico", "qoi", "exr", "hdr", "pnm", "pbm", "pgm", "ppm", "pam", "dds",
+    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "orf", "rw2", "raf", "pef", "srw", "x3f", "3fr", "iiq", "mos", "erf", "kdc", "dcr", "mrw", "rwl", "raw"];
 
   let source = $state<SourceInfo | null>(null);
   let index = $state(0);
   let status = $state<ViewerStatus | null>(null);
-  let showDiag = $state(true); // fase 0: visible por defecto para las pruebas de gestos
+  let showDiag = $state(true); // visible por defecto mientras probamos
+  let showThumbs = $state(true);
+  let opening = $state(false);
   let openError = $state<string | null>(null);
   let viewer: Viewer;
   let diag = $state<DiagnosticsInfo | null>(null);
 
-  const url = (i: number) => (source ? convertFileSrc(`${source.generation}_${i}`, "imgx") : null);
-  const current = $derived(source && source.entries.length ? url(index) : null);
+  // `imgx://localhost/` (o `http://imgx.localhost/` según plataforma). Las rutas se añaden sin
+  // codificar: convertFileSrc codificaría las barras de `t/…` y `d/…`.
+  const base = convertFileSrc("", "imgx");
+  const ref = (s: SourceInfo, i: number): PictureRef => ({
+    url: `${base}${s.generation}_${i}`,
+    fallback: `${base}d/${s.generation}_${i}`,
+    decoded: s.entries[i].decoded,
+  });
+  const thumbUrl = (i: number) => `${base}t/${source!.generation}_${i}`;
+  const current = $derived(source && source.entries.length ? ref(source, index) : null);
   const neighbours = $derived(
-    source ? [index + 1, index - 1, index + 2].filter((i) => i >= 0 && i < source!.entries.length).map((i) => url(i)!) : [],
+    source ? [index + 1, index - 1, index + 2].filter((i) => i >= 0 && i < source!.entries.length).map((i) => ref(source!, i)) : [],
   );
 
   async function openPath(path: string) {
+    opening = true;
     try {
-      source = await invoke<SourceInfo>("open_source", { path });
-      index = 0;
+      const s = await invoke<SourceInfo>("open_source", { path });
+      source = s;
+      index = Math.min(s.start, Math.max(0, s.entries.length - 1));
       openError = null;
-      getCurrentWindow().setTitle(`${source.title} — imgxplorer`).catch((e) => log.warn("título:", e));
+      getCurrentWindow().setTitle(`${s.title} — imgxplorer`).catch((e) => log.warn("título:", e));
     } catch (e) {
       openError = String(e);
       log.warn("abrir falló:", path, e);
+    } finally {
+      opening = false;
     }
   }
 
   async function pickFolder() {
     const dir = await open({ directory: true, multiple: false });
     if (typeof dir === "string") openPath(dir);
+  }
+
+  async function pickFile() {
+    const file = await open({
+      multiple: false,
+      filters: [
+        { name: t("filterAll"), extensions: [...ARCHIVES, ...IMAGES] },
+        { name: t("filterArchives"), extensions: ARCHIVES },
+        { name: t("filterImages"), extensions: IMAGES },
+      ],
+    });
+    if (typeof file === "string") openPath(file);
   }
 
   function go(i: number) {
@@ -85,7 +121,11 @@
       case "R": viewer.rotate(-90); break;
       case "F11": toggleFullscreen(); break;
       case "d": case "D": showDiag = !showDiag; break;
-      case "o": if (e.ctrlKey || e.metaKey) pickFolder(); else return; break;
+      case "t": case "T": showThumbs = !showThumbs; break;
+      case "o": case "O":
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.shiftKey ? pickFolder() : pickFile();
+        break;
       default: return;
     }
     e.preventDefault();
@@ -98,6 +138,9 @@
 
   onMount(() => {
     invoke<DiagnosticsInfo>("diagnostics_info").then((d) => (diag = d));
+    invoke<string | null>("initial_path").then((p) => {
+      if (p) openPath(p);
+    });
     const un = getCurrentWebview().onDragDropEvent((ev) => {
       if (ev.payload.type === "drop" && ev.payload.paths.length) openPath(ev.payload.paths[0]);
     });
@@ -111,7 +154,8 @@
 
 <main>
   <header>
-    <button onclick={pickFolder}>{t("open")}</button>
+    <button onclick={pickFile} title="Ctrl+O">{t("openFile")}</button>
+    <button onclick={pickFolder} title="Ctrl+Shift+O">{t("open")}</button>
     <span class="title">{source?.title ?? ""}</span>
     <span class="spacer"></span>
     <button onclick={() => go(index - 1)} disabled={!source || index === 0} title="{t('prev')} (PgUp)">◀</button>
@@ -123,13 +167,14 @@
     <button onclick={() => viewer.fit()} title="{t('fit')} (F)">{t("fit")}</button>
     <button onclick={() => viewer.actualSize()} title="{t('actual')} (1)">1:1</button>
     <button onclick={() => viewer.rotate(90)} title="{t('rotate')} (R)">⟳</button>
+    <button onclick={() => (showThumbs = !showThumbs)} class:on={showThumbs} title="{t('thumbs')} (T)">▦</button>
     <button onclick={toggleFullscreen} title="{t('fullscreen')} (F11)">⛶</button>
   </header>
 
   {#if diag?.previousCrash}
     <div class="crash" role="alert">
       <span>
-        ⚠ {t("crashNotice")}
+        ⚠ {t("crashNotice", { reason: diag.previousCrash.reason })}
         {#if diag.logDir}<code>{diag.logDir}/imgxplorer.log</code>{/if}
         {#if diag.os === "linux"} · <code>coredumpctl info {diag.previousCrash.pid}</code>{/if}
       </span>
@@ -138,8 +183,10 @@
   {/if}
 
   <section class="stage">
-    <Viewer bind:this={viewer} src={current} prefetch={neighbours} onstatus={(s) => (status = s)} />
-    {#if !source}
+    <Viewer bind:this={viewer} item={current} prefetch={neighbours} onstatus={(s) => (status = s)} />
+    {#if opening}
+      <div class="hint">{t("loading")}</div>
+    {:else if !source || openError}
       <div class="hint">{openError ?? t("openHint")}</div>
     {:else if !source.entries.length}
       <div class="hint">{t("noImages")}</div>
@@ -152,12 +199,26 @@
         <div>{t("lastInput")}: <code>{status?.lastInput ?? "–"}</code></div>
         <div>FPS: {status?.fps ?? 0} · max tex: {status?.maxTexture ?? 0}</div>
         <div>img: {status?.image ? `${status.image.w}×${status.image.h}` : "–"} · dpr {window.devicePixelRatio}</div>
+        <div>
+          {source?.entries[index]?.decoded ? "decodificada en Rust" : "nativa (webview)"} · {status?.loadMs ?? 0} ms
+          {#if (status?.tiles ?? 0) > 1}· {status?.tiles} teselas{/if}
+        </div>
         <div>core {coreVersion()} · {diag?.os ?? ""} {diag?.sessionType ?? ""}</div>
         {#if diag?.logDir}<div class="name">log: {diag.logDir}</div>{/if}
         {#if source?.entries[index]}<div class="name">{source.entries[index].name}</div>{/if}
       </aside>
     {/if}
   </section>
+
+  {#if showThumbs && source && source.entries.length > 1}
+    <Thumbs
+      count={source.entries.length}
+      current={index}
+      url={thumbUrl}
+      name={(i) => source!.entries[i].name}
+      onpick={go}
+    />
+  {/if}
 </main>
 
 <style>
@@ -186,5 +247,6 @@
   }
   .crash span { flex: 1; }
   .crash code { color: #fff; user-select: all; }
+  header button.on { border-color: var(--accent); }
   .diag .name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

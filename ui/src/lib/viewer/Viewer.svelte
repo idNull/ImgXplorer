@@ -2,20 +2,21 @@
   import { onMount } from "svelte";
   import { GlViewer } from "./gl";
   import { attachInput } from "./input";
+  import { PictureCache, type PictureRef } from "./picture";
   import type { ViewerStatus } from "./types";
   import { FIT, actualSizeZoom, lerpPose, panBy, rotated, viewMatrix, zoomAt, type Pose, type Size } from "../core";
   import { t } from "../i18n";
   import { log } from "../log";
 
   interface Props {
-    /** URL imgx:// de la imagen actual. */
-    src: string | null;
-    /** URLs a precargar (vecinas). */
-    prefetch?: string[];
+    /** Imagen actual. */
+    item: PictureRef | null;
+    /** Imágenes a precargar (vecinas). */
+    prefetch?: PictureRef[];
     onstatus?: (s: ViewerStatus) => void;
   }
 
-  let { src, prefetch = [], onstatus }: Props = $props();
+  let { item, prefetch = [], onstatus }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let gl: GlViewer;
@@ -24,23 +25,10 @@
   let vp: Size = { w: 1, h: 1 };
   let dirty = true;
   let anim: { from: Pose; to: Pose; t0: number; ms: number } | null = null;
-  let status: ViewerStatus = { zoomPercent: 100, image: null, lastInput: null, fps: 0, maxTexture: 0, error: null };
+  let status: ViewerStatus = { zoomPercent: 100, image: null, lastInput: null, fps: 0, maxTexture: 0, error: null, tiles: 0, loadMs: 0 };
 
-  // Caché pequeña de imágenes decodificadas (actual + vecinas).
-  const cache = new Map<string, Promise<HTMLImageElement>>();
-  function load(url: string): Promise<HTMLImageElement> {
-    let p = cache.get(url);
-    if (!p) {
-      const el = new Image();
-      el.crossOrigin = "anonymous"; // necesario para usarla como textura WebGL
-      el.src = url;
-      p = el.decode().then(() => el);
-      p.catch(() => cache.delete(url));
-      cache.set(url, p);
-      while (cache.size > 8) cache.delete(cache.keys().next().value!);
-    }
-    return p;
-  }
+  // Imágenes decodificadas (actual + vecinas), limitada por memoria.
+  const cache = new PictureCache();
 
   function report(patch: Partial<ViewerStatus>) {
     status = { ...status, ...patch };
@@ -90,31 +78,42 @@
   }
 
   $effect(() => {
-    const url = src;
-    if (!url) {
+    const ref = item;
+    if (!ref) {
       img = null;
+      gl?.clear();
       dirty = true;
       return;
     }
     let cancelled = false;
-    load(url)
-      .then((el) => {
+    const t0 = performance.now();
+    cache
+      .get(ref)
+      .then((pic) => {
         if (cancelled) return;
-        const size = { w: el.naturalWidth, h: el.naturalHeight };
-        if (!gl.setImage(el, size)) {
+        const size = { w: pic.w, h: pic.h };
+        try {
+          gl.setImage(pic);
+        } catch (e) {
+          log.error(`no se pudo subir ${ref.url} (${pic.w}×${pic.h}) a la GPU:`, e);
           img = null;
           report({ image: size, error: t("tooLarge", { max: gl.maxTexture }) });
-        } else {
-          img = size;
-          pose = new Float64Array([0.5, 0.5, 1, 0]);
-          anim = null;
-          report({ image: size, error: null });
+          return;
         }
+        img = size;
+        pose = new Float64Array([0.5, 0.5, 1, 0]);
+        anim = null;
+        report({ image: size, error: null, tiles: gl.tileCount, loadMs: Math.round(performance.now() - t0) });
         dirty = true;
       })
       .catch((e) => {
-        log.warn(`no se pudo cargar ${url}:`, e);
-        if (!cancelled) report({ error: t("loadError") });
+        log.warn(`no se pudo cargar ${ref.url}:`, e);
+        if (!cancelled) {
+          img = null;
+          gl.clear();
+          dirty = true;
+          report({ error: t("loadError") });
+        }
       });
     return () => {
       cancelled = true;
@@ -122,7 +121,7 @@
   });
 
   $effect(() => {
-    for (const u of prefetch) load(u).catch(() => {});
+    for (const r of prefetch) cache.get(r).catch(() => {});
   });
 
   onMount(() => {
@@ -173,8 +172,7 @@
       if (!dirty) return;
       dirty = false;
       vp = gl.resize();
-      if (img) gl.draw(viewMatrix(pose, img, vp), img, vp);
-      else gl.draw(new Float64Array(6), { w: 1, h: 1 }, vp);
+      gl.draw(img ? viewMatrix(pose, img, vp) : new Float64Array(6), vp);
       frames++;
       if (now - fpsT0 > 500) {
         report({ fps: Math.round((frames * 1000) / (now - fpsT0)) });
