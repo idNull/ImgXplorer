@@ -3,7 +3,9 @@
 pub mod camera;
 pub mod easing;
 pub mod schema;
+pub mod templates;
 pub mod timeline;
+pub mod transition;
 
 pub use camera::Camera;
 pub use easing::Easing;

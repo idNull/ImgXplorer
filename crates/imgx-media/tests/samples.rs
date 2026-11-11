@@ -21,10 +21,13 @@ fn decodificar_muestras() {
         let full = imgx_media::decode(&e.name, &bytes);
         let dec = t0.elapsed() - read;
         let thumb = imgx_media::thumbnail_jpeg(&e.name, &bytes, 320, [0, 0, 0]);
+        let t1 = Instant::now();
+        let panels = imgx_media::panels::detect_panels(&e.name, &bytes).map(|p| p.len()).unwrap_or(0);
+        let panels_ms = t1.elapsed().as_millis();
         match (&full, &thumb) {
             (Ok(img), Ok(t)) => println!(
-                "ok  {:<28} {:>5}×{:<5} lectura {:>4} ms · decodificación {:>5} ms · miniatura {} KB{}",
-                e.name, img.width, img.height, read.as_millis(), dec.as_millis(), t.len() / 1024,
+                "ok  {:<28} {:>5}×{:<5} lectura {:>4} ms · decodificación {:>5} ms · miniatura {} KB · {} viñetas ({} ms){}",
+                e.name, img.width, img.height, read.as_millis(), dec.as_millis(), t.len() / 1024, panels, panels_ms,
                 if imgx_media::needs_decode(&e.name) { "" } else { "  (en la app la decodifica el webview)" }
             ),
             _ => {

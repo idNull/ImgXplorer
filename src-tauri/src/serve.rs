@@ -110,13 +110,7 @@ pub fn handle(app: &tauri::AppHandle, path: &str) -> Response<Vec<u8>> {
         return not_found(format!("ruta inválida: {path}"));
     };
     let state = app.state::<AppState>();
-    let source = {
-        let guard = state.source.read().unwrap();
-        match guard.as_ref() {
-            Some((g, s)) if *g == generation => s.clone(),
-            _ => return not_found("fuente cerrada".into()),
-        }
-    };
+    let Some(source) = state.current(generation).map(|c| c.source) else { return not_found("fuente cerrada".into()) };
     let Some(entry) = source.entries().get(index) else { return not_found(format!("índice {index}")) };
     let name = entry.name.as_str();
 

@@ -44,11 +44,15 @@ pub fn decode(name: &str, bytes: &[u8]) -> Result<Rgba, MediaError> {
     Ok(Rgba { width, height, data: img.into_raw() })
 }
 
+/// Imagen reducida (lado mayor ≤ `max`) para análisis, como la detección de viñetas.
+pub fn preview(name: &str, bytes: &[u8], max: u32) -> Result<DynamicImage, MediaError> {
+    let img = decode_dynamic(name, bytes, Some(max))?;
+    Ok(if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img })
+}
+
 /// Miniatura JPEG cuyo lado mayor no supera `max`. La transparencia se aplana sobre `bg`.
 pub fn thumbnail_jpeg(name: &str, bytes: &[u8], max: u32, bg: [u8; 3]) -> Result<Vec<u8>, MediaError> {
-    let img = decode_dynamic(name, bytes, Some(max))?;
-    let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
-    let rgba = img.into_rgba8();
+    let rgba = preview(name, bytes, max)?.into_rgba8();
     let mut rgb = image::RgbImage::new(rgba.width(), rgba.height());
     for (d, s) in rgb.pixels_mut().zip(rgba.pixels()) {
         let a = s[3] as u32;

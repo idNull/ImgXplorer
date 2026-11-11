@@ -14,6 +14,23 @@ interface Tile {
   h: number;
 }
 
+/** Una imagen subida a la GPU (una o varias teselas). */
+export interface TextureSet {
+  tiles: Tile[];
+}
+
+/** Una imagen a pintar con su matriz imagen→viewport y opacidad. */
+export interface Layer {
+  set: TextureSet;
+  m: Affine;
+  alpha: number;
+}
+
+/** La imagen no cabe en la memoria de la GPU. */
+export class TextureError extends Error {}
+
+const BG = [0.043, 0.051, 0.063] as const;
+
 const VS = `#version 300 es
 in vec2 a_unit;              // 0..1
 uniform vec2 u_off;          // origen de la tesela en la imagen (px)
@@ -47,10 +64,11 @@ function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLSh
 export class GlViewer {
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
-  private tiles: Tile[] = [];
   private loc: Record<string, WebGLUniformLocation | null> = {};
   readonly maxTexture: number;
   private aniso: { ext: EXT_texture_filter_anisotropic; max: number } | null = null;
+  /** Destino intermedio para los fundidos (se crea al primer uso). */
+  private fbo: { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number } | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: true });
@@ -81,26 +99,30 @@ export class GlViewer {
   }
 
   /** Sube la imagen como textura(s) con mipmaps; tesela si supera el máximo de la GPU. */
-  setImage(pic: Picture): void {
-    this.clear();
+  createSet(pic: Picture): TextureSet {
     const { w, h } = pic;
     const step = w <= this.maxTexture && h <= this.maxTexture ? Math.max(w, h) : Math.min(TILE, this.maxTexture);
-    for (let y = 0; y < h; y += step) {
-      for (let x = 0; x < w; x += step) {
-        const tw = Math.min(step, w - x);
-        const th = Math.min(step, h - y);
-        this.tiles.push({ tex: this.upload(pic, x, y, tw, th), x, y, w: tw, h: th });
+    const set: TextureSet = { tiles: [] };
+    try {
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const tw = Math.min(step, w - x);
+          const th = Math.min(step, h - y);
+          set.tiles.push({ tex: this.upload(pic, x, y, tw, th), x, y, w: tw, h: th });
+        }
       }
+      const err = this.gl.getError();
+      if (err === this.gl.OUT_OF_MEMORY) throw new TextureError("GL_OUT_OF_MEMORY");
+    } catch (e) {
+      this.deleteSet(set);
+      throw e instanceof TextureError ? e : new TextureError(String(e));
     }
+    return set;
   }
 
-  get tileCount(): number {
-    return this.tiles.length;
-  }
-
-  clear(): void {
-    for (const t of this.tiles) this.gl.deleteTexture(t.tex);
-    this.tiles = [];
+  deleteSet(set: TextureSet): void {
+    for (const t of set.tiles) this.gl.deleteTexture(t.tex);
+    set.tiles = [];
   }
 
   private upload(pic: Picture, x: number, y: number, w: number, h: number): WebGLTexture {
@@ -154,23 +176,76 @@ export class GlViewer {
     return { w, h };
   }
 
-  draw(m: Affine, vp: Size): void {
+  private drawSet(set: TextureSet, m: Affine, alpha: number, vp: Size): void {
     const gl = this.gl;
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.043, 0.051, 0.063, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    if (!this.tiles.length) return;
-    gl.useProgram(this.prog);
     gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
     // mat3 por columnas: [a b 0 | c d 0 | e f 1]
     gl.uniformMatrix3fv(this.loc.u_m, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
-    gl.uniform1i(this.loc.u_tex, 0);
-    gl.uniform1f(this.loc.u_alpha, 1);
-    for (const t of this.tiles) {
+    gl.uniform1f(this.loc.u_alpha, alpha);
+    for (const t of set.tiles) {
       gl.bindTexture(gl.TEXTURE_2D, t.tex);
       gl.uniform2f(this.loc.u_off, t.x, t.y);
       gl.uniform2f(this.loc.u_size, t.w, t.h);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
+  }
+
+  private target(): WebGLFramebuffer {
+    const gl = this.gl;
+    const { width: w, height: h } = this.canvas;
+    if (this.fbo && (this.fbo.w !== w || this.fbo.h !== h)) {
+      gl.deleteFramebuffer(this.fbo.fb);
+      gl.deleteTexture(this.fbo.tex);
+      this.fbo = null;
+    }
+    if (!this.fbo) {
+      const tex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      const fb = gl.createFramebuffer()!;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      this.fbo = { fb, tex, w, h };
+    }
+    return this.fbo.fb;
+  }
+
+  /**
+   * Pinta las capas en orden. Con `mix`, la segunda se mezcla con la primera usando su alfa
+   * como peso (fundido real: se pinta aparte con su fondo y se compone encima).
+   */
+  draw(layers: Layer[], vp: Size, mix = false): void {
+    const gl = this.gl;
+    gl.useProgram(this.prog);
+    gl.uniform1i(this.loc.u_tex, 0);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    const visible = layers.filter((l) => l.alpha > 0 && l.set.tiles.length);
+    if (mix && visible.length === 2) {
+      const [a, b] = visible;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.target());
+      gl.clearColor(BG[0], BG[1], BG[2], 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      this.drawSet(b.set, b.m, 1, vp);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      this.drawSet(a.set, a.m, 1, vp);
+      // El destino intermedio como un rectángulo de pantalla completa (invertido en Y: GL
+      // guarda las texturas de abajo arriba).
+      gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
+      gl.uniformMatrix3fv(this.loc.u_m, false, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
+      gl.uniform1f(this.loc.u_alpha, b.alpha);
+      gl.bindTexture(gl.TEXTURE_2D, this.fbo!.tex);
+      gl.uniform2f(this.loc.u_off, 0, vp.h);
+      gl.uniform2f(this.loc.u_size, vp.w, -vp.h);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      return;
+    }
+    gl.clearColor(BG[0], BG[1], BG[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    for (const l of visible) this.drawSet(l.set, l.m, l.alpha, vp);
   }
 }

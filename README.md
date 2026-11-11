@@ -26,6 +26,28 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Touchpad: dos dedos para desplazar y pellizco para zoom (GTK en Linux, gestos nativos en macOS).
   - Teclado: atajos de la tabla de abajo.
 
+### Modo Acción
+
+Animaciones de cámara para leer cómics viñeta a viñeta o presentar imágenes. Se abre con el
+botón 🎬 o la tecla `A`.
+
+- **Plantillas**, para todas las imágenes o solo para la actual:
+  - **Cómic por viñetas**: recorre las viñetas en orden de lectura, de derecha a izquierda (manga) o de izquierda a derecha.
+    - Viñetas **detectadas automáticamente** (calles blancas o negras) o por **rejilla** de filas × columnas.
+    - Una viñeta alta que ocupa dos filas se lee en su sitio.
+    - Las viñetas se ven numeradas sobre la página mientras se ajusta la plantilla.
+    - Si una página no tiene viñetas claras (ilustración a página completa), se usa la rejilla.
+  - **Desplazamiento**: ajusta al ancho (o al alto) y recorre la imagen, para webtoons y panorámicas.
+  - **Rebote**: ciclos de acercar y alejar subiendo y bajando.
+  - **Ken Burns** e **imagen completa**.
+  - Cada parámetro (tiempos, márgenes, zoom máximo, curva…) se ajusta con su control.
+- **Transiciones** entre imágenes: corte, fundido, deslizar y **cámara continua** (las páginas se colocan juntas y la cámara viaja de una a otra), con duración y pausa al final.
+- **Reproductor interactivo**:
+  - Pausa, pasos (inicio de cada movimiento), ±1 s, imagen anterior o siguiente, velocidad de 0,5× a 2×.
+  - Si haces zoom o mueves la imagen a mano, la animación se detiene; un segundo después de soltar, la cámara vuelve sola a donde estaba y sigue.
+  - Si cambias el tamaño de la ventana, los encuadres se recalculan. Los cambios de plantilla o de parámetros se aplican al momento, también mientras se reproduce.
+- **Guardado automático** en un archivo `.imgx` junto al original (`Tomo 1.cbz.imgx`, o `.imgxplorer.imgx` dentro de la carpeta). Si ahí no se puede escribir, va al directorio de datos de la app. Un archivo de una versión más nueva no se sobrescribe.
+
 ### Formatos
 
 | Tipo | Formatos | Quién decodifica |
@@ -50,11 +72,27 @@ Se aplica la orientación EXIF en todos los formatos.
 | `1` | Tamaño real (1:1 en píxeles de pantalla) |
 | `R` / `Mayús+R` | Rotar 90° a la derecha / izquierda |
 | `T` | Mostrar u ocultar miniaturas |
+| `A` | Panel del Modo Acción |
+| `P` | Reproducir desde la imagen actual / parar |
 | `D` | Panel de diagnóstico |
 | `F11` | Pantalla completa |
 | `Ctrl+O` / `Ctrl+Mayús+O` | Abrir archivo / abrir carpeta |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
+
+Durante la reproducción:
+
+| Tecla | Acción |
+|---|---|
+| `Espacio` | Pausa / continuar |
+| `←` / `→` | Paso anterior / siguiente |
+| `Mayús+←` / `Mayús+→` | −1 s / +1 s |
+| `RePág` / `AvPág` · `↑` / `↓` | Imagen anterior / siguiente |
+| `Inicio` / `Fin` | Primera / última imagen |
+| `[` / `]` | Más lento / más rápido |
+| `Esc` · `P` | Parar |
+
+Zoom, desplazamiento y rotación (ratón, touchpad o teclado) toman el control manual.
 
 ### Diagnóstico y registro de errores
 
@@ -84,16 +122,11 @@ Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
   - [ ] Ajustes e idioma (es/en).
   - [ ] Recientes y retomar la página.
   - [ ] Atajos configurables.
-- [ ] **Fase 2**: Modo Acción.
-  - Motor de animación y formato `.imgx`.
-  - Plantillas:
-    - Scroll vertical.
-    - Cómic por bloques (derecha→izquierda o izquierda→derecha, con detección de viñetas).
-    - Rebote.
-  - Reproductor interactivo:
-    - Pausa y saltos.
-    - Si haces zoom a mano, la animación se interrumpe y luego vuelve a la pose donde estaba.
-  - Transiciones entre imágenes.
+- [x] **Fase 2**: Modo Acción.
+  - [x] Motor de animación y formato `.imgx` con guardado automático.
+  - [x] Plantillas: cómic por viñetas (con detección automática), desplazamiento, rebote, Ken Burns e imagen completa.
+  - [x] Reproductor interactivo: pausa, pasos, velocidad, y control manual que luego vuelve a la animación.
+  - [x] Transiciones: corte, fundido, deslizar y cámara continua.
 - [ ] **Fase 3**: editor de línea de tiempo.
   - Capturar y grabar movimientos.
   - Clips con nombre, mover y recortar en la línea de tiempo.
@@ -135,7 +168,7 @@ cargo test --workspace
 pnpm check
 ```
 
-Para probar la decodificación con tus propios archivos (RAW, HEIC…) sin abrir la app:
+Para probar la decodificación y la detección de viñetas con tus propios archivos (RAW, HEIC, cómics…) sin abrir la app (la ruta debe ser absoluta):
 
 ```bash
 IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --ignored --nocapture
@@ -144,10 +177,10 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ### Estructura
 
 ```
-crates/imgx-core    Cámara, easing, esquema .imgx y evaluador de timeline (Rust puro, nativo + WASM)
-crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW y miniaturas
+crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas y transiciones (Rust puro, nativo + WASM)
+crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, Modo Acción (ui/src/lib/action)
 docs                Especificación del formato .imgx
 ```

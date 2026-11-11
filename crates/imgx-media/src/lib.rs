@@ -5,6 +5,7 @@ pub mod archive;
 pub mod decode;
 pub mod folder;
 pub mod natural;
+pub mod panels;
 mod raw;
 
 use std::path::{Path, PathBuf};
@@ -98,6 +99,25 @@ pub struct Entry {
     pub size: u64,
 }
 
+/// Huella del contenido (nombres y tamaños de las entradas, FNV-1a de 64 bits en hexadecimal).
+/// Estable entre versiones y plataformas: sirve para reencontrar las animaciones de un cómic
+/// aunque se renombre o se mueva.
+pub fn fingerprint(entries: &[Entry]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut eat = |bytes: &[u8]| {
+        for b in bytes {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    for e in entries {
+        eat(e.name.as_bytes());
+        eat(&[0]);
+        eat(&e.size.to_le_bytes());
+    }
+    format!("{h:016x}")
+}
+
 /// Una colección ordenada de imágenes (carpeta, comprimido o imagen suelta).
 pub trait Source: Send + Sync {
     fn title(&self) -> &str;
@@ -156,5 +176,9 @@ mod tests {
         assert!(is_archive_name("Tomo 1.cbr") && !is_image_name("Tomo 1.cbr"));
         assert!(!is_visible_path("__MACOSX/._a.jpg") && !is_visible_path("x/.thumb.jpg"));
         assert!(is_visible_path("cap 1/001.jpg"));
+        let e = |n: &str, size| Entry { name: n.into(), size };
+        assert_eq!(fingerprint(&[e("a.jpg", 1)]), fingerprint(&[e("a.jpg", 1)]));
+        assert_ne!(fingerprint(&[e("a.jpg", 1)]), fingerprint(&[e("a.jpg", 2)]));
+        assert_eq!(fingerprint(&[]), "cbf29ce484222325");
     }
 }

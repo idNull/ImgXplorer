@@ -46,11 +46,14 @@ pub struct Defaults {
     pub transition: Transition,
     /// Pausa (s) al final de cada imagen antes de la transición.
     pub hold_between: f64,
+    /// Plantilla para las imágenes sin animación propia ("aplicar a todas").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<TemplateRef>,
 }
 
 impl Default for Defaults {
     fn default() -> Self {
-        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3 }
+        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3, template: None }
     }
 }
 
@@ -66,9 +69,14 @@ pub struct Transition {
 pub enum TransitionKind {
     Cut,
     Fade,
+    /// `dir`: lado por el que llega la siguiente imagen.
     Slide { dir: Direction },
-    /// Las páginas se colocan contiguas y la cámara viaja de una a otra.
-    ContinuousCamera,
+    /// Las páginas se colocan contiguas y la cámara viaja de una a otra. Sin `dir`, se deduce
+    /// de la plantilla (cómic D→I: izquierda; scroll: abajo; resto: derecha).
+    ContinuousCamera {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dir: Option<Direction>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +108,25 @@ pub struct Item {
     pub timeline: Timeline,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transition_out: Option<Transition>,
+}
+
+/// Rectángulo en coordenadas normalizadas de imagen (0..1).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+impl Rect {
+    pub const FULL: Rect = Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+    pub fn right(&self) -> f64 {
+        self.x + self.w
+    }
+    pub fn bottom(&self) -> f64 {
+        self.y + self.h
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -259,11 +286,27 @@ mod tests {
                 }],
                 audio: AudioTracks::default(),
             },
-            transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera, duration: 0.8 }),
+            transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera { dir: None }, duration: 0.8 }),
         });
         let back = Project::from_json(&p.to_json()).unwrap();
         assert_eq!(p, back);
         assert!(p.to_json().contains(r#""type": "continuous-camera""#));
+    }
+
+    #[test]
+    fn acepta_lo_que_escribe_la_interfaz() {
+        let json = r#"{"format":"imgx","version":1,
+          "source":{"kind":"archive","name":"Tomo 1","fingerprint":"cbf29ce484222325"},
+          "defaults":{"transition":{"type":"continuous-camera","duration":0.8},"holdBetween":0.3,
+                      "template":{"id":"comic","params":{"mode":"auto","dir":"rtl","hold":2}}},
+          "clips":[],
+          "items":[{"entry":"p01.jpg","size":[1600,2400],"template":{"id":"scroll","params":{}}},
+                   {"entry":"p02.jpg","size":[1600,2400],"transitionOut":{"type":"slide","dir":"left","duration":0.5}}]}"#;
+        let p = Project::from_json(json).unwrap();
+        assert_eq!(p.defaults.transition.kind, TransitionKind::ContinuousCamera { dir: None });
+        assert_eq!(p.defaults.template.as_ref().unwrap().id, "comic");
+        assert_eq!(p.items[1].transition_out.unwrap().kind, TransitionKind::Slide { dir: Direction::Left });
+        assert_eq!(Project::from_json(&p.to_json()).unwrap(), p);
     }
 
     #[test]
