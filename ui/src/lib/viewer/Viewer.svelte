@@ -6,7 +6,7 @@
   import type { ViewerStatus } from "./types";
   import { Player, type PlayerInfo, type PlaySpec, type Scene } from "../action/player";
   import { FIT, actualSizeZoom, lerpPose, panBy, rotated, viewMatrix, zoomAt, type Pose, type Size } from "../core";
-  import { t } from "../i18n";
+  import { t } from "../i18n.svelte";
   import { log } from "../log";
 
   interface Props {
@@ -21,9 +21,13 @@
     onstatus?: (s: ViewerStatus) => void;
     /** Estado del reproductor (`null` al parar). */
     onplayer?: (p: PlayerInfo | null) => void;
+    /** Color de fondo (#rrggbb). */
+    background?: string;
+    /** Multiplicador de la velocidad de zoom con la rueda. */
+    wheelSpeed?: number;
   }
 
-  let { item, prefetch = [], refAt, panels = null, onstatus, onplayer }: Props = $props();
+  let { item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1 }: Props = $props();
 
   interface Slot {
     key: string;
@@ -51,6 +55,14 @@
   let player: Player | null = null;
   let playerInfoAt = 0;
   let lastPlayerState = "";
+  let mounted = $state(false);
+
+  $effect(() => {
+    const bg = background;
+    if (!mounted) return;
+    gl.setBackground(bg);
+    dirty = true;
+  });
 
   function report(patch: Partial<ViewerStatus>) {
     status = { ...status, ...patch };
@@ -342,6 +354,7 @@
         // Mientras se mantiene el arrastre o el pellizco, la animación no recupera el control.
         player?.hold(active);
       },
+      wheelSpeed: () => wheelSpeed,
       doubleClick(x, y) {
         if (!shown) return;
         if (pose[2] > 1.01) fit();
@@ -349,6 +362,7 @@
       },
     });
 
+    mounted = true;
     const ro = new ResizeObserver(() => (dirty = true));
     ro.observe(canvas);
 

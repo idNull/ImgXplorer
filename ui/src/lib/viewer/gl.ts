@@ -29,7 +29,6 @@ export interface Layer {
 /** La imagen no cabe en la memoria de la GPU. */
 export class TextureError extends Error {}
 
-const BG = [0.043, 0.051, 0.063] as const;
 
 const VS = `#version 300 es
 in vec2 a_unit;              // 0..1
@@ -69,6 +68,14 @@ export class GlViewer {
   private aniso: { ext: EXT_texture_filter_anisotropic; max: number } | null = null;
   /** Destino intermedio para los fundidos (se crea al primer uso). */
   private fbo: { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number } | null = null;
+  /** Color de fondo (RGB 0..1). */
+  private bg: [number, number, number] = [0.043, 0.051, 0.063];
+
+  /** Fondo como `#rrggbb`. */
+  setBackground(hex: string) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    if (m) this.bg = [1, 2, 3].map((i) => parseInt(m[i], 16) / 255) as [number, number, number];
+  }
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: true });
@@ -227,7 +234,7 @@ export class GlViewer {
     if (mix && visible.length === 2) {
       const [a, b] = visible;
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.target());
-      gl.clearColor(BG[0], BG[1], BG[2], 1);
+      gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       this.drawSet(b.set, b.m, 1, vp);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -244,7 +251,7 @@ export class GlViewer {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       return;
     }
-    gl.clearColor(BG[0], BG[1], BG[2], 1);
+    gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     for (const l of visible) this.drawSet(l.set, l.m, l.alpha, vp);
   }

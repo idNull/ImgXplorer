@@ -10,6 +10,8 @@ export interface InputHandlers {
   /** Inicio/fin de una interacción manual (el reproductor la usa para "override"). */
   interaction?(active: boolean): void;
   doubleClick?(x: number, y: number): void;
+  /** Multiplicador de la velocidad de zoom con la rueda del ratón (ajustes). */
+  wheelSpeed?(): number;
 }
 
 /** Heurística: la rueda de un ratón da saltos grandes y enteros; el touchpad, deltas finos. */
@@ -38,7 +40,7 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
     if (e.ctrlKey) {
       h.zoom(Math.exp(-dy * 0.01), x, y, "ctrl+rueda"); // pellizco en Chromium/algunos WebKit
     } else if (looksLikeMouseWheel(e)) {
-      h.zoom(Math.exp(-dy * 0.0025), x, y, "rueda");
+      h.zoom(Math.exp(-dy * 0.0025 * (h.wheelSpeed?.() ?? 1)), x, y, "rueda");
     } else {
       h.pan(-e.deltaX, -e.deltaY, "touchpad-scroll");
     }

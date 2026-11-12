@@ -14,17 +14,32 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Imágenes sueltas: al abrirlas se abre su carpeta, situada en esa imagen.
 - **Orden natural** (`pagina 2` va antes que `pagina 10`). Se respetan las subcarpetas (capítulos) y se ignoran los archivos ocultos y `__MACOSX`.
 - Se abren desde el botón, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
+- **Recientes**: lo último que has abierto aparece en la pantalla de inicio y en el menú 🕘 (`Ctrl+R`). Al volver a abrir un cómic o una carpeta, se va a la imagen en la que lo dejaste (salvo que abras una imagen concreta). Los que ya no existen salen tachados.
 - **Comprimidos sólidos** (7z/rar): al leer una página se guardan también las siguientes, para que pasar páginas sea fluido.
 - **Render WebGL2** con mipmaps y filtrado anisótropo.
   - Zoom suave al cursor o al punto del pellizco.
   - Rotación en pasos de 90°.
   - Imágenes más grandes que el máximo de la GPU: se dividen en teselas (p. ej. panorámicas de 20000 px).
 - **Precarga** de las imágenes vecinas y caché limitada por memoria.
-- **Tira de miniaturas** con carga perezosa, siempre centrada en la imagen actual.
+- **Tira de miniaturas** con carga perezosa, siempre centrada en la imagen actual, en tres tamaños.
 - **Entrada**
   - Ratón: rueda para zoom y arrastrar para desplazar.
   - Touchpad: dos dedos para desplazar y pellizco para zoom (GTK en Linux, gestos nativos en macOS).
   - Teclado: atajos de la tabla de abajo.
+
+### Ajustes
+
+Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
+
+- **Idioma**: español, inglés o el del sistema. Cambia sin reiniciar.
+- **Fondo del visor**: oscuro, negro, gris, gris claro o cualquier color.
+- **Miniaturas**: mostrar u ocultar la tira y su tamaño.
+- **Zoom**: cuánto acerca cada paso con teclado y botones, y la velocidad de zoom con la rueda.
+- **Retomar**: volver a la imagen en la que lo dejaste (se puede desactivar).
+- **Diagnóstico**: mostrar u ocultar el panel.
+- **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
+
+Los ajustes y los recientes se guardan en `~/.config/com.imgxplorer.app/` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
 
 ### Modo Acción
 
@@ -62,6 +77,8 @@ Se aplica la orientación EXIF en todos los formatos.
 
 ### Atajos de teclado
 
+Estos son los de fábrica; todos se pueden cambiar en los ajustes.
+
 | Tecla | Acción |
 |---|---|
 | `→` `↓` · `AvPág` · `Espacio` | Siguiente imagen. Con zoom, las flechas desplazan (más con `Mayús`) |
@@ -77,6 +94,8 @@ Se aplica la orientación EXIF en todos los formatos.
 | `D` | Panel de diagnóstico |
 | `F11` | Pantalla completa |
 | `Ctrl+O` / `Ctrl+Mayús+O` | Abrir archivo / abrir carpeta |
+| `Ctrl+R` | Recientes |
+| `Ctrl+,` | Ajustes |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
 
@@ -113,15 +132,15 @@ Zoom, desplazamiento y rotación (ratón, touchpad o teclado) toman el control m
 ## Hoja de ruta
 
 - [x] **Fase 0**: base, motor de cámara compartido (Rust → WASM), visor WebGL, gestos y registro de errores.
-- [ ] **Fase 1**: visor completo.
+- [x] **Fase 1**: visor completo.
   - [x] Comprimidos.
   - [x] Todos los formatos.
   - [x] Miniaturas.
   - [x] Teselado.
   - [x] Imagen suelta en su posición.
-  - [ ] Ajustes e idioma (es/en).
-  - [ ] Recientes y retomar la página.
-  - [ ] Atajos configurables.
+  - [x] Ajustes e idioma (es/en).
+  - [x] Recientes y retomar la página.
+  - [x] Atajos configurables.
 - [x] **Fase 2**: Modo Acción.
   - [x] Motor de animación y formato `.imgx` con guardado automático.
   - [x] Plantillas: cómic por viñetas (con detección automática), desplazamiento, rebote, Ken Burns e imagen completa.
@@ -180,7 +199,7 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas y transiciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, Modo Acción (ui/src/lib/action)
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes y recientes
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action)
 docs                Especificación del formato .imgx
 ```

@@ -7,8 +7,11 @@
     url: (i: number) => string;
     name: (i: number) => string;
     onpick: (i: number) => void;
+    /** Tamaño de la tira: pequeña, mediana o grande. */
+    size?: "s" | "m" | "l";
   }
-  let { count, current, url, name, onpick }: Props = $props();
+  let { count, current, url, name, onpick, size = "m" }: Props = $props();
+  const HEIGHT = { s: 84, m: 112, l: 156 };
 
   let strip: HTMLDivElement;
   const failed = $state<Record<number, boolean>>({});
@@ -27,7 +30,7 @@
   }
 </script>
 
-<div class="strip" bind:this={strip} onwheel={wheel}>
+<div class="strip" bind:this={strip} onwheel={wheel} style:--h="{HEIGHT[size]}px">
   {#each { length: count } as _, i (i)}
     <button class="thumb" class:current={i === current} data-i={i} title={name(i)} onclick={() => onpick(i)}>
       {#if failed[i]}
@@ -43,11 +46,11 @@
 <style>
   .strip {
     display: flex; gap: 6px; padding: 6px 8px; overflow-x: auto; overflow-y: hidden;
-    background: var(--panel); border-top: 1px solid var(--border); height: 112px; flex: none;
+    background: var(--panel); border-top: 1px solid var(--border); height: var(--h); flex: none;
     scrollbar-width: thin;
   }
   .thumb {
-    position: relative; flex: none; width: 72px; height: 100%; padding: 0; overflow: hidden;
+    position: relative; flex: none; width: calc((var(--h) - 12px) * 0.72); height: 100%; padding: 0; overflow: hidden;
     display: grid; place-items: center; background: var(--bg); border: 2px solid transparent; border-radius: 4px;
   }
   .thumb.current { border-color: var(--accent); }

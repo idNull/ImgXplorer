@@ -138,13 +138,15 @@ pub struct Opened {
     pub path: PathBuf,
     /// Índice inicial: la imagen pedida si se abrió una imagen suelta.
     pub start: usize,
+    /// Se abrió una imagen concreta (no la carpeta o el comprimido entero).
+    pub picked: bool,
 }
 
 /// Abre una carpeta, un comprimido o una imagen suelta (abre su carpeta y se sitúa en ella).
 pub fn open_path(path: &Path) -> Result<Opened, MediaError> {
     if path.is_dir() {
         let src = FolderSource::open(path)?;
-        return Ok(Opened { source: Arc::new(src), kind: SourceKind::Folder, path: path.into(), start: 0 });
+        return Ok(Opened { source: Arc::new(src), kind: SourceKind::Folder, path: path.into(), start: 0, picked: false });
     }
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     if is_archive_name(&name) {
@@ -153,13 +155,13 @@ pub fn open_path(path: &Path) -> Result<Opened, MediaError> {
             Some("7z" | "cb7") => Arc::new(SevenZSource::open(path)?),
             _ => Arc::new(RarSource::open(path)?),
         };
-        return Ok(Opened { source, kind: SourceKind::Archive, path: path.into(), start: 0 });
+        return Ok(Opened { source, kind: SourceKind::Archive, path: path.into(), start: 0, picked: false });
     }
     if is_image_name(&name) {
         let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
         let src = FolderSource::open(dir)?;
         let start = src.entries().iter().position(|e| Path::new(&e.name) == Path::new(&name)).unwrap_or(0);
-        return Ok(Opened { source: Arc::new(src), kind: SourceKind::Folder, path: dir.into(), start });
+        return Ok(Opened { source: Arc::new(src), kind: SourceKind::Folder, path: dir.into(), start, picked: true });
     }
     Err(MediaError::Unsupported(name))
 }

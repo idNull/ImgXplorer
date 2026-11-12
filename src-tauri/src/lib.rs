@@ -2,6 +2,7 @@
 
 mod diagnostics;
 mod gestures;
+mod prefs;
 mod project;
 mod serve;
 
@@ -57,6 +58,8 @@ struct SourceInfo {
     kind: &'static str,
     /// Imagen en la que situarse al abrir (la pedida, si se abrió una imagen suelta).
     start: usize,
+    /// Se abrió una imagen concreta: manda sobre la página recordada.
+    picked: bool,
     entries: Vec<EntryInfo>,
     fingerprint: String,
     /// Animaciones guardadas de esta fuente.
@@ -65,7 +68,8 @@ struct SourceInfo {
 
 #[tauri::command]
 async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -> Result<SourceInfo, String> {
-    let requested = std::path::PathBuf::from(&path);
+    // Ruta canónica: la misma fuente abierta de distintas formas se recuerda una sola vez.
+    let requested = std::fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
     // Listar un comprimido grande puede tardar: fuera del hilo principal.
     let opened = tauri::async_runtime::spawn_blocking(move || imgx_media::open_path(&requested))
         .await
@@ -89,6 +93,7 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
             SourceKind::Archive => "archive",
         },
         start: opened.start,
+        picked: opened.picked,
         entries: src
             .entries()
             .iter()
@@ -152,6 +157,9 @@ pub fn run() {
             initial_path,
             detect_panels,
             project::save_project,
+            prefs::load_prefs,
+            prefs::save_prefs,
+            prefs::paths_exist,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])

@@ -1,7 +1,14 @@
 <script lang="ts">
   // Controles flotantes durante la reproducción.
   import type { Player, PlayerInfo } from "./player";
-  import { t } from "../i18n";
+  import { t } from "../i18n.svelte";
+  import { prefs } from "../settings.svelte";
+  import { display, keysFor, type PlayerAction } from "../keys";
+
+  const k = (a: PlayerAction) => {
+    const first = keysFor(prefs.settings.keys, "player", a)[0];
+    return first ? ` (${display(first)})` : "";
+  };
 
   interface Props {
     info: PlayerInfo;
@@ -27,14 +34,14 @@
 </script>
 
 <div class="bar">
-  <button onclick={() => player()?.goTo(info.index - 1)} disabled={info.index === 0} title="{t('prev')} (PgUp)">⏮</button>
-  <button onclick={() => player()?.toggle()} title="{running ? t('pause') : t('play')} ({t('keySpace')})">{running ? "⏸" : "▶"}</button>
-  <button onclick={() => player()?.goTo(info.index + 1)} disabled={info.index >= count - 1} title="{t('next')} (PgDn)">⏭</button>
+  <button onclick={() => player()?.goTo(info.index - 1)} disabled={info.index === 0} title="{t('prev')}{k('pagePrev')}">⏮</button>
+  <button onclick={() => player()?.toggle()} title="{running ? t('pause') : t('play')}{k('toggle')}">{running ? "⏸" : "▶"}</button>
+  <button onclick={() => player()?.goTo(info.index + 1)} disabled={info.index >= count - 1} title="{t('next')}{k('pageNext')}">⏭</button>
   <div class="track"><div class="fill" style:width="{progress * 100}%"></div></div>
   <span class="time">{info.t.toFixed(1)} / {info.duration.toFixed(1)} s</span>
-  <button class="speed" onclick={() => player()?.changeSpeed(1)} title="[ ]">{info.speed}×</button>
+  <button class="speed" onclick={() => player()?.changeSpeed(1)} title="{t('kSpeed')}{k('faster')}">{info.speed}×</button>
   {#if chip}<span class="chip" class:manual={info.state === "override" || info.state === "returning"}>{chip}</span>{/if}
-  <button onclick={onstop} title="{t('stop')} (Esc)">■</button>
+  <button onclick={onstop} title="{t('stop')}{k('stop')}">■</button>
 </div>
 
 <style>

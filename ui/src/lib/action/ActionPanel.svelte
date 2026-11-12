@@ -3,7 +3,20 @@
   // transición entre imágenes y reproducción.
   import { applies, catalog, fresh, paramValue, type ParamSpec, type TemplateRef } from "./catalog";
   import type { Dir, ProjectStore, Transition, TransitionType } from "./project.svelte";
-  import { t, label } from "../i18n";
+  import { t, label } from "../i18n.svelte";
+  import { prefs } from "../settings.svelte";
+  import { display, keysFor, type PlayerAction, type ViewerAction } from "../keys";
+
+  const pk = (a: PlayerAction) => keysFor(prefs.settings.keys, "player", a).slice(0, 2).map(display);
+  const vk = (a: ViewerAction) => keysFor(prefs.settings.keys, "viewer", a).slice(0, 1).map(display);
+  const HELP: { keys: () => string[]; text: () => string }[] = [
+    { keys: () => pk("toggle"), text: () => t("kPause") },
+    { keys: () => [...pk("markPrev").slice(0, 1), ...pk("markNext").slice(0, 1)], text: () => t("kMarks") },
+    { keys: () => [...pk("seekBack").slice(0, 1), ...pk("seekFwd").slice(0, 1)], text: () => t("kSeek") },
+    { keys: () => [...pk("pagePrev").slice(0, 1), ...pk("pageNext").slice(0, 1)], text: () => t("kPages") },
+    { keys: () => [...pk("slower").slice(0, 1), ...pk("faster").slice(0, 1)], text: () => t("kSpeed") },
+    { keys: () => pk("stop").slice(0, 1), text: () => t("kStop") },
+  ];
 
   interface Props {
     store: ProjectStore;
@@ -67,10 +80,10 @@
 <aside class="panel">
   <header>
     <b>{t("action")}</b>
-    <button class="close" onclick={onclose} title="{t('close')} (A)">✕</button>
+    <button class="close" onclick={onclose} title={t("close")}>✕</button>
   </header>
 
-  <button class="play" onclick={onplay}>{playing ? `■ ${t("stop")}` : `▶ ${t("playHere")}`} <kbd>P</kbd></button>
+  <button class="play" onclick={onplay}>{playing ? `■ ${t("stop")}` : `▶ ${t("playHere")}`} {#each vk("play") as k (k)}<kbd>{k}</kbd>{/each}</button>
 
   <section>
     <h4>{t("template")}</h4>
@@ -163,12 +176,9 @@
 
   <section class="keys">
     <h4>{t("playKeys")}</h4>
-    <div><kbd>{t("keySpace")}</kbd> {t("kPause")}</div>
-    <div><kbd>←</kbd><kbd>→</kbd> {t("kMarks")}</div>
-    <div><kbd>{t("keyShift")}</kbd>+<kbd>←</kbd><kbd>→</kbd> {t("kSeek")}</div>
-    <div><kbd>{t("keyPgUp")}</kbd><kbd>{t("keyPgDn")}</kbd> {t("kPages")}</div>
-    <div><kbd>[</kbd><kbd>]</kbd> {t("kSpeed")}</div>
-    <div><kbd>Esc</kbd> {t("kStop")}</div>
+    {#each HELP as h, i (i)}
+      <div>{#each h.keys() as k, j (j)}<kbd>{k}</kbd>{/each} {h.text()}</div>
+    {/each}
     <p class="note">{t("overrideHelp")}</p>
   </section>
 
