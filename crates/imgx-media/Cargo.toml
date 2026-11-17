@@ -9,7 +9,7 @@ license.workspace = true
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff", "tga", "ico", "qoi", "exr", "hdr", "pnm", "dds", "rayon"] }
 jxl-oxide = { version = "0.12", features = ["image"] }
 kamadak-exif = "0.6"
-libheif-rs = "3"
+libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 log = "0.4.35"
 psd = "0.3"
 resvg = "0.49"

@@ -1,6 +1,6 @@
 <script lang="ts">
   // Ventana de ajustes: general y atajos de teclado. Todo se aplica y se guarda al momento.
-  import { BACKGROUNDS, DEFAULT_SETTINGS, prefs } from "./settings.svelte";
+  import { BACKGROUNDS, DEFAULT_SETTINGS, DEFAULT_VIDEO, prefs } from "./prefs.svelte";
   import { MAX_KEYS, actionsOf, assign, comboOf, display, keysFor, type ActionOf, type Group } from "./keys";
   import { t, label } from "./i18n.svelte";
 
@@ -79,7 +79,7 @@
   }
 
   function resetSettings() {
-    prefs.settings = { ...DEFAULT_SETTINGS, lastDir: prefs.settings.lastDir, keys: $state.snapshot(prefs.settings.keys) };
+    prefs.settings = { ...DEFAULT_SETTINGS, lastDir: prefs.settings.lastDir, video: { ...DEFAULT_VIDEO, ffmpeg: prefs.settings.video.ffmpeg }, keys: $state.snapshot(prefs.settings.keys) };
     save();
   }
 

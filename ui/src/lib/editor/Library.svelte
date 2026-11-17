@@ -1,7 +1,7 @@
 <script lang="ts">
   // Biblioteca: clips para arrastrar a la timeline y plantillas propias para aplicar.
   import { openFile, saveFile } from "../files/dialog.svelte";
-  import { library, defaultDuration, type LibClip } from "./library.svelte";
+  import { library, defaultDuration, type LibClip } from "./libstore.svelte";
   import type { ProjectStore } from "../action/project.svelte";
   import { label, t } from "../i18n.svelte";
   import { log } from "../log";

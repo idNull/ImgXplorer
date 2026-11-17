@@ -121,10 +121,24 @@ fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
     image::metadata::Orientation::from_exif(v as u8)
 }
 
+fn libheif() -> &'static libheif_rs::LibHeif {
+    static LIB: OnceLock<libheif_rs::LibHeif> = OnceLock::new();
+    LIB.get_or_init(libheif_rs::LibHeif::new)
+}
+
+/// Lo que puede abrir la libheif instalada: versión y si tiene decodificador HEVC (HEIC) y AV1
+/// (AVIF). Lo usa el instalador para avisar si falta algún complemento.
+pub fn heif_support() -> (String, bool, bool) {
+    use libheif_rs::CompressionFormat;
+    let lib = libheif();
+    let [a, b, c] = lib.version();
+    let has = |f| !lib.decoder_descriptors(1, Some(f)).is_empty();
+    (format!("{a}.{b}.{c}"), has(CompressionFormat::Hevc), has(CompressionFormat::Av1))
+}
+
 fn heif(bytes: &[u8], hint: Option<u32>) -> Result<DynamicImage, MediaError> {
-    use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
-    static LIB: OnceLock<LibHeif> = OnceLock::new();
-    let lib = LIB.get_or_init(LibHeif::new);
+    use libheif_rs::{ColorSpace, HeifContext, RgbChroma};
+    let lib = libheif();
     let ctx = HeifContext::read_from_bytes(bytes).map_err(err)?;
     let handle = ctx.primary_image_handle().map_err(err)?;
     let mut image = lib.decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None).map_err(err)?;

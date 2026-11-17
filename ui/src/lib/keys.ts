@@ -35,6 +35,8 @@ export const DEFAULTS = {
     editor: ["e", "E"],
     undo: ["Ctrl+z"],
     redo: ["Ctrl+Z", "Ctrl+y"],
+    exportVideo: ["Ctrl+e"],
+    closeSource: ["Ctrl+w"],
   },
   player: {
     toggle: [" "],

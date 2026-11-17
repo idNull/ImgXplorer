@@ -1,0 +1,22 @@
+imgxplorer para Linux
+=====================
+
+Instalar (abre una terminal en esta carpeta):
+
+    ./install.sh
+
+El instalador primero comprueba tu sistema y te enseña qué va a hacer; no cambia nada hasta que
+respondas que sí. Instala las bibliotecas que falten con el gestor de paquetes de tu distribución
+(te pedirá la contraseña) y copia la app en tu carpeta personal (~/.local), así que solo la ves tú.
+
+Otras opciones:
+
+    ./install.sh --check       solo comprobar si tu sistema es compatible
+    ./install.sh --system      instalar para todos los usuarios (/usr/local)
+    ./install.sh --no-ffmpeg   no instalar ffmpeg (la app funciona, pero no exporta vídeo)
+    ./install.sh --uninstall   desinstalar
+
+Requisitos: PC de 64 bits (x86_64) con una distribución de 2024 o posterior, por ejemplo
+Ubuntu 24.04, Linux Mint 22, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch, Manjaro o CachyOS.
+
+Si algo falla, el registro completo está en ~/.cache/imgxplorer-install.log.

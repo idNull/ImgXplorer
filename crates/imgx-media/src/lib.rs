@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub use archive::{RarSource, SevenZSource, ZipSource};
-pub use decode::{Rgba, decode, thumbnail_jpeg};
+pub use decode::{Rgba, decode, heif_support, thumbnail_jpeg};
 pub use folder::FolderSource;
 
 #[derive(Debug, thiserror::Error)]

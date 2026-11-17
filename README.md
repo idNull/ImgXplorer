@@ -16,6 +16,12 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
 - Se abren desde el botón, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
 - **Selector de archivos propio** para abrir y guardar: accesos a tus carpetas y unidades montadas, ruta editable, archivos ocultos y aviso antes de reemplazar. Se maneja con el teclado (flechas, `Intro` para entrar o aceptar, `Retroceso` para subir, letras para saltar, `Esc` para cancelar). Existe porque en algunos escritorios Linux (Hyprland/Omarchy…) el diálogo del sistema sale sin botón de Aceptar.
 - **Recientes**: lo último que has abierto aparece en la pantalla de inicio y en el menú 🕘 (`Ctrl+R`). Al volver a abrir un cómic o una carpeta, se va a la imagen en la que lo dejaste (salvo que abras una imagen concreta). Los que ya no existen salen tachados.
+- **Cerrar** (botón ✕ junto al título o `Ctrl+W`): cierra lo que estás viendo y vuelve a la pantalla de inicio con los recientes.
+  - Las animaciones se guardan solas medio segundo después de cada cambio, así que normalmente cierra sin preguntar.
+  - Si una grabación está en curso, la termina y la guarda.
+  - Solo avisa si el guardado ha fallado (sin permiso, disco lleno…): dice cuántos cambios se perderían y por qué, y deja reintentar, cerrar sin guardar o cancelar.
+  - El mismo aviso sale al abrir otro archivo o al cerrar la ventana. Al cerrar la ventana, además, se espera a que se guarde el último cambio.
+  - El historial de deshacer es de la sesión: al cerrar o abrir otro archivo empieza de cero, pero lo hecho ya está guardado.
 - **Comprimidos sólidos** (7z/rar): al leer una página se guardan también las siguientes, para que pasar páginas sea fluido.
 - **Render WebGL2** con mipmaps y filtrado anisótropo.
   - Zoom suave al cursor o al punto del pellizco.
@@ -74,7 +80,10 @@ debajo de la imagen: biblioteca a la izquierda, pista de cámara en el centro e 
 La biblioteca y el inspector se ensanchan arrastrando su borde (doble clic o el botón ↔ ajustan la
 biblioteca a los nombres largos).
 
-- **Marco de reproducción** (botón ▭ Marco, activo de fábrica): al reproducir, el editor se oculta y el visor crece, así que el encuadre cambiaría. Con el marco, el visor se estrecha a la proporción que tendrá al reproducir: lo que ves dentro del recuadro ámbar es exactamente lo que se verá.
+- **Marco** (▭, arriba en el editor): el visor se estrecha a la proporción final y lo que ves dentro del recuadro ámbar es exactamente lo que se verá.
+  - *Reproducción* (de fábrica): la del visor al reproducir (el editor se oculta y el visor crece, así que sin marco el encuadre cambiaría).
+  - *Vídeo*: la del vídeo que vas a exportar (por ejemplo 1080×1920 en vertical).
+  - *Sin marco*.
 - **Claves con la vista actual** (`K`): encuadra la imagen con el ratón, el touchpad o el teclado y pulsa `K`. La clave se guarda en el cabezal; si estás al final, el cabezal avanza 1 s para la siguiente. Pulsar `K` sobre una clave existente la sustituye.
 - **Grabar** (`G`): graba el movimiento real de la cámara mientras lo haces y lo guarda como clip ("Grabación 1"…). Se suaviza el temblor y se simplifica sin perder el ritmo. `G` o `Espacio` terminan, `Esc` descarta.
 - **Pista de cámara**:
@@ -95,6 +104,20 @@ biblioteca a los nombres largos).
   - Plantillas propias: guarda la plantilla de una imagen con sus parámetros y aplícala luego a una imagen o a todas.
   - **Exportar e importar** clips y plantillas en paquetes `.imgxpack` para compartirlos. También se importan soltando el archivo sobre la ventana. Al importar no se duplica lo que ya tienes.
   - Se guarda en `~/.local/share/com.imgxplorer.app/library.json` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
+
+### Exportar a vídeo
+
+Botón 🎞 o `Ctrl+E`. Se exporta tal cual se reproduce: la animación de cada imagen, la pausa entre
+imágenes y las transiciones, con el color de fondo del visor.
+
+- **Qué**: la imagen actual, todas o un rango ("desde la 3 hasta la 8").
+- **Tamaño**: 720p, 1080p, 1440p o 4K, en horizontal (16:9), vertical (9:16, para móvil) o cuadrado; o a medida.
+- **Fotogramas por segundo**: 24, 30 o 60. **Calidad**: alta, normal o ligera.
+- **Archivo**: se propone junto al cómic o la carpeta, con su nombre. Si ya existe se avisa.
+- Barra de progreso con el tiempo que queda; se puede cancelar y el archivo a medias se borra.
+- Las plantillas se recalculan para la forma del vídeo. Para encuadrar a mano con esa forma, usa el marco *vídeo* del editor.
+- **Cómo funciona**: cada fotograma se pinta con el mismo motor WebGL de la vista previa (así sale idéntico), se convierte a YUV 4:2:0 en la GPU y se pasa por tubería a **ffmpeg** (H.264 en MP4, BT.709). ffmpeg escribe en un archivo temporal que se renombra al terminar bien.
+- **ffmpeg** es necesario y no viene incluido: se busca en el sistema (en macOS también en Homebrew) o se indica su ruta en la propia ventana. Si falta, la ventana explica cómo instalarlo (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`, `brew install ffmpeg`). Usa `libx264` si está; si no, `h264_videotoolbox` (macOS) u `libopenh264`.
 
 ### Formatos
 
@@ -124,12 +147,14 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `T` | Mostrar u ocultar miniaturas |
 | `A` | Panel del Modo Acción |
 | `E` | Editor de línea de tiempo |
+| `Ctrl+E` | Exportar vídeo |
 | `Ctrl+Z` / `Ctrl+Mayús+Z` · `Ctrl+Y` | Deshacer / rehacer |
 | `P` | Reproducir desde la imagen actual / parar |
 | `D` | Panel de diagnóstico |
 | `F11` | Pantalla completa |
 | `Ctrl+O` / `Ctrl+Mayús+O` | Abrir archivo / abrir carpeta |
 | `Ctrl+R` | Recientes |
+| `Ctrl+W` | Cerrar y volver al inicio |
 | `Ctrl+,` | Ajustes |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
@@ -200,10 +225,36 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Deshacer y rehacer.
   - [x] Biblioteca de clips y plantillas propias; exportar e importar `.imgxpack`.
   - [x] Corrección manual de viñetas.
-- [ ] **Fase 4**: render a MP4 (ffmpeg) y paquetes: AppImage, Flatpak/AUR, `.dmg` firmado.
+- [x] **Fase 4**: vídeo e instaladores.
+  - [x] Exportar a MP4 con ffmpeg: imagen, todo o un rango; tamaño, forma, fps y calidad; progreso y cancelar.
+  - [x] Marco de vídeo en el editor.
+  - [x] Paquetes de Linux: AppImage, `.deb`, `.rpm` y PKGBUILD para AUR; asociación con cbz/cbr/cb7 e imágenes.
+  - [x] Instaladores que comprueban el sistema e instalan lo que falta: Linux (binario compatible desde Ubuntu 24.04) y macOS (compila en el propio Mac).
+  - Probado en un Mac mini M1: instala, abre y exporta vídeo.
+  - Opcional, solo para publicar: `.dmg` firmado y notarizado (necesita cuenta de Apple Developer) y Flatpak.
 - [ ] **Fase 5**: pistas de audio (voces, efectos, ambiente).
 
 El formato de animaciones está especificado en [docs/format.md](docs/format.md).
+
+## Instalar
+
+Los paquetes para repartir se crean con `pnpm dist` y quedan en `dist/` (detalles en [docs/packaging.md](docs/packaging.md)). Los dos instaladores primero comprueban el sistema, enseñan qué van a hacer y no cambian nada hasta que respondes que sí.
+
+**Linux** (`imgxplorer-<versión>-linux-x86_64.tar.gz`): se descomprime y se ejecuta `./install.sh`.
+- Comprueba el procesador, la distribución y su versión, la glibc y que el gestor de paquetes tenga las bibliotecas.
+- Instala lo que falte con pacman, apt, dnf o zypper (WebKitGTK, libheif con sus complementos, ffmpeg).
+- Arranca la app en modo comprobación antes de copiarla y avisa si no abrirá HEIC.
+- Copia la app en `~/.local` (o en `/usr/local` con `--system`) y la añade al menú.
+- Funciona en distribuciones de 2024 en adelante: Ubuntu 24.04, Mint 22, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch y derivadas.
+- `--check` solo comprueba, y `--uninstall` desinstala.
+
+**macOS** (`imgxplorer-<versión>-mac.tar.gz`): en Terminal, `bash "Instalar imgxplorer.command"`.
+- Comprueba la versión de macOS (11 o posterior), el procesador (también si la Terminal va con Rosetta), el espacio libre y la conexión.
+- Instala lo que falte (herramientas de Xcode, Homebrew, Rust, Node.js, pnpm, wasm-pack, libheif, ffmpeg).
+- Compila la app en el propio Mac, la firma localmente y la deja en Aplicaciones. Así no hace falta cuenta de Apple Developer y Gatekeeper no la bloquea.
+- La primera vez tarda entre 20 y 40 minutos.
+
+`imgxplorer --self-check` dice si la app encuentra sus bibliotecas, la versión de libheif, si abre HEIC/AVIF y la versión de WebKitGTK. `imgxplorer --version` muestra la versión.
 
 ## Desarrollo
 
@@ -228,6 +279,14 @@ pnpm wasm          # compila imgx-core a WASM para la interfaz
 pnpm tauri dev
 ```
 
+**Instaladores** (ver [docs/packaging.md](docs/packaging.md))
+
+```bash
+pnpm dist          # instaladores para repartir (Linux y macOS) en dist/; el de Linux necesita Docker
+pnpm tauri build --bundles appimage,deb,rpm   # Linux: quedan en target/release/bundle/
+cd packaging/aur && IMGX_REPO="file://$(realpath ../..)" makepkg -si   # Arch: instalar desde el código
+```
+
 **Pruebas**
 
 ```bash
@@ -247,7 +306,8 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack y listado de carpetas del selector propio
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files)
-docs                Especificación del formato .imgx
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio y exportación a vídeo con ffmpeg
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export)
+docs                Especificación del formato .imgx y cómo crear los instaladores
+packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR y lanzador .desktop
 ```

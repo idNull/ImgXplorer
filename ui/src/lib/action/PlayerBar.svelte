@@ -2,7 +2,7 @@
   // Controles flotantes durante la reproducción.
   import type { Player, PlayerInfo } from "./player";
   import { t } from "../i18n.svelte";
-  import { prefs } from "../settings.svelte";
+  import { prefs } from "../prefs.svelte";
   import { display, keysFor, type PlayerAction } from "../keys";
 
   const k = (a: PlayerAction) => {

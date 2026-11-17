@@ -15,13 +15,13 @@
   import { wasm } from "../core";
   import type { ProjectStore } from "../action/project.svelte";
   import { label, t } from "../i18n.svelte";
-  import { INSPECTOR_WIDTH, LIB_WIDTH, prefs } from "../settings.svelte";
+  import { INSPECTOR_WIDTH, LIB_WIDTH, prefs, videoPixels, type FrameMode } from "../prefs.svelte";
   import { display, keysFor, type EditorAction, type ViewerAction } from "../keys";
   import {
     addKeyframe, bakeInstance, deleteKey, dragEdge, easePoints, end, inline, keyTimes, moveClip, moveKey, newInstance, nextName,
     poseObj, snap, snapPoints, timelineDuration, type ClipInstance, type Sample, type Timeline,
   } from "./model";
-  import { defaultDuration, library, type LibClip } from "./library.svelte";
+  import { defaultDuration, library, type LibClip } from "./libstore.svelte";
   import Inspector from "./Inspector.svelte";
   import Library from "./Library.svelte";
   import { log } from "../log";
@@ -195,6 +195,11 @@
   }
 
   /** El usuario ha movido la cámara a mano. */
+  /** Termina la grabación en curso y la conserva (al cerrar la fuente). */
+  export function finishRecording() {
+    if (recording) stopRecording(true);
+  }
+
   export function notifyManual() {
     free = true;
     if (playing) pause();
@@ -506,8 +511,9 @@
     prefs.saveSettings();
   }
 
-  function toggleFrame() {
-    prefs.settings.editorFrame = !prefs.settings.editorFrame;
+  const videoPx = $derived(videoPixels(prefs.settings.video));
+  function setFrame(m: FrameMode) {
+    prefs.settings.editorFrame = m;
     prefs.saveSettings();
   }
 
@@ -546,7 +552,14 @@
     <button onclick={() => zoomTimeline(1 / 1.4)} title={t("zoomOutTl")}>−</button>
     <button onclick={() => zoomTimeline(1.4)} title={t("zoomInTl")}>+</button>
     <span class="sep"></span>
-    <button class:on={prefs.settings.editorFrame} onclick={toggleFrame} title={t("frameHelp")}>▭ {t("frameToggle")}</button>
+    <label class="frame-mode" title={t("frameHelp")}>
+      ▭
+      <select value={prefs.settings.editorFrame} onchange={(e) => setFrame(e.currentTarget.value as FrameMode)}>
+        <option value="playback">{t("framePlayback")}</option>
+        <option value="video">{t("frameVideo", { w: videoPx.w, h: videoPx.h })}</option>
+        <option value="off">{t("frameOff")}</option>
+      </select>
+    </label>
     {#if fromTemplate}
       <button onclick={() => edit(() => {})} title={t("bakeHelp")}>{t("bake")}</button>
     {:else if own}
@@ -670,6 +683,8 @@
   .editor { display: flex; flex-direction: column; height: 250px; flex: none; background: var(--panel); border-top: 1px solid var(--border); font-size: 13px; }
   header { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-bottom: 1px solid var(--border); min-width: 0; }
   header button { padding: 2px 8px; }
+  .frame-mode { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+  .frame-mode select { font: inherit; font-size: 12px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; }
   header button.on { border-color: var(--accent); color: var(--accent); }
   .time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 120px; }
   .sep { width: 1px; height: 18px; background: var(--border); }

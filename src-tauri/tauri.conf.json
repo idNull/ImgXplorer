@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "pnpm wasm && pnpm build",
     "frontendDist": "../ui/dist"
   },
   "app": {
@@ -27,9 +27,144 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "deb", "dmg", "app"],
-    "category": "Graphics",
+    "targets": [
+      "appimage",
+      "deb",
+      "rpm",
+      "dmg",
+      "app"
+    ],
+    "category": "GraphicsAndDesign",
     "shortDescription": "Visor de imágenes y cómics con animaciones de cámara",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "imgxplorer",
+    "longDescription": "Visor de imágenes y cómics (carpetas, cbz/cbr/cb7, formatos web, modernos, profesionales y RAW) con Modo Acción: animaciones de cámara por imagen, plantillas, editor de línea de tiempo y exportación a vídeo MP4.",
+    "fileAssociations": [
+      {
+        "ext": [
+          "cbz"
+        ],
+        "name": "Comic Book (ZIP)",
+        "mimeType": "application/vnd.comicbook+zip",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "cbr"
+        ],
+        "name": "Comic Book (RAR)",
+        "mimeType": "application/vnd.comicbook-rar",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "cb7"
+        ],
+        "name": "Comic Book (7z)",
+        "mimeType": "application/x-cb7",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "jpg",
+          "jpeg"
+        ],
+        "name": "JPEG",
+        "mimeType": "image/jpeg",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "png"
+        ],
+        "name": "PNG",
+        "mimeType": "image/png",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "webp"
+        ],
+        "name": "WebP",
+        "mimeType": "image/webp",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "avif"
+        ],
+        "name": "AVIF",
+        "mimeType": "image/avif",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "heic",
+          "heif"
+        ],
+        "name": "HEIF",
+        "mimeType": "image/heif",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "jxl"
+        ],
+        "name": "JPEG XL",
+        "mimeType": "image/jxl",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "gif"
+        ],
+        "name": "GIF",
+        "mimeType": "image/gif",
+        "role": "Viewer"
+      },
+      {
+        "ext": [
+          "tif",
+          "tiff"
+        ],
+        "name": "TIFF",
+        "mimeType": "image/tiff",
+        "role": "Viewer"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libheif1"
+        ],
+        "section": "graphics",
+        "desktopTemplate": "../packaging/linux/imgxplorer.desktop"
+      },
+      "rpm": {
+        "depends": [
+          "libheif"
+        ],
+        "desktopTemplate": "../packaging/linux/imgxplorer.desktop"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "hardenedRuntime": true,
+      "dmg": {
+        "windowSize": {
+          "width": 600,
+          "height": 380
+        }
+      }
+    }
   }
 }

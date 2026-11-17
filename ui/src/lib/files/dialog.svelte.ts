@@ -2,7 +2,7 @@
 // algunos escritorios (Hyprland/Omarchy…) el diálogo GTK sale sin el botón de Aceptar. En
 // macOS se usa el del sistema. Se puede cambiar en Ajustes.
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { prefs } from "../settings.svelte";
+import { prefs } from "../prefs.svelte";
 
 export interface Filter {
   name: string;

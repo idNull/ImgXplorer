@@ -8,7 +8,10 @@
     "build": "vite build --config ui/vite.config.ts",
     "check": "svelte-check --tsconfig ui/tsconfig.json",
     "wasm": "wasm-pack build crates/imgx-wasm --target web --out-dir ../../ui/src/lib/wasm/pkg --out-name imgx",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dist": "bash packaging/dist.sh all",
+    "dist:linux": "bash packaging/dist.sh linux",
+    "dist:mac": "bash packaging/dist.sh mac"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

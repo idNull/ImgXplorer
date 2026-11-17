@@ -1,7 +1,7 @@
 <script lang="ts">
   // Lista de recientes: en la pantalla de inicio y como menú desplegable de la cabecera.
   import { invoke } from "@tauri-apps/api/core";
-  import { prefs } from "./settings.svelte";
+  import { prefs } from "./prefs.svelte";
   import { t } from "./i18n.svelte";
 
   interface Props {

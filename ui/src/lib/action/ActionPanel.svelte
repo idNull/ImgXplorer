@@ -4,7 +4,7 @@
   import { applies, catalog, fresh, paramValue, type ParamSpec, type TemplateRef } from "./catalog";
   import type { Dir, ProjectStore, Transition, TransitionType } from "./project.svelte";
   import { t, label } from "../i18n.svelte";
-  import { prefs } from "../settings.svelte";
+  import { prefs } from "../prefs.svelte";
   import { display, keysFor, type PlayerAction, type ViewerAction } from "../keys";
 
   const pk = (a: PlayerAction) => keysFor(prefs.settings.keys, "player", a).slice(0, 2).map(display);

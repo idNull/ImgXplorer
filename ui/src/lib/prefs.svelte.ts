@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { setLang, type LangSetting } from "./i18n.svelte";
 import { cleanOverrides, type KeyOverrides } from "./keys";
 import { log } from "./log";
-import { library } from "./editor/library.svelte";
+import { library } from "./editor/libstore.svelte";
 
 export type ThumbSize = "s" | "m" | "l";
 
@@ -25,12 +25,60 @@ export interface Settings {
   fileDialog: FileDialogMode;
   /** Última carpeta visitada en el selector propio. */
   lastDir: string;
-  /** Al editar, mostrar el marco exacto de la reproducción. */
-  editorFrame: boolean;
+  /** Marco del editor: la proporción de la reproducción, la del vídeo o ninguno. */
+  editorFrame: FrameMode;
   /** Anchos (px) de las columnas de biblioteca e inspector del editor. */
   libWidth: number;
   inspectorWidth: number;
+  /** Opciones de la última exportación a vídeo. */
+  video: VideoPrefs;
   keys: KeyOverrides;
+}
+
+export type FrameMode = "playback" | "video" | "off";
+
+export type VideoSize = "720p" | "1080p" | "1440p" | "4k" | "custom";
+export type VideoShape = "landscape" | "portrait" | "square";
+export type VideoQuality = "high" | "normal" | "light";
+export interface VideoPrefs {
+  size: VideoSize;
+  shape: VideoShape;
+  /** Tamaño a medida (px). */
+  width: number;
+  height: number;
+  fps: 24 | 30 | 60;
+  quality: VideoQuality;
+  /** Ruta de ffmpeg (vacía: buscarlo). */
+  ffmpeg: string;
+}
+
+export const VIDEO_SIZES: Record<Exclude<VideoSize, "custom">, number> = { "720p": 720, "1080p": 1080, "1440p": 1440, "4k": 2160 };
+export const QUALITY_CRF: Record<VideoQuality, number> = { high: 18, normal: 23, light: 28 };
+export const DEFAULT_VIDEO: VideoPrefs = { size: "1080p", shape: "landscape", width: 1920, height: 1080, fps: 30, quality: "normal", ffmpeg: "" };
+
+const mult4 = (v: number) => Math.max(16, Math.min(8192, Math.round(v / 4) * 4));
+
+/** Tamaño en píxeles del vídeo (múltiplos de 4). */
+export function videoPixels(v: VideoPrefs): { w: number; h: number } {
+  if (v.size === "custom") return { w: mult4(v.width), h: mult4(v.height) };
+  const short = VIDEO_SIZES[v.size];
+  const long = Math.round((short * 16) / 9);
+  if (v.shape === "square") return { w: short, h: short };
+  return v.shape === "portrait" ? { w: mult4(short), h: mult4(long) } : { w: mult4(long), h: mult4(short) };
+}
+
+function cleanVideo(raw: unknown): VideoPrefs {
+  const v: VideoPrefs = { ...DEFAULT_VIDEO };
+  if (!raw || typeof raw !== "object") return v;
+  const r = raw as Record<string, unknown>;
+  if (r.size === "custom" || (typeof r.size === "string" && r.size in VIDEO_SIZES)) v.size = r.size as VideoSize;
+  if (r.shape === "landscape" || r.shape === "portrait" || r.shape === "square") v.shape = r.shape;
+  if (typeof r.width === "number" && Number.isFinite(r.width)) v.width = mult4(r.width);
+  if (typeof r.height === "number" && Number.isFinite(r.height)) v.height = mult4(r.height);
+  if (r.fps === 24 || r.fps === 30 || r.fps === 60) v.fps = r.fps;
+  if (r.quality === "high" || r.quality === "normal" || r.quality === "light") v.quality = r.quality;
+  if (typeof r.ffmpeg === "string") v.ffmpeg = r.ffmpeg;
+  return v;
 }
 
 export type FileDialogMode = "auto" | "app" | "system";
@@ -61,15 +109,16 @@ export const DEFAULT_SETTINGS: Settings = {
   resume: true,
   fileDialog: "auto",
   lastDir: "",
-  editorFrame: true,
+  editorFrame: "playback",
   libWidth: LIB_WIDTH.def,
   inspectorWidth: INSPECTOR_WIDTH.def,
+  video: DEFAULT_VIDEO,
   keys: {},
 };
 export const MAX_RECENTS = 20;
 
 function clean(raw: unknown): Settings {
-  const s: Settings = { ...DEFAULT_SETTINGS, keys: {} };
+  const s: Settings = { ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, keys: {} };
   if (!raw || typeof raw !== "object") return s;
   const r = raw as Record<string, unknown>;
   if (r.lang === "es" || r.lang === "en" || r.lang === "auto") s.lang = r.lang;
@@ -82,7 +131,9 @@ function clean(raw: unknown): Settings {
   if (typeof r.resume === "boolean") s.resume = r.resume;
   if (r.fileDialog === "auto" || r.fileDialog === "app" || r.fileDialog === "system") s.fileDialog = r.fileDialog;
   if (typeof r.lastDir === "string") s.lastDir = r.lastDir;
-  if (typeof r.editorFrame === "boolean") s.editorFrame = r.editorFrame;
+  if (r.editorFrame === "playback" || r.editorFrame === "video" || r.editorFrame === "off") s.editorFrame = r.editorFrame;
+  else if (r.editorFrame === false) s.editorFrame = "off";
+  s.video = cleanVideo(r.video);
   const width = (v: unknown, w: { min: number; max: number; def: number }) =>
     typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(w.max, Math.max(w.min, v))) : w.def;
   s.libWidth = width(r.libWidth, LIB_WIDTH);
@@ -108,7 +159,7 @@ function cleanRecents(raw: unknown): Recent[] {
 }
 
 class Prefs {
-  settings = $state<Settings>({ ...DEFAULT_SETTINGS, keys: {} });
+  settings = $state<Settings>({ ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, keys: {} });
   recents = $state<Recent[]>([]);
   loaded = $state(false);
 

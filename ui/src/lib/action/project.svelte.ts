@@ -61,6 +61,9 @@ export class ProjectStore {
   /** El archivo existente no se pudo leer: no se guarda para no destruirlo. */
   readOnly = $state<string | null>(null);
   saveError = $state<string | null>(null);
+  /** Cambios (pasos de edición) aún sin guardar en disco. Normalmente vuelve a 0 en medio
+   *  segundo; solo se queda alto si falla el guardado. */
+  unsaved = $state(0);
   private generation = 0;
   private timer: number | undefined;
   private pending = false;
@@ -85,6 +88,7 @@ export class ProjectStore {
     this.path = loaded.path;
     this.readOnly = loaded.error;
     this.saveError = null;
+    this.unsaved = 0;
     let data: ProjectData | null = null;
     if (loaded.json) {
       try {
@@ -166,6 +170,7 @@ export class ProjectStore {
     this.data = JSON.parse(json) as ProjectData;
     this.base = json;
     this.syncFlags();
+    this.unsaved++;
     this.save();
   }
 
@@ -258,6 +263,7 @@ export class ProjectStore {
 
   changed() {
     if (this.readOnly || !this.data) return;
+    if (!this.stepPending) this.unsaved++;
     this.stepPending = true;
     clearTimeout(this.stepTimer);
     if (!this.batching) this.stepTimer = window.setTimeout(() => this.commit(), STEP_DELAY);
@@ -272,20 +278,51 @@ export class ProjectStore {
     this.timer = window.setTimeout(() => this.flush(), SAVE_DELAY);
   }
 
-  /** Guarda ya lo pendiente. */
-  async flush() {
+  /** Guarda ya lo pendiente. Devuelve si todo quedó guardado. */
+  async flush(): Promise<boolean> {
     clearTimeout(this.timer);
-    if (!this.pending || !this.data || this.readOnly) return;
+    if (!this.data || this.readOnly) return true;
+    // Tras un fallo se reintenta aunque no haya cambios nuevos.
+    if (!this.pending && !this.unsaved) return true;
     this.pending = false;
+    const n = this.unsaved;
     try {
       this.path = await invoke<string>("save_project", {
         generation: this.generation,
         json: JSON.stringify($state.snapshot(this.data)),
       });
       this.saveError = null;
+      this.unsaved = Math.max(0, this.unsaved - n); // lo cambiado mientras se guardaba sigue pendiente
+      return !this.pending;
     } catch (e) {
       this.saveError = String(e);
       log.warn("no se pudo guardar el proyecto:", e);
+      return false;
     }
+  }
+
+  /** Renuncia a guardar lo pendiente (el usuario lo ha decidido tras un fallo). */
+  discard() {
+    clearTimeout(this.timer);
+    this.pending = false;
+    this.unsaved = 0;
+  }
+
+  /** Olvida la fuente cerrada (llamar después de `flush`). */
+  unload() {
+    clearTimeout(this.timer);
+    clearTimeout(this.stepTimer);
+    this.data = null;
+    this.path = null;
+    this.readOnly = null;
+    this.saveError = null;
+    this.pending = false;
+    this.unsaved = 0;
+    this.stepPending = false;
+    this.batching = 0;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.base = null;
+    this.syncFlags();
   }
 }

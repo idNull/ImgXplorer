@@ -4,7 +4,7 @@
   import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { fileDialog, dirOf, joinPath, withExtension, type PickRequest } from "./dialog.svelte";
-  import { prefs } from "../settings.svelte";
+  import { prefs } from "../prefs.svelte";
   import { label, t } from "../i18n.svelte";
 
   interface Entry {

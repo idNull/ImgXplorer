@@ -52,6 +52,63 @@ uniform float u_alpha;
 out vec4 color;
 void main() { color = texture(u_tex, v_uv) * u_alpha; }`;
 
+// Conversión a YUV 4:2:0 (I420, BT.709, rango limitado) para exportar vídeo. La salida es una
+// textura RGBA de (W/4)×(1.5·H) cuyos bytes, leídos fila a fila, son exactamente los planos Y, U
+// y V seguidos: cada texel lleva 4 bytes consecutivos del archivo.
+const YUV_VS = `#version 300 es
+void main() {
+  vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+const YUV_FS = `#version 300 es
+precision highp float;
+precision highp int;
+uniform sampler2D u_src;
+uniform int u_w;
+uniform int u_h;
+out vec4 color;
+// Píxel (x, y) de la imagen con y = 0 arriba (la textura guarda las filas de abajo arriba).
+vec3 px(int x, int y) { return texelFetch(u_src, ivec2(x, u_h - 1 - y), 0).rgb; }
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+float byteAt(int i) {
+  int ysize = u_w * u_h;
+  int cw = u_w / 2;
+  if (i < ysize) {
+    return (16.0 + 219.0 * luma(px(i % u_w, i / u_w))) / 255.0;
+  }
+  int j = i - ysize;
+  int csize = cw * (u_h / 2);
+  bool v = j >= csize;
+  if (v) j -= csize;
+  int cx = (j % cw) * 2;
+  int cy = (j / cw) * 2;
+  vec3 c = (px(cx, cy) + px(cx + 1, cy) + px(cx, cy + 1) + px(cx + 1, cy + 1)) * 0.25;
+  float l = luma(c);
+  float d = v ? (c.r - l) / 1.5748 : (c.b - l) / 1.8556;
+  return (128.0 + 224.0 * d) / 255.0;
+}
+void main() {
+  int base = (int(gl_FragCoord.y) * (u_w / 4) + int(gl_FragCoord.x)) * 4;
+  color = vec4(byteAt(base), byteAt(base + 1), byteAt(base + 2), byteAt(base + 3));
+}`;
+
+function program(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) ?? "link");
+  return prog;
+}
+
+interface Target {
+  fb: WebGLFramebuffer;
+  tex: WebGLTexture;
+  w: number;
+  h: number;
+}
+
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const s = gl.createShader(type)!;
   gl.shaderSource(s, src);
@@ -77,19 +134,19 @@ export class GlViewer {
     if (m) this.bg = [1, 2, 3].map((i) => parseInt(m[i], 16) / 255) as [number, number, number];
   }
 
-  constructor(private canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: true });
+  /** Captura para exportar: se pinta en `out` y se convierte a YUV en `yuv`. */
+  private out: Target | null = null;
+  private yuv: (Target & { prog: WebGLProgram; loc: Record<string, WebGLUniformLocation | null> }) | null = null;
+
+  constructor(private canvas: HTMLCanvasElement | OffscreenCanvas) {
+    const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, premultipliedAlpha: true }) as WebGL2RenderingContext | null;
     if (!gl) throw new Error("WebGL2 no disponible");
     this.gl = gl;
     this.maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     const ext = gl.getExtension("EXT_texture_filter_anisotropic");
     if (ext) this.aniso = { ext, max: gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT) };
 
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VS));
-    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FS));
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) ?? "link");
+    const prog = program(gl, VS, FS);
     this.prog = prog;
     for (const n of ["u_off", "u_size", "u_vp", "u_m", "u_tex", "u_alpha"]) this.loc[n] = gl.getUniformLocation(prog, n);
 
@@ -173,7 +230,7 @@ export class GlViewer {
   /** Ajusta el canvas al tamaño CSS × devicePixelRatio. Devuelve el viewport en px CSS. */
   resize(): Size {
     const dpr = window.devicePixelRatio || 1;
-    const { clientWidth: w, clientHeight: h } = this.canvas;
+    const { clientWidth: w, clientHeight: h } = this.canvas as HTMLCanvasElement;
     const pw = Math.max(1, Math.round(w * dpr));
     const ph = Math.max(1, Math.round(h * dpr));
     if (this.canvas.width !== pw || this.canvas.height !== ph) {
@@ -199,7 +256,7 @@ export class GlViewer {
 
   private target(): WebGLFramebuffer {
     const gl = this.gl;
-    const { width: w, height: h } = this.canvas;
+    const { w, h } = this.size();
     if (this.fbo && (this.fbo.w !== w || this.fbo.h !== h)) {
       gl.deleteFramebuffer(this.fbo.fb);
       gl.deleteTexture(this.fbo.tex);
@@ -227,9 +284,12 @@ export class GlViewer {
    */
   draw(layers: Layer[], vp: Size, mix = false): void {
     const gl = this.gl;
+    const dest = this.out?.fb ?? null;
+    const size = this.size();
     gl.useProgram(this.prog);
     gl.uniform1i(this.loc.u_tex, 0);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
+    gl.viewport(0, 0, size.w, size.h);
     const visible = layers.filter((l) => l.alpha > 0 && l.set.tiles.length);
     if (mix && visible.length === 2) {
       const [a, b] = visible;
@@ -237,7 +297,7 @@ export class GlViewer {
       gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       this.drawSet(b.set, b.m, 1, vp);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
       gl.clear(gl.COLOR_BUFFER_BIT);
       this.drawSet(a.set, a.m, 1, vp);
       // El destino intermedio como un rectángulo de pantalla completa (invertido en Y: GL
@@ -254,5 +314,83 @@ export class GlViewer {
     gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     for (const l of visible) this.drawSet(l.set, l.m, l.alpha, vp);
+  }
+
+  /** Tamaño en píxeles del destino de dibujo (la captura, si la hay, o el canvas). */
+  private size(): Size {
+    return this.out ? { w: this.out.w, h: this.out.h } : { w: this.canvas.width, h: this.canvas.height };
+  }
+
+  private makeTarget(w: number, h: number, filter: number): Target {
+    const gl = this.gl;
+    const tex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new TextureError(`destino ${w}×${h} no disponible`);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { fb, tex, w, h };
+  }
+
+  private dropTarget(t: Target | null) {
+    if (!t) return;
+    this.gl.deleteFramebuffer(t.fb);
+    this.gl.deleteTexture(t.tex);
+  }
+
+  /**
+   * A partir de ahora se pinta en un destino de `w`×`h` píxeles (múltiplos de 4) para leerlo
+   * con `readYuv`. `null` vuelve a pintar en el canvas.
+   */
+  capture(size: Size | null) {
+    this.dropTarget(this.out);
+    this.out = null;
+    if (this.yuv) {
+      this.dropTarget(this.yuv);
+      this.gl.deleteProgram(this.yuv.prog);
+      this.yuv = null;
+    }
+    if (!size) return;
+    if (size.w % 4 || size.h % 4) throw new Error(`tamaño de vídeo no válido: ${size.w}×${size.h}`);
+    this.out = this.makeTarget(size.w, size.h, this.gl.NEAREST);
+    const prog = program(this.gl, YUV_VS, YUV_FS);
+    const loc: Record<string, WebGLUniformLocation | null> = {};
+    for (const n of ["u_src", "u_w", "u_h"]) loc[n] = this.gl.getUniformLocation(prog, n);
+    this.yuv = { ...this.makeTarget(size.w / 4, (size.h * 3) / 2, this.gl.NEAREST), prog, loc };
+  }
+
+  /** Bytes de un fotograma YUV 4:2:0 (W·H·1.5). */
+  readYuv(buf: Uint8Array): void {
+    const gl = this.gl;
+    const out = this.out;
+    const y = this.yuv;
+    if (!out || !y) throw new Error("no hay captura activa");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, y.fb);
+    gl.viewport(0, 0, y.w, y.h);
+    gl.disable(gl.BLEND);
+    gl.useProgram(y.prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, out.tex);
+    gl.uniform1i(y.loc.u_src, 0);
+    gl.uniform1i(y.loc.u_w, out.w);
+    gl.uniform1i(y.loc.u_h, out.h);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.readPixels(0, 0, y.w, y.h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    gl.enable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /** Libera la GPU (contextos de exportación). */
+  dispose() {
+    this.capture(null);
+    this.dropTarget(this.fbo);
+    this.fbo = null;
+    this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 }

@@ -1,0 +1,25 @@
+imgxplorer para macOS
+=====================
+
+Este paquete trae el código de la app y un instalador que la compila en tu Mac. Así macOS la
+deja abrir sin avisos y no hace falta una cuenta de desarrollador de Apple.
+
+Instalar:
+
+  1. Abre la app Terminal (Aplicaciones > Utilidades > Terminal).
+  2. Escribe «bash » (con un espacio al final), arrastra a la ventana el archivo
+     «Instalar imgxplorer.command» y pulsa Intro.
+
+El instalador primero comprueba tu Mac y te enseña qué va a hacer; no cambia nada hasta que
+respondas que sí. Después instala lo que falte (herramientas de Xcode, Homebrew, Rust, Node.js,
+libheif y ffmpeg), compila la app y la copia en Aplicaciones. La primera vez tarda entre 20 y 40
+minutos, casi todo descargando y compilando. Puede pedirte la contraseña de tu Mac.
+
+Requisitos: macOS 11 Big Sur o posterior, Apple Silicon (M1, M2…) o Intel, unos 8 GB libres y
+conexión a Internet.
+
+Solo comprobar, sin instalar nada:
+
+    bash "Instalar imgxplorer.command" --check
+
+Si algo falla, el registro completo está en ~/Library/Logs/imgxplorer-install.log.

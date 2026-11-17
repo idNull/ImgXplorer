@@ -1,6 +1,7 @@
 //! Aplicación Tauri: fuentes abiertas, protocolo `imgx://` y puente de gestos.
 
 mod diagnostics;
+mod export;
 mod gestures;
 mod browse;
 mod pack;
@@ -33,6 +34,8 @@ pub(crate) struct AppState {
     thumbs: serve::ThumbCache,
     /// Viñetas detectadas por imagen de la fuente abierta.
     panels: Mutex<HashMap<usize, Vec<PanelRect>>>,
+    /// Última generación usada; no se reinicia al cerrar para que las URL nunca se repitan.
+    last_generation: std::sync::atomic::AtomicU64,
 }
 
 impl AppState {
@@ -85,7 +88,7 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
     let fingerprint = imgx_media::fingerprint(src.entries());
     let loaded = project::load(&app, &opened.path, opened.kind, &fingerprint);
     let mut guard = state.current.write().unwrap();
-    let generation = guard.as_ref().map_or(1, |c| c.generation + 1);
+    let generation = state.last_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let info = SourceInfo {
         generation,
         title: src.title().to_owned(),
@@ -108,6 +111,16 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
     state.thumbs.clear();
     state.panels.lock().unwrap().clear();
     Ok(info)
+}
+
+/// Cierra la fuente abierta (vuelve a la pantalla de inicio).
+#[tauri::command]
+fn close_source(state: State<'_, AppState>) {
+    if let Some(c) = state.current.write().unwrap().take() {
+        log::info!("cerrada {}", c.path.display());
+    }
+    state.thumbs.clear();
+    state.panels.lock().unwrap().clear();
 }
 
 /// Viñetas de la imagen `index` (vacío si no se distinguen al menos dos).
@@ -134,10 +147,40 @@ async fn detect_panels(generation: u64, index: usize, state: State<'_, AppState>
     Ok(found)
 }
 
-/// Ruta pasada por línea de comandos (`imgxplorer <carpeta|comprimido|imagen>`).
+/// Archivo que macOS pidió abrir antes de que la interfaz estuviera lista (doble clic en Finder).
+static OPENED: Mutex<Option<String>> = Mutex::new(None);
+
+/// Ruta a abrir al arrancar: la de la línea de comandos (`imgxplorer <carpeta|comprimido|imagen>`)
+/// o la que pidió el sistema al abrir un archivo asociado.
 #[tauri::command]
 fn initial_path() -> Option<String> {
-    std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).find(|a| !a.starts_with('-'))
+    OPENED.lock().unwrap().take().or_else(|| std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).find(|a| !a.starts_with('-')))
+}
+
+/// `--version` y `--self-check` (para el instalador): responden sin abrir ventana. Que el programa
+/// llegue a ejecutarse ya demuestra que el sistema tiene todas las bibliotecas que necesita.
+pub fn cli() -> Option<String> {
+    let arg = std::env::args().nth(1)?;
+    let version = format!("imgxplorer {}", env!("CARGO_PKG_VERSION"));
+    match arg.as_str() {
+        "--version" | "-V" => Some(version),
+        "--self-check" => {
+            let (heif, hevc, av1) = imgx_media::heif_support();
+            let yn = |b: bool| if b { "si" } else { "no" };
+            let mut out = format!("{version}\nlibheif={heif}\nheic={}\navif={}", yn(hevc), yn(av1));
+            #[cfg(target_os = "linux")]
+            {
+                // SAFETY: funciones sin argumentos que solo devuelven constantes de la biblioteca.
+                let (ma, mi, pa) = unsafe {
+                    use webkit2gtk::ffi as w;
+                    (w::webkit_get_major_version(), w::webkit_get_minor_version(), w::webkit_get_micro_version())
+                };
+                out += &format!("\nwebkitgtk={ma}.{mi}.{pa}");
+            }
+            Some(out)
+        }
+        _ => None,
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -148,6 +191,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .manage(diagnostics::Diagnostics::default())
+        .manage(export::Exporter::default())
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             let path = request.uri().path().to_owned();
@@ -156,6 +200,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             open_source,
+            close_source,
             initial_path,
             detect_panels,
             project::save_project,
@@ -166,6 +211,11 @@ pub fn run() {
             pack::import_pack,
             browse::list_dir,
             browse::places,
+            export::ffmpeg_info,
+            export::export_start,
+            export::export_frame,
+            export::export_finish,
+            export::export_cancel,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])
@@ -178,9 +228,18 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error al iniciar imgxplorer");
-    app.run(|app, event| {
-        if let RunEvent::Exit = event {
-            diagnostics::end_session(app);
+    app.run(|app, event| match event {
+        RunEvent::Exit => diagnostics::end_session(app),
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        RunEvent::Opened { urls } => {
+            if let Some(path) = urls.iter().find_map(|u| u.to_file_path().ok()) {
+                let path = path.to_string_lossy().into_owned();
+                // Si la interfaz ya está en marcha se le avisa; si no, lo recoge `initial_path`.
+                *OPENED.lock().unwrap() = Some(path.clone());
+                use tauri::Emitter;
+                let _ = app.emit("open-path", path);
+            }
         }
+        _ => {}
     });
 }

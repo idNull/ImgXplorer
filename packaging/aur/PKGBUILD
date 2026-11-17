@@ -1,0 +1,64 @@
+# Paquete de AUR (versión de desarrollo, desde git).
+#
+# Probarlo en local sin publicar nada:
+#   cd packaging/aur && IMGX_REPO="file://$(realpath ../..)" makepkg -si
+# Para publicarlo en AUR hay que poner en _repo la URL pública del repositorio.
+
+pkgname=imgxplorer-git
+_name=imgxplorer
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Visor de imágenes y cómics con animaciones de cámara y exportación a vídeo"
+arch=('x86_64' 'aarch64')
+url="https://github.com/CAMBIAR/imgxplorer"
+license=('LicenseRef-imgxplorer')
+depends=('webkit2gtk-4.1' 'gtk3' 'libheif' 'hicolor-icon-theme')
+makedepends=('git' 'rust' 'rust-wasm' 'wasm-pack' 'nodejs' 'pnpm' 'clang')
+optdepends=('ffmpeg: exportar a vídeo MP4')
+provides=("$_name")
+conflicts=("$_name")
+options=('!lto' '!debug')
+_repo="${IMGX_REPO:-$url.git}"
+source=("$_name::git+$_repo")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_name"
+  local v
+  v=$(grep -m1 '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')
+  printf "%s.r%s.%s" "$v" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$_name"
+  export CARGO_HOME="$srcdir/cargo-home"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  pnpm install --frozen-lockfile
+}
+
+build() {
+  cd "$_name"
+  export CARGO_HOME="$srcdir/cargo-home"
+  export CARGO_TARGET_DIR=target
+  # Compila el núcleo a WASM, la interfaz y el binario (sin crear paquetes de Tauri).
+  pnpm tauri build --no-bundle
+}
+
+check() {
+  cd "$_name"
+  export CARGO_HOME="$srcdir/cargo-home"
+  export CARGO_TARGET_DIR=target
+  cargo test --release --locked -p imgx-core
+}
+
+package() {
+  cd "$_name"
+  install -Dm755 target/release/imgxplorer "$pkgdir/usr/bin/imgxplorer"
+  install -Dm644 packaging/linux/imgxplorer.desktop "$pkgdir/usr/share/applications/imgxplorer.desktop"
+  local s
+  for s in 32 64 128; do
+    install -Dm644 "src-tauri/icons/${s}x${s}.png" "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/imgxplorer.png"
+  done
+  install -Dm644 "src-tauri/icons/128x128@2x.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/imgxplorer.png"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/imgxplorer/README.md"
+}

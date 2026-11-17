@@ -2,15 +2,19 @@
   import { onMount, untrack } from "svelte";
   import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
+  import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { openFile, openFolder, fileDialog, dirOf } from "./lib/files/dialog.svelte";
   import FileDialog from "./lib/files/FileDialog.svelte";
-  import { library } from "./lib/editor/library.svelte";
+  import ExportDialog from "./lib/export/ExportDialog.svelte";
+  import type { ExportSpec } from "./lib/export/exporter";
+  import { library } from "./lib/editor/libstore.svelte";
   import Viewer from "./lib/viewer/Viewer.svelte";
   import Thumbs from "./lib/Thumbs.svelte";
   import Settings from "./lib/Settings.svelte";
   import Recents from "./lib/Recents.svelte";
-  import { prefs } from "./lib/settings.svelte";
+  import Confirm, { type ConfirmSpec } from "./lib/Confirm.svelte";
+  import { prefs, videoPixels } from "./lib/prefs.svelte";
   import { comboOf, display, keymap, keysFor, type ViewerAction } from "./lib/keys";
   import Editor from "./lib/editor/Editor.svelte";
   import { removeRect, type PanelEdit } from "./lib/viewer/panelEdit";
@@ -85,11 +89,84 @@
     source ? [index + 1, index - 1, index + 2].filter((i) => i >= 0 && i < source!.entries.length).map((i) => ref(source!, i)) : [],
   );
 
+  // Preguntas al usuario (cambios sin guardar…).
+  let confirmSpec = $state<ConfirmSpec | null>(null);
+  let confirmAnswer: ((v: string) => void) | null = null;
+  function askUser(spec: ConfirmSpec): Promise<string> {
+    confirmAnswer?.(spec.cancel);
+    return new Promise((res) => {
+      confirmSpec = spec;
+      confirmAnswer = res;
+    });
+  }
+  function answer(v: string) {
+    const f = confirmAnswer;
+    confirmSpec = null;
+    confirmAnswer = null;
+    f?.(v);
+  }
+
+  /**
+   * Antes de dejar la fuente abierta (cerrarla, abrir otra o salir): termina la grabación en
+   * curso y guarda. Las animaciones se guardan solas al momento, así que solo pregunta si el
+   * guardado falla. Devuelve si se puede seguir.
+   */
+  async function readyToLeave(kind: "close" | "open" | "quit"): Promise<boolean> {
+    if (!source) return true;
+    editor?.finishRecording();
+    if (panelEdit) finishPanelEdit();
+    store.commit();
+    for (;;) {
+      if (await store.flush()) return true;
+      const n = Math.max(1, store.unsaved);
+      const v = await askUser({
+        title: t("unsavedTitle"),
+        message: t(n === 1 ? "unsavedOne" : "unsavedMany", { n, title: source.title }),
+        detail: store.saveError ?? undefined,
+        buttons: [
+          { label: t("cancel"), value: "cancel" },
+          { label: t(`unsavedDiscard.${kind}`), value: "discard", danger: true },
+          { label: t("unsavedRetry"), value: "retry", primary: true },
+        ],
+        cancel: "cancel",
+      });
+      if (v === "cancel") return false;
+      if (v === "discard") {
+        store.discard();
+        return true;
+      }
+    }
+  }
+
+  /** Cierra lo que se está viendo y vuelve a la pantalla de inicio (recientes). */
+  async function closeSource() {
+    if (!source || opening) return;
+    if (!(await readyToLeave("close"))) return;
+    viewer?.stop();
+    actionOpen = false;
+    editorOpen = false;
+    exportOpen = false;
+    recentsOpen = false;
+    panelEdit = false;
+    panelSel = -1;
+    prefs.flush();
+    source = null;
+    index = 0;
+    status = null;
+    openError = null;
+    overlayPanels = null;
+    detectedCount = null;
+    panelCache.clear();
+    store.unload();
+    invoke("close_source").catch((e) => log.warn("cerrar fuente:", e));
+    getCurrentWindow().setTitle("imgxplorer").catch((e) => log.warn("título:", e));
+  }
+
   async function openPath(path: string) {
+    if (opening || !(await readyToLeave("open"))) return;
     opening = true;
     viewer?.stop();
     try {
-      await store.flush(); // lo pendiente de la fuente anterior, antes de cambiar
       const s = await invoke<SourceInfo>("open_source", { path });
       panelCache.clear();
       await store.load(s.generation, { kind: s.kind, title: s.title, fingerprint: s.fingerprint }, s.project);
@@ -208,21 +285,28 @@
     return tpl ? templateTimeline(i, tpl, img, viewer.aspect()) : null;
   }
 
+  /** Cómo se recorre la fuente al reproducir (y al exportar a vídeo). */
+  const sequence: ExportSpec = {
+    timeline: timelineFor,
+    transitionOut: (i) => {
+      const entry = source!.entries[i].name;
+      const tr = $state.snapshot(store.transitionFor(entry));
+      const tpl = store.templateFor(entry);
+      return { json: JSON.stringify(tr), tpl: tpl ? JSON.stringify($state.snapshot(tpl)) : "", duration: tr.duration, cut: tr.type === "cut" };
+    },
+    holdBetween: () => store.data?.defaults.holdBetween ?? 0.3,
+  };
+
   function startPlay() {
     if (!source || !source.entries.length) return;
-    viewer.play({
-      start: index,
-      count: source.entries.length,
-      timeline: timelineFor,
-      transitionOut: (i) => {
-        const entry = source!.entries[i].name;
-        const tr = $state.snapshot(store.transitionFor(entry));
-        const tpl = store.templateFor(entry);
-        return { json: JSON.stringify(tr), tpl: tpl ? JSON.stringify($state.snapshot(tpl)) : "", duration: tr.duration, cut: tr.type === "cut" };
-      },
-      holdBetween: () => store.data?.defaults.holdBetween ?? 0.3,
-      onIndex: (i) => (index = i),
-    });
+    viewer.play({ ...sequence, start: index, count: source.entries.length, onIndex: (i) => (index = i) });
+  }
+
+  let exportOpen = $state(false);
+  function openExport() {
+    if (!source?.entries.length) return;
+    if (playerInfo) viewer.stop();
+    exportOpen = true;
   }
 
   function togglePlay() {
@@ -339,11 +423,21 @@
   let stageW = $state(0);
   let stageH = $state(0);
   let editorH = $state(0);
+  // Con el marco "vídeo", la proporción es la del vídeo que se exportará.
   const frame = $derived.by(() => {
-    if (!editorShown || !prefs.settings.editorFrame || !stageW || !stageH || !editorH) return null;
-    const ph = stageH + editorH;
-    const w = Math.max(1, Math.round((stageH * stageW) / ph));
-    return { x: Math.round((stageW - w) / 2), w, pw: stageW, ph };
+    const mode = prefs.settings.editorFrame;
+    if (!editorShown || mode === "off" || !stageW || !stageH || !editorH) return null;
+    const video = mode === "video" ? videoPixels(prefs.settings.video) : null;
+    const pw = video?.w ?? stageW;
+    const ph = video?.h ?? stageH + editorH;
+    const aspect = pw / ph;
+    let w = stageW;
+    let h = Math.round(stageW / aspect);
+    if (h > stageH) {
+      h = stageH;
+      w = Math.max(1, Math.round(stageH * aspect));
+    }
+    return { x: Math.round((stageW - w) / 2), y: Math.round((stageH - h) / 2), w, h, pw, ph, video: !!video };
   });
   /** Primera tecla de una acción del visor, para los títulos de los botones. */
   const kt = (a: ViewerAction) => {
@@ -387,9 +481,13 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen || fileDialog.request) return; // los diálogos gestionan sus teclas
+    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec) return; // los diálogos gestionan sus teclas
     const tgt = e.target;
-    if (tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement || tgt instanceof HTMLTextAreaElement) return;
+    // En los campos de texto las teclas son para escribir. En listas, deslizadores y casillas
+    // solo se quedan las teclas sueltas (flechas…): los atajos con Ctrl siguen funcionando.
+    const textField = tgt instanceof HTMLTextAreaElement || (tgt instanceof HTMLInputElement && !["range", "checkbox", "radio", "color"].includes(tgt.type));
+    if (textField) return;
+    if ((tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement) && !e.ctrlKey && !e.metaKey) return;
     if (recentsOpen && e.key === "Escape") {
       recentsOpen = false;
       return e.preventDefault();
@@ -437,6 +535,8 @@
       case "recents": recentsOpen = !recentsOpen; break;
       case "settings": settingsOpen = true; break;
       case "editor": if (source) editorOpen = !editorOpen; break;
+      case "exportVideo": openExport(); break;
+      case "closeSource": closeSource(); break;
       case "undo": store.undo(); break;
       case "redo": store.redo(); break;
     }
@@ -464,6 +564,16 @@
       prefs.flush();
     };
     window.addEventListener("beforeunload", flush);
+    // Cerrar la ventana: guardar de verdad (esperando) y avisar si no se pudo.
+    const unClose = getCurrentWindow().onCloseRequested(async (e) => {
+      if (!(await readyToLeave("quit"))) return e.preventDefault();
+      prefs.flush();
+    });
+    // macOS: archivo abierto desde Finder con la app ya en marcha.
+    const unOpen = listen<string>("open-path", (e) => {
+      void invoke("initial_path"); // ya atendido: que no se vuelva a abrir al recargar
+      openPath(e.payload);
+    });
     const un = getCurrentWebview().onDragDropEvent((ev) => {
       if (ev.payload.type !== "drop" || !ev.payload.paths.length) return;
       const packs = ev.payload.paths.filter((p) => p.toLowerCase().endsWith(".imgxpack"));
@@ -473,6 +583,8 @@
     return () => {
       window.removeEventListener("beforeunload", flush);
       un.then((f) => f());
+      unOpen.then((f) => f());
+      unClose.then((f) => f());
     };
   });
 </script>
@@ -493,6 +605,9 @@
       {/if}
     </div>
     <span class="title">{source?.title ?? ""}</span>
+    {#if source}
+      <button class="close-src" onclick={closeSource} disabled={opening} title="{t('closeSource')}{kt('closeSource')}">✕</button>
+    {/if}
     <span class="spacer"></span>
     <button onclick={() => go(index - 1)} disabled={!source || index === 0} title="{t('prev')}{kt('prev')}">◀</button>
     <span class="counter">{source && source.entries.length ? `${index + 1} / ${source.entries.length}` : "–"}</span>
@@ -506,6 +621,7 @@
     <button onclick={toggleThumbs} class:on={prefs.settings.showThumbs} title="{t('thumbs')}{kt('thumbs')}">▦</button>
     <button onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
     <button onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
+    <button onclick={openExport} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
     <button onclick={toggleFullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>
     <button onclick={() => (settingsOpen = true)} title="{t('settings')}{kt('settings')}">⚙</button>
   </header>
@@ -523,7 +639,8 @@
 
   <div class="body">
   <section class="stage" class:framed={!!frame} bind:clientWidth={stageW} bind:clientHeight={stageH}>
-    <div class="frame" class:framed={!!frame} style:left={frame ? `${frame.x}px` : null} style:width={frame ? `${frame.w}px` : null}>
+    <div class="frame" class:framed={!!frame} style:left={frame ? `${frame.x}px` : null} style:top={frame ? `${frame.y}px` : null}
+      style:width={frame ? `${frame.w}px` : null} style:height={frame ? `${frame.h}px` : null}>
     <Viewer
       bind:this={viewer}
       item={current}
@@ -537,7 +654,7 @@
       onmanual={() => editor?.notifyManual()}
       {editPanels}
     />
-    {#if frame}<span class="frame-tag" title={t("frameHelp")}>{t("frameTag", { w: frame.pw, h: frame.ph })}</span>{/if}
+    {#if frame}<span class="frame-tag" title={t("frameHelp")}>{t(frame.video ? "frameTagVideo" : "frameTag", { w: frame.pw, h: frame.ph })}</span>{/if}
     </div>
     {#if panelEdit}
       <div class="panel-hint">{t("panelEditHint")}</div>
@@ -629,9 +746,24 @@
   <Settings onclose={() => (settingsOpen = false)} />
 {/if}
 
+{#if exportOpen && source}
+  <ExportDialog
+    title={source.title}
+    dir={source.kind === "folder" ? source.path : dirOf(source.path)}
+    count={source.entries.length}
+    {index}
+    refAt={(i) => ref(source!, i)}
+    spec={sequence}
+    os={diag?.os ?? ""}
+    onclose={() => (exportOpen = false)}
+  />
+{/if}
+
 {#if fileDialog.request}
   {#key fileDialog.request}<FileDialog req={fileDialog.request} />{/key}
 {/if}
+
+{#if confirmSpec}<Confirm spec={confirmSpec} onanswer={answer} />{/if}
 
 <style>
   main { display: flex; flex-direction: column; height: 100%; }
@@ -640,13 +772,15 @@
     background: var(--panel); border-bottom: 1px solid var(--border); user-select: none;
   }
   .title { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .close-src { padding: 0 6px; background: none; border-color: transparent; color: var(--muted); flex-shrink: 0; }
+  .close-src:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
   .spacer { flex: 1; }
   .counter, .zoom { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
   .body { flex: 1; min-height: 0; display: flex; }
   .stage { position: relative; flex: 1; min-width: 0; }
   .stage.framed { background: repeating-linear-gradient(135deg, #07080a 0 10px, #0d0f13 10px 20px); }
   .frame { position: absolute; inset: 0; }
-  .frame.framed { right: auto; box-shadow: 0 0 0 1px rgb(251 191 36 / 0.7); }
+  .frame.framed { right: auto; bottom: auto; box-shadow: 0 0 0 1px rgb(251 191 36 / 0.7); }
   .frame-tag {
     position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; pointer-events: none;
     background: rgb(0 0 0 / 0.6); color: #fde68a;
