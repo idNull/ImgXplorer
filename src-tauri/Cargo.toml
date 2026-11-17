@@ -13,11 +13,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+imgx-audio.workspace = true
 imgx-core.workspace = true
 imgx-media.workspace = true
 log = "0.4"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"

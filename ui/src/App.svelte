@@ -14,6 +14,11 @@
   import Settings from "./lib/Settings.svelte";
   import Recents from "./lib/Recents.svelte";
   import Confirm, { type ConfirmSpec } from "./lib/Confirm.svelte";
+  import { sounds, isAudioPath } from "./lib/audio/sounds.svelte";
+  import { director } from "./lib/audio/director";
+  import { ambientSpecs } from "./lib/audio/sync";
+  import { trackSpecs } from "./lib/audio/tracks";
+  import { clearSolo, solo } from "./lib/audio/solo.svelte";
   import { prefs, videoPixels } from "./lib/prefs.svelte";
   import { comboOf, display, keymap, keysFor, type ViewerAction } from "./lib/keys";
   import Editor from "./lib/editor/Editor.svelte";
@@ -113,7 +118,7 @@
    */
   async function readyToLeave(kind: "close" | "open" | "quit"): Promise<boolean> {
     if (!source) return true;
-    editor?.finishRecording();
+    await editor?.finishRecording();
     if (panelEdit) finishPanelEdit();
     store.commit();
     for (;;) {
@@ -158,6 +163,7 @@
     detectedCount = null;
     panelCache.clear();
     store.unload();
+    clearSolo();
     invoke("close_source").catch((e) => log.warn("cerrar fuente:", e));
     getCurrentWindow().setTitle("imgxplorer").catch((e) => log.warn("título:", e));
   }
@@ -169,6 +175,7 @@
     try {
       const s = await invoke<SourceInfo>("open_source", { path });
       panelCache.clear();
+      clearSolo();
       await store.load(s.generation, { kind: s.kind, title: s.title, fingerprint: s.fingerprint }, s.project);
       source = s;
       // Volver a la imagen en la que se dejó (salvo que se haya abierto una imagen concreta).
@@ -198,21 +205,37 @@
     toastTimer = window.setTimeout(() => (toast = null), 4000);
   }
 
+  /** Archivos de audio soltados sobre la ventana: se copian a la biblioteca de sonidos. */
+  async function importSounds(paths: string[]) {
+    say(t("loading"));
+    try {
+      if (!sounds.loaded) await sounds.load();
+      const r = await sounds.import(paths);
+      say(r.errors.length ? t("soundImportError", { error: r.errors.join(" · ") }) : t("soundsImported", { n: r.added.length }));
+    } catch (e) {
+      log.warn("importar sonidos:", e);
+      say(t("soundImportError", { error: String(e) }));
+    }
+  }
+
   /** Paquetes soltados sobre la ventana: se añaden a la biblioteca. */
   async function importPacks(paths: string[]) {
     let clips = 0;
     let templates = 0;
+    let snd = 0;
+    if (!sounds.loaded) await sounds.load();
     for (const p of paths) {
       try {
         const r = await library.importPack(p);
         clips += r.clips;
         templates += r.templates;
+        snd += r.sounds.length;
       } catch (e) {
         log.warn("importar paquete:", p, e);
         return say(t("packError", { error: String(e) }));
       }
     }
-    say(clips || templates ? t("imported", { clips, templates }) : t("importedNothing"));
+    say(clips || templates || snd ? t("imported", { clips, templates, sounds: snd }) : t("importedNothing"));
   }
 
   async function pickFolder() {
@@ -295,11 +318,35 @@
       return { json: JSON.stringify(tr), tpl: tpl ? JSON.stringify($state.snapshot(tpl)) : "", duration: tr.duration, cut: tr.type === "cut" };
     },
     holdBetween: () => store.data?.defaults.holdBetween ?? 0.3,
+    audio: (i) => store.audioFor(source!.entries[i].name),
+    ambient: (i) => ambientSpecs(store.ambients, i, indexOfEntry),
+    tracks: () => trackSpecs($state.snapshot(store.tracks)),
   };
+
+  /** Nombres de las entradas, en orden, y su posición (para los ambientes). */
+  const entryNames = $derived(source ? source.entries.map((e) => e.name) : []);
+  const entryIndex = $derived(new Map(entryNames.map((n, i) => [n, i])));
+  const indexOfEntry = (name: string) => entryIndex.get(name) ?? -1;
+
+  // Volumen de cada pista (del proyecto) y general y silencio (de los ajustes).
+  $effect(() => {
+    director.levels($state.snapshot(store.mix), prefs.settings.sound.master, prefs.settings.sound.mute);
+  });
+  // Pistas (con sus efectos) y las que están en solo (solo existentes).
+  $effect(() => {
+    const tracks = trackSpecs($state.snapshot(store.tracks));
+    director.tracks(tracks, solo.ids.filter((id) => tracks.some((t) => t.id === id)));
+  });
+
+  function toggleMute() {
+    prefs.settings.sound.mute = !prefs.settings.sound.mute;
+    prefs.saveSettings();
+    say(prefs.settings.sound.mute ? t("muted") : t("unmuted"));
+  }
 
   function startPlay() {
     if (!source || !source.entries.length) return;
-    viewer.play({ ...sequence, start: index, count: source.entries.length, onIndex: (i) => (index = i) });
+    viewer.play({ ...sequence, start: index, count: source.entries.length, onIndex: (i) => (index = i), sound: director });
   }
 
   let exportOpen = $state(false);
@@ -537,6 +584,7 @@
       case "editor": if (source) editorOpen = !editorOpen; break;
       case "exportVideo": openExport(); break;
       case "closeSource": closeSource(); break;
+      case "mute": toggleMute(); break;
       case "undo": store.undo(); break;
       case "redo": store.redo(); break;
     }
@@ -577,7 +625,9 @@
     const un = getCurrentWebview().onDragDropEvent((ev) => {
       if (ev.payload.type !== "drop" || !ev.payload.paths.length) return;
       const packs = ev.payload.paths.filter((p) => p.toLowerCase().endsWith(".imgxpack"));
+      const audio = ev.payload.paths.filter(isAudioPath);
       if (packs.length) importPacks(packs);
+      else if (audio.length) importSounds(audio);
       else openPath(ev.payload.paths[0]);
     });
     return () => {
@@ -662,7 +712,7 @@
       <div class="panel-hint toast">{toast}</div>
     {/if}
     {#if playerInfo && source}
-      <PlayerBar info={playerInfo} count={source.entries.length} player={() => viewer.playback()} onstop={() => viewer.stop()} />
+      <PlayerBar info={playerInfo} count={source.entries.length} player={() => viewer.playback()} onstop={() => viewer.stop()} onmute={toggleMute} />
     {/if}
     {#if opening}
       <div class="hint">{t("loading")}</div>
@@ -712,6 +762,8 @@
       onpaneledit={togglePanelEdit}
       onresetpanels={() => { finishPanelEdit(); if (curEntry && curSize) store.setPanels(curEntry, curSize, null); }}
       oneditor={() => (editorOpen = true)}
+      entries={entryNames}
+      {index}
     />
   {/if}
   </div>
@@ -726,6 +778,8 @@
       viewer={{ currentPose: (f) => viewer.currentPose(f), setPoseNow: (p) => viewer.setPoseNow(p) }}
       generate={editorTemplate}
       onclose={() => (editorOpen = false)}
+      {index}
+      entries={entryNames}
     />
     </div>
   {/if}
@@ -755,6 +809,7 @@
     refAt={(i) => ref(source!, i)}
     spec={sequence}
     os={diag?.os ?? ""}
+    mix={store.mix}
     onclose={() => (exportOpen = false)}
   />
 {/if}

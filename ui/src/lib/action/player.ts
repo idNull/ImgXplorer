@@ -10,6 +10,9 @@
 //   ended      fin de la última imagen
 import { lerpPose, wasm, type Pose, type Size } from "../core";
 import { log } from "../log";
+import { audioEnd, type AudioTracks } from "../editor/model";
+import { sceneSpecs, type AmbientSpec } from "../audio/sync";
+import type { SoundSink } from "../audio/director";
 
 /** Sin tocar durante este tiempo, la cámara vuelve a la animación. */
 const IDLE_MS = 1000;
@@ -38,13 +41,26 @@ export interface PlaySpec {
   timeline(i: number, size: Size, aspect: number): Promise<wasm.WasmTimeline>;
   transitionOut(i: number): TransitionSpec;
   holdBetween(): number;
+  /** Voz y efectos de la imagen i (la imagen dura al menos hasta que acaban). */
+  audio?(i: number): AudioTracks;
+  /** Ambientes que suenan en la imagen i. */
+  ambient?(i: number): AmbientSpec[];
   /** La imagen actual ha cambiado (para el contador, las miniaturas…). */
   onIndex(i: number): void;
 }
 
+/** Duración de una imagen: su animación o su sonido, lo que dure más. */
+export function itemDuration(tl: wasm.WasmTimeline, audio: AudioTracks | undefined): number {
+  return Math.max(tl.duration(), audio ? audioEnd(audio) : 0);
+}
+
+const NO_AUDIO: AudioTracks = { voice: [], sfx: [] };
+
 export interface PlayOptions extends PlaySpec {
   /** Carga la imagen i en la GPU; `key` la identifica al pintar. */
   load(i: number): Promise<{ key: string; size: Size }>;
+  /** A dónde mandar el sonido (sin él, el reproductor va mudo). */
+  sound?: SoundSink;
 }
 
 /** Qué pintar. `pose: null` = la pose la lleva el visor (control manual). */
@@ -66,6 +82,7 @@ interface Prepared {
   key: string;
   size: Size;
   tl: wasm.WasmTimeline;
+  audio: AudioTracks;
   dur: number;
   dead: boolean;
 }
@@ -123,7 +140,8 @@ export class Player {
   private async prepare(i: number): Promise<Prepared> {
     const { key, size } = await this.o.load(i);
     const tl = await this.o.timeline(i, size, this.aspect);
-    return { i, key, size, tl, dur: tl.duration(), dead: false };
+    const audio = this.o.audio?.(i) ?? NO_AUDIO;
+    return { i, key, size, tl, audio, dur: itemDuration(tl, audio), dead: false };
   }
 
   /** Va a la imagen `i`, desde el principio, sin transición. */
@@ -148,6 +166,7 @@ export class Player {
       this.t = 0;
       this.state = want;
       this.o.onIndex(i);
+      this.soundFor(p);
       this.prefetchNext();
     } catch (e) {
       log.warn(`reproductor: no se pudo preparar la imagen ${i + 1}:`, e);
@@ -188,7 +207,9 @@ export class Player {
           if (p.dead) return tl.free();
           p.tl.free();
           p.tl = tl;
-          p.dur = tl.duration();
+          p.audio = this.o.audio?.(p.i) ?? NO_AUDIO;
+          p.dur = itemDuration(tl, p.audio);
+          if (p === this.cur) this.soundFor(p);
         },
         (e) => log.warn("reproductor: no se pudo regenerar la timeline:", e),
       );
@@ -222,11 +243,36 @@ export class Player {
     this.t = 0;
     this.state = "playing";
     this.o.onIndex(n.i);
+    this.soundFor(n);
     this.prefetchNext();
+  }
+
+  /** Sonido de la imagen que pasa a ser la actual. */
+  private soundFor(p: Prepared) {
+    const snd = this.o.sound;
+    if (!snd || this.stopped) return;
+    snd.scene(this, sceneSpecs(p.audio));
+    snd.ambient(this, this.o.ambient?.(p.i) ?? []);
   }
 
   /** Avanza el reloj y devuelve qué pintar. `viewerPose` es la pose que muestra el visor. */
   frame(now: number, viewerPose: Pose, vp: Size): Scene {
+    const scene = this.step(now, viewerPose, vp);
+    const snd = this.o.sound;
+    if (snd && !this.stopped) {
+      const st = this.state;
+      snd.transport(this, {
+        t: this.t,
+        playing: st === "playing",
+        // El ambiente sigue mientras se mueve la cámara a mano o se pasa de imagen.
+        running: st === "playing" || st === "override" || st === "returning" || st === "transition" || st === "loading",
+        rate: this.speed,
+      });
+    }
+    return scene;
+  }
+
+  private step(now: number, viewerPose: Pose, vp: Size): Scene {
     const dt = this.lastNow ? Math.min(MAX_STEP, (now - this.lastNow) / 1000) * this.speed : 0;
     this.lastNow = now;
     const aspect = vp.w / Math.max(1, vp.h);
@@ -246,7 +292,7 @@ export class Player {
             this.t = c.dur;
           } else if (this.next) {
             this.startTransition();
-            return this.frame(now, viewerPose, vp);
+            return this.step(now, viewerPose, vp);
           } else {
             this.prefetchNext(); // la siguiente aún carga: se espera en la última pose
           }
@@ -379,6 +425,7 @@ export class Player {
 
   stop() {
     this.stopped = true;
+    this.o.sound?.release(this);
     this.token++;
     release(this.cur);
     release(this.next);

@@ -119,6 +119,65 @@ imágenes y las transiciones, con el color de fondo del visor.
 - **Cómo funciona**: cada fotograma se pinta con el mismo motor WebGL de la vista previa (así sale idéntico), se convierte a YUV 4:2:0 en la GPU y se pasa por tubería a **ffmpeg** (H.264 en MP4, BT.709). ffmpeg escribe en un archivo temporal que se renombra al terminar bien.
 - **ffmpeg** es necesario y no viene incluido: se busca en el sistema (en macOS también en Homebrew) o se indica su ruta en la propia ventana. Si falta, la ventana explica cómo instalarlo (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`, `brew install ffmpeg`). Usa `libx264` si está; si no, `h264_videotoolbox` (macOS) u `libopenh264`.
 
+### Sonido
+
+Cada imagen puede llevar **voz** y **efectos**, y el proyecto, **ambientes o música** que suenan de una imagen a otra. Se oye al reproducir en el Modo Acción y en el editor, y sale en el vídeo exportado.
+
+- **Biblioteca de sonidos** (pestaña *Sonidos* del editor):
+  - **Tuyos**: importa mp3, wav, flac, ogg o m4a con *Importar sonido* o arrastrando los archivos a la ventana. Se **copian** a tu biblioteca, así que no se rompen si mueves o borras el original. El mismo archivo importado dos veces es el mismo sonido.
+  - **Grabaciones**: las voces grabadas con el micrófono.
+  - **De serie**: 14 efectos que fabrica la propia app por síntesis, sin descargas ni licencias. Hay lluvia, viento, oleaje, latido, trueno, golpe, puñetazo, zas, explosión, llamar a la puerta, pasos, campana, timbre y disparo. Los marcados con 🔁 están pensados para sonar en bucle.
+  - ▶ para escuchar, doble clic para renombrar y ✕ para quitarlo de la biblioteca (el archivo original no se toca).
+- **Pistas**: hay tres grupos (**voces**, **efectos** y **ambiente**) y en cada uno puedes tener **varias pistas** («Voz Ana», «Voz Luis», «Golpes»…), las mismas en todas las imágenes, como en un programa de audio. Así se mezclan varios sonidos a la vez sin salir de la app.
+  - **＋** en la cabecera de la última pista de un grupo añade otra. Doble clic en el nombre la renombra.
+  - **M** silencia la pista (tampoco sale en el vídeo) y **S** deja solo esa mientras editas (no se guarda ni afecta al vídeo).
+  - Al pulsar la cabecera, el inspector muestra su **volumen**, **panorama** (izquierda/derecha), sus **efectos de audio**, el orden dentro del grupo y *Borrar pista*. Borrar una pista borra lo que suena en ella (avisa de cuántos sonidos son) y se puede deshacer. Cada grupo conserva al menos una pista.
+  - Con muchas pistas, la zona de pistas se desplaza en vertical: rueda sobre los nombres o `Mayús` + rueda. La altura del editor se cambia arrastrando su borde superior (doble clic la devuelve a la normal).
+  - Los proyectos de antes tienen una pista por grupo y se abren igual.
+- **Clips de sonido**: arrastra un sonido a la fila de la pista que quieras (o pulsa **+** en la biblioteca para ponerlo en el cabezal, en la última pista usada). Cada clip muestra su forma de onda y se mueve con ajuste magnético a claves y otros clips; arrastrándolo hacia arriba o abajo cambia de pista dentro de su grupo.
+  - Sus bordes recortan: el izquierdo salta el principio del sonido y el derecho lo acorta.
+  - En el inspector se ajustan el inicio, la duración, el recorte, el **volumen** (hasta el 200 %), los **fundidos** de entrada y salida, la **pista** (también de voz a efectos o al revés) y los **efectos de audio del propio clip**. Desde ahí también se duplica o se borra.
+  - Todo entra en deshacer y rehacer.
+  - **La imagen dura al menos lo que su sonido**: la voz nunca se corta. La cámara se queda en su última pose hasta que acaba.
+  - El sonido no depende de la cámara: una imagen puede usar una plantilla y tener su propia voz.
+- **Grabar voz** (botón 🎙 *Voz* o `V`): graba del micrófono mientras la animación avanza desde el cabezal.
+  - Muestra el nivel (en rojo si es demasiado alto) y los segundos grabados.
+  - `V` o `Espacio` terminan, y `Esc` descarta.
+  - La grabación se guarda en tu biblioteca («Voz 1»…) y se coloca en la pista de voz seleccionada (o en la primera); el medidor aparece en su cabecera.
+  - Mientras grabas, el sonido se silencia para que el micrófono no lo recoja.
+  - El micrófono se elige en los ajustes. En macOS, la primera vez el sistema pide permiso.
+- **Ambientes y música** (sección *Sonido* del Modo Acción): elige un sonido y *Añadir*.
+  - Suena desde la imagen actual hasta la última, en bucle; luego se cambia *desde* y *hasta*, el volumen y los fundidos.
+  - También se puede soltar un sonido en una pista de ambiente del editor, y entonces suena en esa imagen. Cada ambiente puede ir en su propia pista y llevar sus efectos.
+  - Al pasar de una imagen a otra del tramo, el ambiente **no se corta**: solo se funde al entrar y al salir.
+  - Si mueves la cámara a mano, la voz y los efectos se congelan con la imagen, pero el ambiente sigue.
+- **Mezclador** (sección *Sonido* del Modo Acción): volumen de cada grupo (voces, efectos y ambiente) y, debajo, de cada una de sus pistas, con **M** y **S**. Opción para **bajar el ambiente mientras hay voz** (de las pistas que no estén silenciadas), que se calcula según dónde están los clips de voz, así que suena igual en directo que en el vídeo.
+- **Efectos de audio**, en una pista (afectan a todo lo que suena en ella) o en un clip concreto (solo a ese sonido; los de la pista se aplican después). Cada uno tiene ajustes predefinidos y mandos para afinar (doble clic en un mando lo devuelve a su valor), se enciende y apaga, y se reordena con ▲▼:
+
+  | Efecto | Ajustes predefinidos | Mandos |
+  |---|---|---|
+  | ⛪ Reverb | Habitación, sala, catedral, cueva, baño | Tamaño, amortiguación, mezcla, anchura, retardo inicial |
+  | 🔁 Eco | Corto, eco, montaña, ping-pong | Tiempo, repeticiones, brillo, mezcla, ping-pong |
+  | 🎚 Ecualizador | Más cuerpo, más claridad, sin graves | Graves, medios y agudos (±12 dB) |
+  | 📞 Filtro | Teléfono, radio, megáfono, bajo el agua, lejos, tras la pared | Quita graves, quita agudos, saturación |
+  | 🗜 Compresor | Voz, suave, fuerte | Umbral, proporción, ataque, liberación, ganancia |
+  | 🎵 Tono | Monstruo, grave, agudo, ardilla | Semitonos (±12, sin cambiar la velocidad), mezcla |
+  | 🤖 Robot | Robot, alien, metálico | Frecuencia, metal, mezcla |
+  | ⚡ Distorsión | Suave, fuerte, radio rota | Intensidad, brillo, mezcla |
+
+  Las colas (la reverb de una cueva, las repeticiones de un eco) siguen sonando al pasar a la imagen siguiente, igual en directo que en el vídeo.
+- **Velocidad**: a 0,5×–2× la voz y los efectos aceleran o frenan cambiando el tono (como una cinta); el ambiente no cambia.
+- **Silenciar**: botón 🔊 de la barra de reproducción o `M`. En los ajustes están el **volumen general** y el **micrófono**.
+- **En el vídeo**: casilla *Incluir el sonido* al exportar.
+  - Se mezcla con el mismo mezclador que suena en directo, a 48 kHz.
+  - Se añade al MP4 en AAC (192 kbps) con una segunda pasada rápida de ffmpeg que copia el vídeo sin volver a codificarlo.
+- **Paquetes `.imgxpack`**: además de clips y plantillas, llevan tus sonidos. Al importarlos se añaden a tu biblioteca y se comprueba que cada archivo es lo que dice ser.
+- **Cómo funciona**: el sonido lo produce un motor propio en Rust (`crates/imgx-audio`), no el navegador interno.
+  - Decodifica con `symphonia`, en Rust puro y sin GStreamer.
+  - Mezcla con interpolación cúbica y sale por `cpal` (ALSA/PipeWire/Pulse en Linux, CoreAudio en macOS).
+  - Los efectos (`crates/imgx-audio/src/fx`) son propios y deterministas: Freeverb, eco con realimentación filtrada, biquads, compresor, desplazador de tono granular, modulador en anillo y saturación. La misma mesa de mezclas (pistas → grupos → general) sirve para oír y para exportar, y una prueba comprueba que el directo y la exportación dan las mismas muestras.
+  - La interfaz le manda qué suena en cada imagen y su reloj. Él lleva el suyo y lo corrige si se separa más de 50 ms, sin mandar una orden en cada fotograma.
+
 ### Formatos
 
 | Tipo | Formatos | Quién decodifica |
@@ -155,6 +214,7 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `Ctrl+O` / `Ctrl+Mayús+O` | Abrir archivo / abrir carpeta |
 | `Ctrl+R` | Recientes |
 | `Ctrl+W` | Cerrar y volver al inicio |
+| `M` | Silenciar o activar el sonido |
 | `Ctrl+,` | Ajustes |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
@@ -232,7 +292,15 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Instaladores que comprueban el sistema e instalan lo que falta: Linux (binario compatible desde Ubuntu 24.04) y macOS (compila en el propio Mac).
   - Probado en un Mac mini M1: instala, abre y exporta vídeo.
   - Opcional, solo para publicar: `.dmg` firmado y notarizado (necesita cuenta de Apple Developer) y Flatpak.
-- [ ] **Fase 5**: pistas de audio (voces, efectos, ambiente).
+- [x] **Fase 5**: sonido.
+  - [x] Motor de audio propio (decodificar, mezclar, salida y micrófono) y biblioteca de sonidos con efectos de serie.
+  - [x] Pistas de voz y efectos en el editor, con forma de onda, recortes, volumen y fundidos; la imagen dura lo que su sonido.
+  - [x] Ambientes y música entre imágenes, mezcla por pista y atenuación con voz.
+  - [x] Sonido en el vídeo exportado (AAC).
+  - [x] Grabar voz con el micrófono.
+  - [x] Sonidos dentro de los paquetes `.imgxpack`.
+  - [x] Varias pistas por grupo (las mismas en todo el proyecto), mezclador con volumen, panorama, silencio y solo.
+  - [x] Efectos de audio en pistas y clips: reverb, eco, ecualizador, filtros, compresor, tono, robot y distorsión.
 
 El formato de animaciones está especificado en [docs/format.md](docs/format.md).
 
@@ -263,12 +331,12 @@ Los paquetes para repartir se crean con `pnpm dist` y quedan en `dist/` (detalle
 - `wasm-pack`.
 - Node 22 o superior y `pnpm`.
 - `libheif`.
-- En Linux, WebKitGTK 4.1.
+- En Linux, WebKitGTK 4.1 y ALSA (`alsa-lib` o `libasound2-dev`, para el sonido).
 
 En Arch/CachyOS:
 
 ```bash
-sudo pacman -S rust rust-wasm wasm-pack libheif webkit2gtk-4.1 pnpm
+sudo pacman -S rust rust-wasm wasm-pack libheif webkit2gtk-4.1 alsa-lib pnpm
 ```
 
 **Arrancar**
@@ -305,9 +373,10 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ```
 crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
+crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio y exportación a vídeo con ffmpeg
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export)
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg y biblioteca de sonidos
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio)
 docs                Especificación del formato .imgx y cómo crear los instaladores
 packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR y lanzador .desktop
 ```

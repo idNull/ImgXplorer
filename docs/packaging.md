@@ -57,10 +57,13 @@ la escribe en `REQUISITOS`, que es lo que compara el instalador.
 
   | Distribución | Paquetes |
   |---|---|
-  | Arch | `webkit2gtk-4.1 gtk3 libheif ffmpeg` |
-  | Debian/Ubuntu | `libwebkit2gtk-4.1-0`, GTK 3, `libheif1` y sus complementos `libde265` y `dav1d`, `ffmpeg` |
-  | Fedora | `webkit2gtk4.1 gtk3 libheif`, `ffmpeg` o `ffmpeg-free` |
-  | openSUSE | `libwebkit2gtk-4_1-0 libgtk-3-0 libheif1 ffmpeg` |
+  | Arch | `webkit2gtk-4.1 gtk3 libheif alsa-lib ffmpeg` |
+  | Debian/Ubuntu | `libwebkit2gtk-4.1-0`, GTK 3, `libheif1` y sus complementos `libde265` y `dav1d`, `libasound2`, `ffmpeg` |
+  | Fedora | `webkit2gtk4.1 gtk3 libheif alsa-lib`, `ffmpeg` o `ffmpeg-free` |
+  | openSUSE | `libwebkit2gtk-4_1-0 libgtk-3-0 libheif1 libasound2 ffmpeg` |
+
+  `alsa-lib` (`libasound2`) es la del sonido: con PipeWire o PulseAudio también funciona, porque
+  la usan por debajo.
 
 - **La app.** Va a `~/.local/bin`, con su lanzador y sus iconos, solo para ti y sin contraseña.
   Con `--system` va a `/usr/local`. Con tarjeta Nvidia, el lanzador añade
@@ -87,6 +90,10 @@ Apple Developer (99 $/año) la bloquea Gatekeeper. Compilada allí no tiene ese 
 - Homebrew (pide la contraseña).
 - Rust con `rustup`, en tu carpeta personal.
 - Con Homebrew: Node.js, pnpm, wasm-pack, pkg-config, libheif y ffmpeg.
+
+**Micrófono.** `src-tauri/Info.plist` lleva el texto con el que macOS pide permiso la primera vez
+que se graba voz. `src-tauri/entitlements.plist` da el permiso de micrófono para cuando la app se
+firme con una cuenta de Apple (runtime endurecido).
 
 **Qué hace después**
 1. Compila con `pnpm tauri build --bundles app`.

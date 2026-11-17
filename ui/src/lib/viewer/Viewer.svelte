@@ -5,7 +5,7 @@
   import { HANDLES, cursorAt, handlePoint, press, type PanelEdit } from "./panelEdit";
   import { PictureCache, type PictureRef } from "./picture";
   import type { ViewerStatus } from "./types";
-  import { Player, type PlayerInfo, type PlaySpec, type Scene } from "../action/player";
+  import { Player, type PlayerInfo, type PlayOptions, type Scene } from "../action/player";
   import { FIT, actualSizeZoom, lerpPose, panBy, rotated, viewMatrix, zoomAt, type Pose, type Size } from "../core";
   import { t } from "../i18n.svelte";
   import { log } from "../log";
@@ -208,7 +208,7 @@
   }
 
   /** Empieza a reproducir el Modo Acción desde `spec.start`. */
-  export function play(spec: PlaySpec) {
+  export function play(spec: Omit<PlayOptions, "load">) {
     stop();
     if (!refAt) return;
     const at = refAt;

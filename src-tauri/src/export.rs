@@ -10,7 +10,7 @@ use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use tauri::ipc::{InvokeBody, Request};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// Codificadores H.264 que se saben usar, por orden de preferencia.
 const ENCODERS: [&str; 3] = ["libx264", "h264_videotoolbox", "libopenh264"];
@@ -33,6 +33,8 @@ struct Job {
     out: PathBuf,
     frame_bytes: usize,
     finished: bool,
+    /// El ffmpeg usado (para la segunda pasada con el sonido).
+    ffmpeg: String,
 }
 
 impl Job {
@@ -205,7 +207,7 @@ fn start(o: &ExportOptions) -> Result<Job, String> {
     let (tx, rx) = sync_channel::<Vec<u8>>(QUEUE);
     let frame_bytes = (o.width * o.height * 3 / 2) as usize;
     log::info!("exportando {}×{} a {} fps con {} → {}", o.width, o.height, o.fps, info.encoder, out.display());
-    Ok(Job { child, tx: Some(tx), writer: Some(writer_thread(stdin, rx)), stderr, tmp, out, frame_bytes, finished: false })
+    Ok(Job { child, tx: Some(tx), writer: Some(writer_thread(stdin, rx)), stderr, tmp, out, frame_bytes, finished: false, ffmpeg: info.path })
 }
 
 /// Empieza una exportación (cancela la anterior si quedaba alguna).
@@ -237,9 +239,59 @@ pub async fn export_frame(request: Request<'_>, state: State<'_, Exporter>) -> R
     })
 }
 
-/// Termina: cierra la entrada de ffmpeg, espera y deja el vídeo en su sitio. Devuelve la ruta.
+/// Sonido del vídeo: los clips en tiempo del vídeo y la mezcla del proyecto.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportAudio {
+    clips: Vec<crate::audio::ClipSpec>,
+    /// Pistas del proyecto (volumen, panorama, silencio y efectos).
+    #[serde(default)]
+    tracks: Vec<imgx_audio::TrackSpec>,
+    levels: imgx_audio::Levels,
+    /// Duración del vídeo (s).
+    seconds: f64,
+}
+
+/// Frecuencia del sonido en el vídeo.
+const AUDIO_RATE: u32 = 48_000;
+
+/// Argumentos de la segunda pasada: copia el vídeo tal cual y añade el sonido en AAC.
+fn mux_args(video: &Path, wav: &Path, out: &Path) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"].map(String::from).to_vec();
+    a.push(video.to_string_lossy().into_owned());
+    a.push("-i".into());
+    a.push(wav.to_string_lossy().into_owned());
+    a.extend(
+        ["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "-f", "mp4"]
+            .map(String::from),
+    );
+    a.push(out.to_string_lossy().into_owned());
+    a
+}
+
+/// Mezcla el sonido y lo une al vídeo `video`, dejando el resultado en `out`.
+fn add_sound(ffmpeg: &str, video: &Path, out: &Path, clips: &[imgx_audio::Clip], tracks: &[imgx_audio::TrackSpec], levels: imgx_audio::Levels, seconds: f64) -> Result<(), String> {
+    let mix = imgx_audio::mixer::render(clips, tracks, levels, AUDIO_RATE, seconds);
+    let wav = video.with_extension("wav");
+    let muxed = video.with_extension("mux");
+    let res = (|| {
+        imgx_audio::wav::write_samples(&wav, AUDIO_RATE, &mix).map_err(|e| e.to_string())?;
+        let o = Command::new(ffmpeg).args(mux_args(video, &wav, &muxed)).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+        if !o.status.success() {
+            let msg = String::from_utf8_lossy(&o.stderr).trim().to_owned();
+            return Err(if msg.is_empty() { "ffmpeg no pudo añadir el sonido".into() } else { msg });
+        }
+        std::fs::rename(&muxed, out).map_err(|e| format!("{}: {e}", out.display()))
+    })();
+    std::fs::remove_file(&wav).ok();
+    std::fs::remove_file(&muxed).ok();
+    res
+}
+
+/// Termina: cierra la entrada de ffmpeg, espera, añade el sonido (si hay) y deja el vídeo en su
+/// sitio. Devuelve la ruta.
 #[tauri::command]
-pub async fn export_finish(state: State<'_, Exporter>) -> Result<String, String> {
+pub async fn export_finish(app: AppHandle, audio: Option<ExportAudio>, state: State<'_, Exporter>) -> Result<String, String> {
     let mut job = state.job.lock().unwrap().take().ok_or("no hay ninguna exportación en curso")?;
     tauri::async_runtime::spawn_blocking(move || {
         let ok = job.close().map_err(|e| e.to_string())?;
@@ -247,7 +299,20 @@ pub async fn export_finish(state: State<'_, Exporter>) -> Result<String, String>
             let msg = job.stderr_tail();
             return Err(if msg.is_empty() { "ffmpeg terminó con error".into() } else { msg });
         }
-        std::fs::rename(&job.tmp, &job.out).map_err(|e| format!("{}: {e}", job.out.display()))?;
+        match audio.filter(|a| !a.clips.is_empty()) {
+            Some(a) => {
+                let state = app.state::<crate::audio::Audio>();
+                let clips: Vec<imgx_audio::Clip> = a
+                    .clips
+                    .iter()
+                    .filter_map(|c| c.resolve(&app, &state).inspect_err(|e| log::warn!("exportar sonido: {e}")).ok())
+                    .collect();
+                log::info!("exportar: mezclando {} sonidos ({:.1} s)", clips.len(), a.seconds);
+                add_sound(&job.ffmpeg, &job.tmp, &job.out, &clips, &a.tracks, a.levels, a.seconds)?;
+                std::fs::remove_file(&job.tmp).ok();
+            }
+            None => std::fs::rename(&job.tmp, &job.out).map_err(|e| format!("{}: {e}", job.out.display()))?,
+        }
         job.finished = true;
         Ok(job.out.to_string_lossy().into_owned())
     })
@@ -305,6 +370,44 @@ mod tests {
         std::fs::rename(&job.tmp, &job.out).unwrap();
         job.finished = true;
         assert!(std::fs::metadata(&out).unwrap().len() > 100);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Vídeo de 1 s con sonido: se comprueba con ffprobe que lleva una pista AAC de 1 s.
+    #[test]
+    fn anade_sonido_si_hay_ffmpeg() {
+        let Ok(info) = probe(None) else { return };
+        if info.encoder.is_empty() || Command::new("ffprobe").arg("-version").output().is_err() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("imgx-export-snd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("con-sonido.mp4");
+        let mut job = start(&opts(&out, 30)).unwrap();
+        let tx = job.tx.clone().unwrap();
+        for _ in 0..10 {
+            tx.send(vec![128u8; job.frame_bytes]).unwrap();
+        }
+        drop(tx);
+        assert!(job.close().unwrap(), "{}", job.stderr_tail());
+        let tone = std::sync::Arc::new(imgx_audio::synth::sine(440.0, 2.0, 44100));
+        let clip = imgx_audio::Clip::new(tone, imgx_audio::Bus::Voice, 0.2, 2.0);
+        let reverb = imgx_audio::TrackSpec { effects: vec![imgx_audio::fx::FxSpec::new(imgx_audio::fx::FxKind::Reverb, &[])], ..imgx_audio::TrackSpec::default_for(imgx_audio::Bus::Voice) };
+        add_sound(&job.ffmpeg, &job.tmp, &job.out, &[clip], &[reverb], imgx_audio::Levels::default(), 1.0).unwrap();
+        std::fs::remove_file(&job.tmp).ok();
+        job.finished = true;
+        let probe = Command::new("ffprobe")
+            .args(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name,duration", "-of", "csv=p=0"])
+            .arg(&out)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&probe.stdout).trim().to_owned();
+        let mut parts = text.split(',');
+        assert_eq!(parts.next(), Some("aac"), "{text}");
+        let dur: f64 = parts.next().and_then(|d| d.parse().ok()).unwrap_or(0.0);
+        assert!((dur - 1.0).abs() < 0.1, "el sonido dura lo que el vídeo: {dur}");
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(left.len(), 1, "no quedan temporales: {left:?}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -15,8 +15,13 @@
     count: number;
     player: () => Player | null;
     onstop: () => void;
+    onmute: () => void;
   }
-  let { info, count, player, onstop }: Props = $props();
+  let { info, count, player, onstop, onmute }: Props = $props();
+  const kv = (a: "mute") => {
+    const first = keysFor(prefs.settings.keys, "viewer", a)[0];
+    return first ? ` (${display(first)})` : "";
+  };
 
   const progress = $derived(info.duration > 0 ? Math.min(1, info.t / info.duration) : 0);
   const chip = $derived(
@@ -41,6 +46,9 @@
   <span class="time">{info.t.toFixed(1)} / {info.duration.toFixed(1)} s</span>
   <button class="speed" onclick={() => player()?.changeSpeed(1)} title="{t('kSpeed')}{k('faster')}">{info.speed}×</button>
   {#if chip}<span class="chip" class:manual={info.state === "override" || info.state === "returning"}>{chip}</span>{/if}
+  <button onclick={onmute} class:off={prefs.settings.sound.mute} title="{prefs.settings.sound.mute ? t('unmute') : t('mute')}{kv('mute')}">
+    {prefs.settings.sound.mute ? "🔇" : "🔊"}
+  </button>
   <button onclick={onstop} title="{t('stop')}{k('stop')}">■</button>
 </div>
 
@@ -57,4 +65,5 @@
   .speed { min-width: 48px; }
   .chip { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--panel-2); color: var(--muted); }
   .chip.manual { color: #04121b; background: #fbbf24; }
+  .off { color: #fca5a5; }
 </style>

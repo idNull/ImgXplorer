@@ -20,6 +20,107 @@ pub struct Project {
     pub clips: Vec<NamedClip>,
     #[serde(default)]
     pub items: Vec<Item>,
+    /// Ambientes o música: cada uno suena de una imagen a otra, en bucle.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ambient: Vec<AmbientClip>,
+    /// Pistas de sonido (las mismas en todas las imágenes). Si no hay, una por grupo con el id
+    /// del grupo (`voice`, `sfx`, `ambient`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tracks: Vec<Track>,
+}
+
+/// Grupo de una pista de sonido.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Bus {
+    Voice,
+    Sfx,
+    Ambient,
+}
+
+/// Pista de sonido: todo lo que suena en ella pasa por su volumen, panorama y efectos.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Track {
+    pub id: String,
+    pub bus: Bus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default = "one")]
+    pub volume: f64,
+    /// −1 izquierda … 1 derecha.
+    #[serde(default)]
+    pub pan: f64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mute: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<Effect>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// Efecto de sonido (reverb, eco…) de una pista o de un clip.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Effect {
+    pub id: String,
+    /// `reverb`, `delay`, `eq`, `filter`, `compressor`, `pitch`, `robot` o `distortion`.
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default = "yes")]
+    pub on: bool,
+    /// Ajuste predefinido del que salió (solo informativo).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset: Option<String>,
+    /// Mandos; los que falten toman su valor por defecto.
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, f64>,
+}
+
+/// Sonido de fondo que abarca varias imágenes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AmbientClip {
+    pub id: String,
+    pub sound: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Primera y última imagen (por nombre de entrada) en que suena.
+    pub from: String,
+    pub to: String,
+    #[serde(default = "one")]
+    pub volume: f64,
+    #[serde(default)]
+    pub fade_in: f64,
+    #[serde(default)]
+    pub fade_out: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<Effect>,
+}
+
+/// Volumen de cada grupo y si el ambiente baja cuando hay voz.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Mix {
+    #[serde(default = "one")]
+    pub voice: f64,
+    #[serde(default = "one")]
+    pub sfx: f64,
+    #[serde(default = "ambient_level")]
+    pub ambient: f64,
+    #[serde(default = "yes")]
+    pub duck: bool,
+}
+
+fn ambient_level() -> f64 {
+    0.7
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,11 +150,14 @@ pub struct Defaults {
     /// Plantilla para las imágenes sin animación propia ("aplicar a todas").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<TemplateRef>,
+    /// Mezcla del sonido (si no está, la de fábrica).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mix: Option<Mix>,
 }
 
 impl Default for Defaults {
     fn default() -> Self {
-        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3, template: None }
+        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3, template: None, mix: None }
     }
 }
 
@@ -152,11 +256,50 @@ pub struct Timeline {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct AudioTracks {
     #[serde(default)]
-    pub voice: Vec<serde_json::Value>,
+    pub voice: Vec<AudioClip>,
     #[serde(default)]
-    pub sfx: Vec<serde_json::Value>,
-    #[serde(default)]
+    pub sfx: Vec<AudioClip>,
+    /// Sin uso: el ambiente va en el proyecto (`ambient`), porque puede abarcar varias imágenes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ambient: Vec<serde_json::Value>,
+}
+
+/// Un sonido colocado en la timeline de una imagen (voz o efecto).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioClip {
+    /// Id del sonido en la biblioteca (`builtin:<id>` para los de serie).
+    pub sound: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Segundo de la imagen en que empieza.
+    pub start: f64,
+    /// Segundos que se saltan del principio del sonido.
+    #[serde(default)]
+    pub trim_in: f64,
+    pub duration: f64,
+    #[serde(default = "one")]
+    pub volume: f64,
+    #[serde(default)]
+    pub fade_in: f64,
+    #[serde(default)]
+    pub fade_out: f64,
+    /// Pista (si falta, la primera de su grupo).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<Effect>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl Timeline {
+    /// Final del último sonido (0 si no hay): la imagen dura al menos esto.
+    pub fn audio_end(&self) -> f64 {
+        self.audio.voice.iter().chain(&self.audio.sfx).map(|c| c.start + c.duration).fold(0.0, f64::max)
+    }
 }
 
 /// Un clip colocado en la timeline.
@@ -238,6 +381,8 @@ impl Project {
             defaults: Defaults::default(),
             clips: Vec::new(),
             items: Vec::new(),
+            ambient: Vec::new(),
+            tracks: Vec::new(),
         }
     }
 
@@ -324,5 +469,51 @@ mod tests {
             Project::from_json(r#"{"format":"imgx","version":99,"source":{"kind":"image","name":"a"}}"#),
             Err(FormatError::TooNew(99))
         ));
+    }
+
+    #[test]
+    fn sonido_de_la_imagen() {
+        let json = r#"{"camera":[],"audio":{"voice":[{"sound":"abc","start":1,"duration":2.5,"fadeIn":0.2}],"sfx":[{"sound":"builtin:hit","start":4,"duration":0.6,"volume":0.5,"trimIn":0.1}]}}"#;
+        let tl: Timeline = serde_json::from_str(json).unwrap();
+        assert_eq!(tl.audio.voice[0].volume, 1.0, "volumen por defecto");
+        assert_eq!(tl.audio.voice[0].fade_in, 0.2);
+        assert_eq!(tl.audio.sfx[0].trim_in, 0.1);
+        assert!((tl.audio_end() - 4.6).abs() < 1e-9);
+        let back: Timeline = serde_json::from_str(&serde_json::to_string(&tl).unwrap()).unwrap();
+        assert_eq!(back, tl);
+        assert!(!serde_json::to_string(&tl).unwrap().contains("ambient"), "el hueco sin uso no se escribe");
+        assert_eq!(Timeline::default().audio_end(), 0.0);
+    }
+
+    #[test]
+    fn ambiente_y_mezcla_se_conservan() {
+        let json = r#"{"format":"imgx","version":1,"source":{"kind":"archive","name":"a.cbz"},
+            "defaults":{"transition":{"type":"fade","duration":0.5},"holdBetween":0.3,"mix":{"voice":1,"sfx":0.8,"ambient":0.5,"duck":false}},
+            "ambient":[{"id":"x","sound":"builtin:rain","from":"01.jpg","to":"05.jpg","fadeIn":2}]}"#;
+        let p = Project::from_json(json).unwrap();
+        assert_eq!(p.ambient[0].volume, 1.0);
+        assert_eq!(p.ambient[0].fade_in, 2.0);
+        assert_eq!(p.defaults.mix.unwrap().sfx, 0.8);
+        let back = Project::from_json(&p.to_json()).unwrap();
+        assert_eq!(back, p);
+        let empty = Project::from_json(r#"{"format":"imgx","version":1,"source":{"kind":"image","name":"a"}}"#).unwrap();
+        assert!(!empty.to_json().contains("ambient"), "sin ambiente no se escribe nada");
+    }
+
+    #[test]
+    fn pistas_y_efectos_se_conservan() {
+        let json = r#"{"format":"imgx","version":1,"source":{"kind":"archive","name":"a.cbz"},
+            "tracks":[{"id":"voice","bus":"voice","name":"Ana","pan":-0.3,"effects":[{"id":"e1","type":"reverb","preset":"sala","params":{"size":0.6,"mix":0.3}}]},
+                      {"id":"t2","bus":"voice","volume":0.8,"mute":true}],
+            "items":[{"entry":"01.jpg","size":[100,100],"timeline":{"camera":[],"audio":{"voice":[{"sound":"abc","start":0,"duration":1,"track":"t2","effects":[{"id":"e2","type":"pitch","on":false,"params":{"semitones":-5}}]}]}}}],
+            "ambient":[{"id":"x","sound":"builtin:rain","from":"01.jpg","to":"01.jpg","track":"ambient","effects":[{"id":"e3","type":"eq","params":{}}]}]}"#;
+        let p = Project::from_json(json).unwrap();
+        assert_eq!(p.tracks.len(), 2);
+        assert!(p.tracks[0].effects[0].on, "encendido por defecto");
+        assert_eq!(p.tracks[1].volume, 0.8);
+        let back = Project::from_json(&p.to_json()).unwrap();
+        assert_eq!(back, p);
+        let out = p.to_json();
+        assert!(!out.contains("\"mute\":false"), "lo que está por defecto no se escribe");
     }
 }

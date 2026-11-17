@@ -37,6 +37,7 @@ export const DEFAULTS = {
     redo: ["Ctrl+Z", "Ctrl+y"],
     exportVideo: ["Ctrl+e"],
     closeSource: ["Ctrl+w"],
+    mute: ["m", "M"],
   },
   player: {
     toggle: [" "],
@@ -57,6 +58,7 @@ export const DEFAULTS = {
     toggle: [" "],
     keyframe: ["k", "K"],
     record: ["g", "G"],
+    recordVoice: ["v", "V"],
     remove: ["Delete"],
     markPrev: [","],
     markNext: ["."],

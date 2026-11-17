@@ -4,8 +4,11 @@
 // edición, o cada gesto completo (`batch`), es un paso.
 import { invoke } from "@tauri-apps/api/core";
 import type { TemplateRef } from "./catalog";
-import type { Timeline } from "../editor/model";
+import { audioOf, hasAudio, type AudioTracks, type Timeline } from "../editor/model";
 import { log } from "../log";
+import { DEFAULT_LEVELS, type MixLevels } from "../audio/director";
+import type { Effect } from "../audio/effects";
+import { newTrackId, resolveTrack, withDefaults, type SoundBus, type Track } from "../audio/tracks";
 
 export type TransitionType = "cut" | "fade" | "slide" | "continuous-camera";
 export type Dir = "left" | "right" | "up" | "down";
@@ -37,9 +40,28 @@ export interface ProjectData {
   format: "imgx";
   version: number;
   source: { kind: "folder" | "archive" | "image"; name: string; fingerprint?: string };
-  defaults: { transition: Transition; holdBetween: number; template?: TemplateRef };
+  defaults: { transition: Transition; holdBetween: number; template?: TemplateRef; mix?: MixLevels };
   clips: unknown[];
   items: Item[];
+  /** Ambientes o música que abarcan varias imágenes. */
+  ambient?: AmbientClip[];
+  /** Pistas de sonido (si no hay, una por grupo). */
+  tracks?: Track[];
+}
+
+/** Sonido de fondo de una imagen a otra (en bucle). */
+export interface AmbientClip {
+  id: string;
+  sound: string;
+  name?: string;
+  /** Primera y última imagen (nombre de la entrada). */
+  from: string;
+  to: string;
+  volume: number;
+  fadeIn: number;
+  fadeOut: number;
+  track?: string;
+  effects?: Effect[];
 }
 
 /** Lo que `open_source` devuelve sobre el proyecto guardado. */
@@ -231,13 +253,182 @@ export class ProjectStore {
    */
   setTimeline(entry: string, size: [number, number], tl: Timeline | null) {
     if (!this.data) return;
+    // El sonido de la imagen no depende de la cámara: se conserva aunque esta cambie.
+    const audio = hasAudio(this.item(entry)?.timeline) ? this.item(entry)!.timeline!.audio : undefined;
     if (tl?.camera.length) {
       const it = this.ensure(entry, size);
+      if (!hasAudio(tl)) {
+        if (audio) tl.audio = audio;
+        else delete tl.audio;
+      }
       it.timeline = tl;
       delete it.template;
     } else {
       const it = this.item(entry);
-      if (it) delete it.timeline;
+      if (it && audio) it.timeline = { camera: [], audio };
+      else if (it) delete it.timeline;
+      this.prune();
+    }
+    this.changed();
+  }
+
+  /** Ambientes del proyecto. */
+  get ambients(): AmbientClip[] {
+    return this.data?.ambient ?? [];
+  }
+
+  addAmbient(a: Omit<AmbientClip, "id">): string | null {
+    if (!this.data || this.readOnly) return null;
+    const id = `amb-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    // Por el proxy: `x ??= []` devuelve el array sin envolver y lo añadido no se vería.
+    this.data.ambient ??= [];
+    this.data.ambient.push({ id, ...a });
+    this.changed();
+    return id;
+  }
+
+  editAmbient(id: string, fn: (a: AmbientClip) => void) {
+    const a = this.data?.ambient?.find((x) => x.id === id);
+    if (!a || this.readOnly) return;
+    fn(a);
+    this.changed();
+  }
+
+  removeAmbient(id: string) {
+    if (!this.data?.ambient || this.readOnly) return;
+    this.data.ambient = this.data.ambient.filter((x) => x.id !== id);
+    if (!this.data.ambient.length) delete this.data.ambient;
+    this.changed();
+  }
+
+  /** Mezcla del proyecto (la de fábrica si no se ha tocado). */
+  get mix(): MixLevels {
+    return this.data?.defaults.mix ?? DEFAULT_LEVELS;
+  }
+
+  setMix(fn: (m: MixLevels) => void) {
+    if (!this.data || this.readOnly) return;
+    this.data.defaults.mix ??= { ...DEFAULT_LEVELS };
+    fn(this.data.defaults.mix);
+    this.changed();
+  }
+
+  /** Pistas de sonido, en orden y con al menos una por grupo. */
+  get tracks(): Track[] {
+    return withDefaults(this.data?.tracks);
+  }
+
+  /** La lista de pistas del proyecto, ya escrita (a través del proxy). */
+  private ownTracks(): Track[] | null {
+    if (!this.data || this.readOnly) return null;
+    if (!this.data.tracks?.length) this.data.tracks = withDefaults(undefined);
+    return this.data.tracks;
+  }
+
+  /** Pista nueva al final de su grupo. Devuelve su id. */
+  addTrack(bus: SoundBus): string | null {
+    const list = this.ownTracks();
+    if (!list) return null;
+    const id = newTrackId();
+    let last = -1;
+    list.forEach((t, i) => t.bus === bus && (last = i));
+    const next = [...list];
+    next.splice(last + 1, 0, { id, bus, volume: 1, pan: 0 });
+    this.data!.tracks = withDefaults(next);
+    this.changed();
+    return id;
+  }
+
+  editTrack(id: string, fn: (t: Track) => void) {
+    const t = this.ownTracks()?.find((x) => x.id === id);
+    if (!t) return;
+    fn(t);
+    this.changed();
+  }
+
+  /** Sube (−1) o baja (1) una pista dentro de su grupo. */
+  moveTrack(id: string, dir: -1 | 1) {
+    const list = this.ownTracks();
+    if (!list) return;
+    const i = list.findIndex((t) => t.id === id);
+    if (i < 0) return;
+    let j = i + dir;
+    while (j >= 0 && j < list.length && list[j].bus !== list[i].bus) j += dir;
+    if (j < 0 || j >= list.length) return;
+    const next = [...list];
+    [next[i], next[j]] = [next[j], next[i]];
+    this.data!.tracks = next;
+    this.changed();
+  }
+
+  /** Clips (y en cuántas imágenes) que suenan en una pista. */
+  usage(id: string): { clips: number; images: number } {
+    const tracks = this.tracks;
+    const track = tracks.find((t) => t.id === id);
+    if (!track || !this.data) return { clips: 0, images: 0 };
+    const mine = (c: { track?: string }, bus: SoundBus) => resolveTrack(tracks, c.track, bus).id === id;
+    let clips = 0;
+    let images = 0;
+    for (const it of this.data.items) {
+      const a = audioOf(it.timeline);
+      const n = a.voice.filter((c) => mine(c, "voice")).length + a.sfx.filter((c) => mine(c, "sfx")).length;
+      clips += n;
+      if (n) images++;
+    }
+    for (const a of this.data.ambient ?? []) if (mine(a, "ambient")) clips++;
+    return { clips, images };
+  }
+
+  /** Borra una pista y todo lo que suena en ella. Cada grupo conserva al menos una. */
+  removeTrack(id: string): boolean {
+    if (!this.data || this.readOnly) return false;
+    const tracks = this.tracks;
+    const track = tracks.find((t) => t.id === id);
+    if (!track || tracks.filter((t) => t.bus === track.bus).length < 2) return false;
+    const mine = (c: { track?: string }, bus: SoundBus) => resolveTrack(tracks, c.track, bus).id === id;
+    // Los clips sin pista van a la primera de su grupo: si se borra otra, siguen donde estaban.
+    for (const it of this.data.items) {
+      const a = it.timeline?.audio;
+      if (!a) continue;
+      for (const bus of ["voice", "sfx"] as const) {
+        const list = a[bus];
+        if (list) a[bus] = list.filter((c) => !mine(c, bus));
+      }
+      if (!hasAudio(it.timeline)) {
+        delete it.timeline!.audio;
+        if (!it.timeline!.camera.length) delete it.timeline;
+      }
+    }
+    if (this.data.ambient) {
+      this.data.ambient = this.data.ambient.filter((a) => !mine(a, "ambient"));
+      if (!this.data.ambient.length) delete this.data.ambient;
+    }
+    this.data.tracks = tracks.filter((t) => t.id !== id);
+    this.prune();
+    this.changed();
+    return true;
+  }
+
+  /** Voz y efectos de la imagen. */
+  audioFor(entry: string): AudioTracks {
+    return audioOf(this.item(entry)?.timeline);
+  }
+
+  /** Cambia el sonido de la imagen sin tocar su cámara ni su plantilla. */
+  editAudio(entry: string, size: [number, number], fn: (a: AudioTracks) => void) {
+    if (!this.data || this.readOnly) return;
+    const it = this.ensure(entry, size);
+    // Siempre a través del proxy (ver `addAmbient`).
+    it.timeline ??= { camera: [] };
+    const tl = it.timeline;
+    tl.audio ??= {};
+    const a = tl.audio;
+    a.voice ??= [];
+    a.sfx ??= [];
+    fn(a as AudioTracks);
+    if (!hasAudio(tl)) {
+      delete tl.audio;
+      if (!tl.camera.length) delete it.timeline;
       this.prune();
     }
     this.changed();
@@ -258,7 +449,7 @@ export class ProjectStore {
   /** Quita las entradas que ya no aportan nada. */
   private prune() {
     if (!this.data) return;
-    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || i.panels);
+    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.panels);
   }
 
   changed() {

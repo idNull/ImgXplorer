@@ -6,6 +6,7 @@ import { cleanClip, clipLength, type Clip } from "./model";
 import { info, type TemplateRef } from "../action/catalog";
 import { label } from "../i18n.svelte";
 import { log } from "../log";
+import { sounds, type SoundInfo } from "../audio/sounds.svelte";
 
 export interface LibClip {
   id: string;
@@ -130,13 +131,16 @@ class Library {
     return $state.snapshot({ clips: this.clips, templates: this.templates }) as LibraryFile;
   }
 
-  async exportPack(path: string) {
-    await invoke("export_pack", { path, library: JSON.stringify(this.file()) });
+  /** Exporta clips, plantillas y (si se pide) los sonidos propios. Devuelve cuántos sonidos van. */
+  async exportPack(path: string, sounds = true): Promise<number> {
+    return await invoke<number>("export_pack", { path, library: JSON.stringify(this.file()), sounds });
   }
 
   /** Añade lo que trae el paquete. Lo que ya existe (mismo id o mismo contenido) no se duplica. */
-  async importPack(path: string): Promise<{ clips: number; templates: number }> {
-    const f = cleanFile(JSON.parse(await invoke<string>("import_pack", { path })));
+  async importPack(path: string): Promise<{ clips: number; templates: number; sounds: SoundInfo[] }> {
+    const r = await invoke<{ library: string; sounds: SoundInfo[] }>("import_pack", { path });
+    for (const s of r.sounds) sounds.add(s);
+    const f = cleanFile(JSON.parse(r.library));
     const sig = (x: unknown) => JSON.stringify(x);
     const haveClips = new Set(this.clips.flatMap((c) => [c.id, sig(c.clip)]));
     const haveTpls = new Set(this.templates.flatMap((c) => [c.id, sig(c.template)]));
@@ -145,7 +149,7 @@ class Library {
     this.clips = [...this.clips, ...clips];
     this.templates = [...this.templates, ...templates];
     if (clips.length || templates.length) this.save();
-    return { clips: clips.length, templates: templates.length };
+    return { clips: clips.length, templates: templates.length, sounds: r.sounds };
   }
 
   save() {

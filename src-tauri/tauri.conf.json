@@ -141,14 +141,16 @@
     "linux": {
       "deb": {
         "depends": [
-          "libheif1"
+          "libheif1",
+          "libasound2t64 | libasound2"
         ],
         "section": "graphics",
         "desktopTemplate": "../packaging/linux/imgxplorer.desktop"
       },
       "rpm": {
         "depends": [
-          "libheif"
+          "libheif",
+          "alsa-lib"
         ],
         "desktopTemplate": "../packaging/linux/imgxplorer.desktop"
       },
@@ -159,6 +161,7 @@
     "macOS": {
       "minimumSystemVersion": "11.0",
       "hardenedRuntime": true,
+      "entitlements": "entitlements.plist",
       "dmg": {
         "windowSize": {
           "width": 600,

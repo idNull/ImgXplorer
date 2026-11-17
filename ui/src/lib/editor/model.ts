@@ -2,6 +2,8 @@
 // operaciones de edición puras sobre ella (mutan la timeline que reciben). La evaluación (tiempo → pose) la hace siempre
 // imgx-core vía WASM; aquí solo se mueven, estiran y crean clips y claves.
 
+import type { Effect } from "../audio/effects";
+
 /** Copia profunda que acepta proxies de `$state` (structuredClone no puede con ellos). */
 const $snapshot = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -86,7 +88,75 @@ export interface ClipInstance {
 
 export interface Timeline {
   camera: ClipInstance[];
-  audio?: unknown;
+  audio?: { voice?: AudioClip[]; sfx?: AudioClip[]; ambient?: unknown[] };
+}
+
+/** Pistas de sonido de una imagen. */
+export type AudioBus = "voice" | "sfx";
+
+/** Un sonido colocado en la timeline de la imagen. */
+export interface AudioClip {
+  /** Id del sonido en la biblioteca (`builtin:<id>` para los de serie). */
+  sound: string;
+  name?: string;
+  start: number;
+  /** Segundos que se saltan del principio del sonido. */
+  trimIn: number;
+  duration: number;
+  /** 1 = volumen original. */
+  volume: number;
+  fadeIn: number;
+  fadeOut: number;
+  /** Pista del proyecto (si falta, la primera de su grupo). */
+  track?: string;
+  /** Efectos del propio clip. */
+  effects?: Effect[];
+}
+
+export interface AudioTracks {
+  voice: AudioClip[];
+  sfx: AudioClip[];
+}
+
+export const AUDIO_BUSES: AudioBus[] = ["voice", "sfx"];
+
+/** Las pistas de sonido de una timeline (vacías si no tiene). */
+export function audioOf(tl: Timeline | null | undefined): AudioTracks {
+  return { voice: tl?.audio?.voice ?? [], sfx: tl?.audio?.sfx ?? [] };
+}
+
+export const hasAudio = (tl: Timeline | null | undefined) => !!(tl?.audio?.voice?.length || tl?.audio?.sfx?.length);
+
+export const audioClipEnd = (c: AudioClip) => c.start + c.duration;
+
+/** Final del último sonido de la imagen (0 si no hay): la imagen dura al menos esto. */
+export function audioEnd(a: AudioTracks): number {
+  return [...a.voice, ...a.sfx].reduce((m, c) => Math.max(m, audioClipEnd(c)), 0);
+}
+
+/** Clip nuevo con el sonido entero. */
+export function newAudioClip(sound: { id: string; seconds: number }, start: number): AudioClip {
+  return { sound: sound.id, start: Math.max(0, start), trimIn: 0, duration: Math.max(MIN_DURATION, sound.seconds), volume: 1, fadeIn: 0, fadeOut: 0 };
+}
+
+/**
+ * Arrastra el borde de un clip de sonido. El inicio recorta el principio del sonido (el final no
+ * se mueve); el final lo acorta o alarga, sin pasar del final del sonido.
+ */
+export function dragAudioEdge(c: AudioClip, edge: "start" | "end", t: number, soundSeconds: number) {
+  const len = Number.isFinite(soundSeconds) && soundSeconds > 0 ? soundSeconds : Infinity;
+  if (edge === "start") {
+    const endT = audioClipEnd(c);
+    // Ni antes del principio del sonido ni más allá de dejar un clip mínimo.
+    const s = Math.min(endT - MIN_DURATION, Math.max(t, c.start - c.trimIn, 0));
+    c.trimIn = Math.max(0, c.trimIn + (s - c.start));
+    c.duration = endT - s;
+    c.start = s;
+  } else {
+    c.duration = Math.max(MIN_DURATION, Math.min(t - c.start, len - c.trimIn));
+  }
+  c.fadeIn = Math.min(c.fadeIn, c.duration);
+  c.fadeOut = Math.min(c.fadeOut, c.duration - c.fadeIn);
 }
 
 /** Duración mínima de un clip en la timeline (s). */

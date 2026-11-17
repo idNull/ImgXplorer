@@ -6,6 +6,7 @@
   import { t, label } from "../i18n.svelte";
   import { prefs } from "../prefs.svelte";
   import { display, keysFor, type PlayerAction, type ViewerAction } from "../keys";
+  import SoundPanel from "../audio/SoundPanel.svelte";
 
   const pk = (a: PlayerAction) => keysFor(prefs.settings.keys, "player", a).slice(0, 2).map(display);
   const vk = (a: ViewerAction) => keysFor(prefs.settings.keys, "viewer", a).slice(0, 1).map(display);
@@ -35,9 +36,12 @@
     onpaneledit: () => void;
     onresetpanels: () => void;
     oneditor: () => void;
+    /** Nombres de las entradas e imagen actual (para los ambientes). */
+    entries: string[];
+    index: number;
   }
 
-  let { store, entry, size, detected, playing, onplay, onclose, panelEdit, manualPanels, onpaneledit, onresetpanels, oneditor }: Props = $props();
+  let { store, entry, size, detected, playing, onplay, onclose, panelEdit, manualPanels, onpaneledit, onresetpanels, oneditor, entries, index }: Props = $props();
 
   const ownTimeline = $derived(!!(entry && store.item(entry)?.timeline?.camera?.length));
   const effective = $derived(entry ? store.templateFor(entry) : null);
@@ -204,6 +208,8 @@
       </label>
     </section>
   {/if}
+
+  {#if store.data}<SoundPanel {store} {entries} {index} />{/if}
 
   <section class="keys">
     <h4>{t("playKeys")}</h4>

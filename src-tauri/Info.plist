@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Se une al Info.plist que genera Tauri. Sin esta frase, macOS cierra la app al usar el micrófono. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>imgxplorer usa el micrófono para grabar voces sobre tus imágenes.</string>
+</dict>
+</plist>

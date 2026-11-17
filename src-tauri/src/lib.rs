@@ -1,5 +1,6 @@
 //! Aplicación Tauri: fuentes abiertas, protocolo `imgx://` y puente de gestos.
 
+mod audio;
 mod diagnostics;
 mod export;
 mod gestures;
@@ -192,6 +193,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(diagnostics::Diagnostics::default())
         .manage(export::Exporter::default())
+        .manage(audio::Audio::default())
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             let path = request.uri().path().to_owned();
@@ -216,6 +218,23 @@ pub fn run() {
             export::export_frame,
             export::export_finish,
             export::export_cancel,
+            audio::sound_list,
+            audio::sound_import,
+            audio::sound_rename,
+            audio::sound_delete,
+            audio::sound_peaks,
+            audio::sound_preview,
+            audio::audio_scene,
+            audio::audio_ambient,
+            audio::audio_transport,
+            audio::audio_tracks,
+            audio::audio_levels,
+            audio::audio_silence,
+            audio::audio_status,
+            audio::audio_inputs,
+            audio::record_start,
+            audio::record_level,
+            audio::record_stop,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])

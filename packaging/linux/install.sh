@@ -176,10 +176,10 @@ esac
 
 # Cada entrada: alternativas separadas por «|» (la primera que exista en el repositorio).
 case "$PM" in
-  pacman) REQ=(webkit2gtk-4.1 gtk3 libheif); OPT=(ffmpeg) ;;
-  apt)    REQ=(libwebkit2gtk-4.1-0 "libgtk-3-0t64|libgtk-3-0" "libheif1|libheif1t64" libheif-plugin-libde265 "libheif-plugin-dav1d|libheif-plugin-aomdec"); OPT=(ffmpeg) ;;
-  dnf)    REQ=(webkit2gtk4.1 gtk3 libheif); OPT=("ffmpeg|ffmpeg-free") ;;
-  zypper) REQ=(libwebkit2gtk-4_1-0 libgtk-3-0 libheif1); OPT=("ffmpeg-7|ffmpeg-6|ffmpeg") ;;
+  pacman) REQ=(webkit2gtk-4.1 gtk3 libheif alsa-lib); OPT=(ffmpeg) ;;
+  apt)    REQ=(libwebkit2gtk-4.1-0 "libgtk-3-0t64|libgtk-3-0" "libheif1|libheif1t64" libheif-plugin-libde265 "libheif-plugin-dav1d|libheif-plugin-aomdec" "libasound2t64|libasound2"); OPT=(ffmpeg) ;;
+  dnf)    REQ=(webkit2gtk4.1 gtk3 libheif alsa-lib); OPT=("ffmpeg|ffmpeg-free") ;;
+  zypper) REQ=(libwebkit2gtk-4_1-0 libgtk-3-0 libheif1 libasound2); OPT=("ffmpeg-7|ffmpeg-6|ffmpeg") ;;
   *)      REQ=(); OPT=() ;;
 esac
 

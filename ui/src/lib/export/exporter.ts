@@ -1,11 +1,15 @@
 // Exportar a vídeo. Recorre las imágenes como el reproductor (animación, pausa entre imágenes y
 // transición), pinta cada fotograma con el mismo motor WebGL de la vista previa en un canvas
 // aparte, lo convierte a YUV en la GPU y lo envía a Rust, que se lo pasa a ffmpeg.
+import type { TrackSpec } from "../audio/tracks";
 import { invoke } from "@tauri-apps/api/core";
 import { GlViewer, type TextureSet } from "../viewer/gl";
 import { PictureCache, type PictureRef } from "../viewer/picture";
 import { viewMatrix, wasm, type Size } from "../core";
-import type { PlaySpec } from "../action/player";
+import { itemDuration, type PlaySpec } from "../action/player";
+import type { AudioTracks } from "../editor/model";
+import { SoundSchedule } from "../audio/sync";
+import type { MixLevels } from "../audio/director";
 
 export interface VideoOptions {
   path: string;
@@ -19,6 +23,8 @@ export interface VideoOptions {
   /** Imágenes a exportar (índices incluidos). */
   from: number;
   to: number;
+  /** Incluir el sonido, con esta mezcla (null: vídeo mudo). */
+  sound: MixLevels | null;
 }
 
 export interface ExportProgress {
@@ -28,15 +34,21 @@ export interface ExportProgress {
   index: number;
   /** 0..1 aproximado (por imágenes). */
   fraction: number;
+  /** Mezclando el sonido al final. */
+  mixing?: boolean;
 }
 
-export type ExportSpec = Pick<PlaySpec, "timeline" | "transitionOut" | "holdBetween">;
+export type ExportSpec = Pick<PlaySpec, "timeline" | "transitionOut" | "holdBetween" | "audio" | "ambient"> & {
+  /** Pistas del proyecto (volumen, panorama, silencio y efectos). */
+  tracks?: () => TrackSpec[];
+};
 
 interface Prepared {
   i: number;
   size: Size;
   set: TextureSet;
   tl: wasm.WasmTimeline;
+  audio: AudioTracks | undefined;
   dur: number;
 }
 
@@ -71,7 +83,8 @@ export async function exportVideo(
     const set = gl.createSet(pic);
     try {
       const tl = await spec.timeline(i, size, aspect);
-      const p = { i, size, set, tl, dur: tl.duration() };
+      const audio = spec.audio?.(i);
+      const p = { i, size, set, tl, audio, dur: itemDuration(tl, audio) };
       live.add(p);
       return p;
     } catch (e) {
@@ -116,26 +129,29 @@ export async function exportVideo(
   try {
     const count = o.to - o.from + 1;
     const hold = spec.holdBetween();
+    const schedule = new SoundSchedule();
     let cur = await prepare(o.from);
     for (let i = o.from; i <= o.to; i++) {
       index = i;
       const last = i === o.to;
+      schedule.image(frames / o.fps, cur.audio, spec.ambient?.(i) ?? []);
       const next = last ? null : prepare(i + 1);
       next?.catch(() => {}); // el error se recoge al esperarla
       // La imagen: animación y pausa (en la última, hasta el final exacto).
       const n = Math.max(1, Math.round((cur.dur + hold) * o.fps)) + (last ? 1 : 0);
       for (let k = 0; k < n; k++) {
         fraction = (i - o.from + k / n) / count;
-        const pose = cur.tl.evaluate(Math.min(k / o.fps, cur.dur));
+        const pose = cur.tl.evaluate(Math.min(k / o.fps, cur.tl.duration()));
         gl.draw([{ set: cur.set, m: viewMatrix(pose, cur.size, vp), alpha: 1 }], vp);
         await emit();
       }
+      schedule.imageEnd(frames / o.fps);
       if (!next) break;
       const nx = await next;
       // Transición hacia la siguiente.
       const tr = spec.transitionOut(i);
       if (!tr.cut && tr.duration >= 0.01) {
-        const from = cur.tl.evaluate(cur.dur);
+        const from = cur.tl.evaluate(cur.tl.duration());
         const to = nx.tl.evaluate(0);
         const m = Math.max(1, Math.round(tr.duration * o.fps));
         for (let j = 0; j < m; j++) {
@@ -155,8 +171,10 @@ export async function exportVideo(
       cur = nx;
     }
     await pending;
-    onprogress({ frames, index: o.to, fraction: 1 });
-    return await invoke<string>("export_finish");
+    const clips = o.sound ? schedule.finish() : [];
+    onprogress({ frames, index: o.to, fraction: 1, mixing: clips.length > 0 });
+    const audio = clips.length ? { clips, tracks: spec.tracks?.() ?? [], levels: o.sound, seconds: frames / o.fps } : null;
+    return await invoke<string>("export_finish", { audio });
   } catch (e) {
     await pending.catch(() => {});
     await invoke("export_cancel").catch(() => {});

@@ -30,8 +30,12 @@ export interface Settings {
   /** Anchos (px) de las columnas de biblioteca e inspector del editor. */
   libWidth: number;
   inspectorWidth: number;
+  /** Altura del editor (px). */
+  editorHeight: number;
   /** Opciones de la última exportación a vídeo. */
   video: VideoPrefs;
+  /** Sonido: volumen general (0..1,5), silencio y micrófono para grabar voz ("" = el del sistema). */
+  sound: { master: number; mute: boolean; input: string };
   keys: KeyOverrides;
 }
 
@@ -84,6 +88,7 @@ function cleanVideo(raw: unknown): VideoPrefs {
 export type FileDialogMode = "auto" | "app" | "system";
 export const LIB_WIDTH = { min: 160, max: 640, def: 220 } as const;
 export const INSPECTOR_WIDTH = { min: 200, max: 520, def: 250 } as const;
+export const EDITOR_HEIGHT = { min: 170, max: 1200, def: 260 } as const;
 
 export interface Recent {
   path: string;
@@ -112,13 +117,15 @@ export const DEFAULT_SETTINGS: Settings = {
   editorFrame: "playback",
   libWidth: LIB_WIDTH.def,
   inspectorWidth: INSPECTOR_WIDTH.def,
+  editorHeight: EDITOR_HEIGHT.def,
   video: DEFAULT_VIDEO,
+  sound: { master: 1, mute: false, input: "" },
   keys: {},
 };
 export const MAX_RECENTS = 20;
 
 function clean(raw: unknown): Settings {
-  const s: Settings = { ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, keys: {} };
+  const s: Settings = { ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, sound: { ...DEFAULT_SETTINGS.sound }, keys: {} };
   if (!raw || typeof raw !== "object") return s;
   const r = raw as Record<string, unknown>;
   if (r.lang === "es" || r.lang === "en" || r.lang === "auto") s.lang = r.lang;
@@ -138,6 +145,11 @@ function clean(raw: unknown): Settings {
     typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(w.max, Math.max(w.min, v))) : w.def;
   s.libWidth = width(r.libWidth, LIB_WIDTH);
   s.inspectorWidth = width(r.inspectorWidth, INSPECTOR_WIDTH);
+  s.editorHeight = width(r.editorHeight, EDITOR_HEIGHT);
+  const snd = (r.sound && typeof r.sound === "object" ? r.sound : {}) as Record<string, unknown>;
+  if (typeof snd.master === "number" && Number.isFinite(snd.master)) s.sound.master = Math.min(1.5, Math.max(0, snd.master));
+  if (typeof snd.mute === "boolean") s.sound.mute = snd.mute;
+  if (typeof snd.input === "string") s.sound.input = snd.input.slice(0, 300);
   s.keys = cleanOverrides(r.keys);
   return s;
 }
@@ -159,7 +171,7 @@ function cleanRecents(raw: unknown): Recent[] {
 }
 
 class Prefs {
-  settings = $state<Settings>({ ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, keys: {} });
+  settings = $state<Settings>({ ...DEFAULT_SETTINGS, video: { ...DEFAULT_VIDEO }, sound: { ...DEFAULT_SETTINGS.sound }, keys: {} });
   recents = $state<Recent[]>([]);
   loaded = $state(false);
 

@@ -3,6 +3,17 @@
   import { BACKGROUNDS, DEFAULT_SETTINGS, DEFAULT_VIDEO, prefs } from "./prefs.svelte";
   import { MAX_KEYS, actionsOf, assign, comboOf, display, keysFor, type ActionOf, type Group } from "./keys";
   import { t, label } from "./i18n.svelte";
+  import { invoke } from "@tauri-apps/api/core";
+
+  // Micrófonos y salida de sonido (se piden al abrir los ajustes).
+  let inputs = $state<{ id: string; name: string }[]>([]);
+  let output = $state<string | null>(null);
+  invoke<{ id: string; name: string }[]>("audio_inputs").then((l) => (inputs = l), () => {});
+  invoke<{ device: string | null; error: string | null }>("audio_status").then((st) => (output = st.device ?? st.error), () => {});
+  function setSound(k: "master" | "mute" | "input", v: number | boolean | string) {
+    (prefs.settings.sound as Record<string, number | boolean | string>)[k] = v;
+    prefs.saveSettings();
+  }
 
   interface Props {
     onclose: () => void;
@@ -79,7 +90,13 @@
   }
 
   function resetSettings() {
-    prefs.settings = { ...DEFAULT_SETTINGS, lastDir: prefs.settings.lastDir, video: { ...DEFAULT_VIDEO, ffmpeg: prefs.settings.video.ffmpeg }, keys: $state.snapshot(prefs.settings.keys) };
+    prefs.settings = {
+      ...DEFAULT_SETTINGS,
+      lastDir: prefs.settings.lastDir,
+      video: { ...DEFAULT_VIDEO, ffmpeg: prefs.settings.video.ffmpeg },
+      sound: { ...DEFAULT_SETTINGS.sound, input: prefs.settings.sound.input },
+      keys: $state.snapshot(prefs.settings.keys),
+    };
     save();
   }
 
@@ -159,6 +176,24 @@
           </select>
         </label>
         <p class="note">{t("fileDialogHelp")}</p>
+        <label class="row">
+          <span>{t("masterVolume")}</span>
+          <input type="range" min="0" max="150" step="5" value={Math.round(s.sound.master * 100)} oninput={(e) => setSound("master", Number(e.currentTarget.value) / 100)} />
+          <output>{Math.round(s.sound.master * 100)} %</output>
+        </label>
+        <label class="row">
+          <span>{t("mute")}</span>
+          <input type="checkbox" checked={s.sound.mute} onchange={(e) => setSound("mute", e.currentTarget.checked)} />
+        </label>
+        <label class="row">
+          <span>{t("microphone")}</span>
+          <select value={s.sound.input} onchange={(e) => setSound("input", e.currentTarget.value)}>
+            <option value="">{t("microphoneDefault")}</option>
+            {#if s.sound.input && !inputs.some((d) => d.id === s.sound.input)}<option value={s.sound.input}>{s.sound.input}</option>{/if}
+            {#each inputs as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
+          </select>
+        </label>
+        {#if output}<p class="note">{t("soundOutput", { name: output })}</p>{/if}
         <label class="row">
           <span>{t("showDiag")}</span>
           <input type="checkbox" checked={s.showDiag} onchange={(e) => set("showDiag", e.currentTarget.checked)} />

@@ -8,6 +8,7 @@
   import { prefs, videoPixels, QUALITY_CRF, VIDEO_SIZES, type VideoSize } from "../prefs.svelte";
   import type { PictureRef } from "../viewer/picture";
   import { t } from "../i18n.svelte";
+  import type { MixLevels } from "../audio/director";
   import { log } from "../log";
 
   interface Props {
@@ -20,9 +21,11 @@
     refAt: (i: number) => PictureRef;
     spec: ExportSpec;
     os: string;
+    /** Mezcla del proyecto (volumen de voz, efectos y ambiente). */
+    mix: MixLevels;
     onclose: () => void;
   }
-  let { title, dir, count, index, refAt, spec, os, onclose }: Props = $props();
+  let { title, dir, count, index, refAt, spec, os, mix, onclose }: Props = $props();
 
   interface Ffmpeg {
     path: string;
@@ -55,6 +58,15 @@
     return { a, b };
   });
   const ready = $derived(phase === "setup" && !!ff?.encoder && !!path.trim());
+  /** Alguna imagen del tramo tiene sonido. */
+  const hasSound = $derived.by(() => {
+    for (let i = span.a; i <= span.b; i++) {
+      const a = spec.audio?.(i);
+      if (a?.voice.length || a?.sfx.length || spec.ambient?.(i).length) return true;
+    }
+    return false;
+  });
+  let withSound = $state(true);
 
   const save = () => prefs.saveSettings();
   const stem = (s: string) => s.replace(/\.[^./]+$/, "") || "video";
@@ -121,6 +133,7 @@
           background: prefs.settings.background,
           from: span.a,
           to: span.b,
+          sound: hasSound && withSound ? $state.snapshot(mix) : null,
         },
         spec,
         refAt,
@@ -268,6 +281,9 @@
             <button onclick={pickPath}>{t("browse")}</button>
           </div>
         </div>
+        {#if hasSound}
+          <label class="sound"><input type="checkbox" bind:checked={withSound} /> {t("exportSound")}</label>
+        {/if}
         {#if exists}<p class="warn">{t("videoExists")}</p>{/if}
         <p class="note">{t("exportNote")}</p>
       </div>
@@ -285,7 +301,7 @@
           {t("exportStats", { frames: progress.frames, video: clock(videoTime * 1000), elapsed: clock(elapsed) })}
           {#if remaining !== null} · {t("exportRemaining", { t: clock(remaining) })}{/if}
         </p>
-        <p class="note">{t("exportWait")}</p>
+        <p class="note">{progress.mixing ? t("exportMixing") : t("exportWait")}</p>
       </div>
       <footer>
         <button onclick={() => abort?.abort()}>{t("cancel")}</button>
@@ -329,6 +345,7 @@
     .row { grid-template-columns: 1fr; gap: 4px; }
   }
   .col { display: flex; flex-direction: column; gap: 4px; }
+  .sound { display: flex; align-items: center; gap: 6px; }
   .inline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   .grow input.path { flex: 1; min-width: 0; }
   input[type="number"] { width: 70px; }

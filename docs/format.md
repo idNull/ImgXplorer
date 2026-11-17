@@ -33,11 +33,22 @@ Son independientes de la resolución, así que un clip vale para cualquier image
     "template": { "id": "comic-blocks", "params": { "rows": 3, "cols": 2, "dir": "rtl" } },
     "timeline": {
       "camera": [ { "name": "Zoom al título", "start": 0, "duration": 2, "clip": { "ref": "zoom-titulo" }, "trimIn": 0, "trimOut": 0 } ],
-      "audio": { "voice": [], "sfx": [], "ambient": [] }
+      "audio": {
+        "voice": [ { "sound": "3f2a…", "name": "Narración", "start": 0.5, "trimIn": 0, "duration": 4.2, "volume": 1, "fadeIn": 0, "fadeOut": 0.3 } ],
+        "sfx": [ { "sound": "builtin:knock", "start": 3, "trimIn": 0, "duration": 1.2, "volume": 0.8, "fadeIn": 0, "fadeOut": 0 } ]
+      }
     },
     "transitionOut": { "type": "continuous-camera", "duration": 0.8 },
     "panels": [ { "x": 0.05, "y": 0.04, "w": 0.9, "h": 0.3 } ]
-  } ]
+  } ],
+  "ambient": [ { "id": "amb-…", "sound": "builtin:rain", "from": "003.jpg", "to": "007.jpg", "volume": 1, "fadeIn": 1.5, "fadeOut": 1.5 } ],
+  "tracks": [
+    { "id": "voice", "bus": "voice", "name": "Ana", "volume": 1, "pan": -0.2,
+      "effects": [ { "id": "fx-…", "type": "reverb", "on": true, "preset": "hall", "params": { "size": 0.7, "mix": 0.3 } } ] },
+    { "id": "trk-…", "bus": "voice", "name": "Luis", "volume": 0.9, "pan": 0.2, "mute": true },
+    { "id": "sfx", "bus": "sfx", "volume": 1, "pan": 0 },
+    { "id": "ambient", "bus": "ambient", "volume": 1, "pan": 0 }
+  ]
 }
 ```
 
@@ -60,7 +71,36 @@ Easing: `linear`, `ease-in`, `ease-out`, `ease-in-out`, `bounce`, `elastic`, `st
   debajo. En un hueco se mantiene la última pose del clip que terminó más tarde, y antes del
   primero, su pose inicial.
 - Una espera sin `pose` mantiene la pose con la que se llega a ella.
-- `audio` está reservado para la fase de sonido: se conserva al guardar, pero aún no se usa.
+- `audio.voice` y `audio.sfx`: sonidos de la imagen (ver *Sonido*). Una timeline puede tener
+  sonido y ninguna cámara; entonces la imagen sigue usando su plantilla para la cámara.
+
+### Sonido
+- **Clip de voz o efecto** (`timeline.audio.voice[]`, `timeline.audio.sfx[]`):
+  - `sound`: id del sonido en la biblioteca del usuario (los 20 primeros caracteres hexadecimales del SHA-256 del archivo), o `builtin:<id>` para los efectos de serie.
+  - `start`: segundo de la imagen en que empieza. `trimIn`: segundos que se saltan del sonido. `duration`: cuánto suena.
+  - `volume`: 1 es el original. `fadeIn` y `fadeOut`: segundos de fundido.
+  - `name`: opcional.
+  - `track`: opcional, id de la pista (si falta o no existe, la primera de su grupo).
+  - `effects`: opcional, efectos del propio clip (se aplican antes que los de la pista).
+  - La imagen dura al menos hasta el final de su último sonido.
+- **Ambiente** (`ambient[]`, en el proyecto): suena en bucle desde el principio de la imagen `from` hasta el final de la imagen `to` (nombres de entrada), con su volumen y fundidos. Si `to` ya no existe, suena solo en `from`; si no existe `from`, no suena. También admite `track` y `effects`.
+- **Pistas** (`tracks[]`, opcional): las mismas en todas las imágenes. `bus` es el grupo (`voice`, `sfx` o `ambient`), `volume` (1), `pan` (−1 izquierda … 1 derecha), `mute` (false) y `effects`. Si no hay ninguna de un grupo, existe una con el id del grupo (así se leen los proyectos de antes).
+- **Efecto** (en `tracks[].effects`, `voice[]/sfx[].effects` y `ambient[].effects`): `{ id, type, on, preset?, params }`. `type` es `reverb`, `delay`, `eq`, `filter`, `compressor`, `pitch`, `robot` o `distortion`; `preset` es solo informativo; en `params` los mandos que falten toman su valor por defecto y los que se salgan del rango se limitan:
+
+  | `type` | `params` (valor por defecto) |
+  |---|---|
+  | `reverb` | `size` 0–1 (0.5), `damping` 0–1 (0.5), `mix` 0–1 (0.3), `width` 0–1 (1), `predelay` ms (0) |
+  | `delay` | `time` ms (350), `feedback` 0–0.95 (0.35), `tone` Hz (6000), `mix` 0–1 (0.35), `pingpong` 0/1 (0) |
+  | `eq` | `low`, `mid`, `high` en dB (0) a 150 Hz, 1 kHz y 5 kHz |
+  | `filter` | `low` Hz paso alto (20 = sin), `high` Hz paso bajo (20000 = sin), `drive` 0–1 (0) |
+  | `compressor` | `threshold` dB (−18), `ratio` (4), `attack` ms (10), `release` ms (150), `makeup` dB (6) |
+  | `pitch` | `semitones` −12–12 (−5), `mix` 0–1 (1) |
+  | `robot` | `freq` Hz (50), `metal` 0–0.9 (0.4), `mix` 0–1 (1) |
+  | `distortion` | `drive` 0–1 (0.5), `tone` Hz (6000), `mix` 0–1 (1) |
+
+- **Mezcla** (`defaults.mix`, opcional): volumen de cada grupo, `{ "voice": 1, "sfx": 1, "ambient": 0.7, "duck": true }`. `duck` baja el ambiente al 35 % mientras hay voz (de pistas no silenciadas).
+- Orden de la mezcla: clip → sus efectos → pista (efectos, volumen, panorama) → grupo (volumen, atenuación) → volumen general y limitador.
+- Los sonidos no van dentro del `.imgx`: están en la biblioteca de sonidos del usuario y viajan en los paquetes `.imgxpack` (`sounds.json` y la carpeta `sounds/`).
 
 ### Plantillas
 `defaults.template` se aplica a todas las imágenes sin animación propia; `items[].template`
