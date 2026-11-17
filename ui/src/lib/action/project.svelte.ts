@@ -1,7 +1,10 @@
 // Proyecto `.imgx` de la fuente abierta: lo que el usuario configura en el Modo Acción.
 // Se guarda solo (con un pequeño retraso) en cuanto cambia algo; Rust lo valida antes de escribir.
+// Deshacer/rehacer guarda instantáneas del proyecto entero (es pequeño): cada pausa en la
+// edición, o cada gesto completo (`batch`), es un paso.
 import { invoke } from "@tauri-apps/api/core";
 import type { TemplateRef } from "./catalog";
+import type { Timeline } from "../editor/model";
 import { log } from "../log";
 
 export type TransitionType = "cut" | "fade" | "slide" | "continuous-camera";
@@ -13,12 +16,21 @@ export interface Transition {
   duration: number;
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Item {
   entry: string;
   size: [number, number];
   template?: TemplateRef;
-  timeline?: { camera: unknown[]; audio?: unknown };
+  timeline?: Timeline;
   transitionOut?: Transition;
+  /** Viñetas dibujadas a mano (sustituyen a la detección). */
+  panels?: Rect[];
 }
 
 export interface ProjectData {
@@ -38,6 +50,9 @@ export interface LoadedProject {
 }
 
 const SAVE_DELAY = 500;
+/** Sin cambios durante este tiempo, lo editado cuenta como un paso de deshacer. */
+const STEP_DELAY = 350;
+const MAX_UNDO = 200;
 
 export class ProjectStore {
   data = $state<ProjectData | null>(null);
@@ -49,6 +64,16 @@ export class ProjectStore {
   private generation = 0;
   private timer: number | undefined;
   private pending = false;
+  private undoStack: string[] = [];
+  private redoStack: string[] = [];
+  /** Estado tras el último paso guardado en el historial. */
+  private base: string | null = null;
+  private stepTimer: number | undefined;
+  private batching = 0;
+  /** Hay cambios aún sin cerrar como paso de deshacer. */
+  private stepPending = false;
+  canUndo = $state(false);
+  canRedo = $state(false);
 
   async load(
     generation: number,
@@ -80,6 +105,68 @@ export class ProjectStore {
     data.source.name = source.title;
     data.source.fingerprint = source.fingerprint;
     this.data = data;
+    clearTimeout(this.stepTimer);
+    this.stepPending = false;
+    this.batching = 0;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.base = this.json();
+    this.syncFlags();
+  }
+
+  private json(): string {
+    return JSON.stringify($state.snapshot(this.data));
+  }
+
+  private syncFlags() {
+    this.canUndo = this.undoStack.length > 0 || this.stepPending;
+    this.canRedo = this.redoStack.length > 0;
+  }
+
+  /** Cierra el paso de deshacer en curso (si hubo cambios). */
+  commit() {
+    clearTimeout(this.stepTimer);
+    this.stepPending = false;
+    if (!this.data) return;
+    const now = this.json();
+    if (this.base !== null && now !== this.base) {
+      this.undoStack.push(this.base);
+      if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
+      this.redoStack = [];
+    }
+    this.base = now;
+    this.syncFlags();
+  }
+
+  /** Agrupa todos los cambios de un gesto (arrastre…) en un solo paso. */
+  batch(active: boolean) {
+    this.batching = Math.max(0, this.batching + (active ? 1 : -1));
+    if (!this.batching) this.commit();
+  }
+
+  undo(): boolean {
+    this.commit();
+    const prev = this.undoStack.pop();
+    if (prev === undefined || this.base === null) return false;
+    this.redoStack.push(this.base);
+    this.restore(prev);
+    return true;
+  }
+
+  redo(): boolean {
+    this.commit();
+    const next = this.redoStack.pop();
+    if (next === undefined || this.base === null) return false;
+    this.undoStack.push(this.base);
+    this.restore(next);
+    return true;
+  }
+
+  private restore(json: string) {
+    this.data = JSON.parse(json) as ProjectData;
+    this.base = json;
+    this.syncFlags();
+    this.save();
   }
 
   item(entry: string): Item | undefined {
@@ -122,13 +209,63 @@ export class ProjectStore {
     this.changed();
   }
 
+  /** Entrada de la imagen, creándola si no existe. */
+  private ensure(entry: string, size: [number, number]): Item {
+    let it = this.item(entry);
+    if (!it) {
+      this.data!.items.push({ entry, size });
+      it = this.data!.items.at(-1)!;
+    }
+    it.size = size;
+    return it;
+  }
+
+  /**
+   * Timeline propia de la imagen (editor). Sustituye a cualquier plantilla. Vacía o `null`, la
+   * imagen vuelve a usar la plantilla de todas.
+   */
+  setTimeline(entry: string, size: [number, number], tl: Timeline | null) {
+    if (!this.data) return;
+    if (tl?.camera.length) {
+      const it = this.ensure(entry, size);
+      it.timeline = tl;
+      delete it.template;
+    } else {
+      const it = this.item(entry);
+      if (it) delete it.timeline;
+      this.prune();
+    }
+    this.changed();
+  }
+
+  /** Viñetas dibujadas a mano; `null` vuelve a la detección automática. */
+  setPanels(entry: string, size: [number, number], panels: Rect[] | null) {
+    if (!this.data) return;
+    if (panels) this.ensure(entry, size).panels = panels;
+    else {
+      const it = this.item(entry);
+      if (it) delete it.panels;
+      this.prune();
+    }
+    this.changed();
+  }
+
   /** Quita las entradas que ya no aportan nada. */
   private prune() {
     if (!this.data) return;
-    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length);
+    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || i.panels);
   }
 
   changed() {
+    if (this.readOnly || !this.data) return;
+    this.stepPending = true;
+    clearTimeout(this.stepTimer);
+    if (!this.batching) this.stepTimer = window.setTimeout(() => this.commit(), STEP_DELAY);
+    this.canUndo = true;
+    this.save();
+  }
+
+  private save() {
     if (this.readOnly || !this.data) return;
     this.pending = true;
     clearTimeout(this.timer);

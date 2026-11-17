@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { GlViewer, TextureError, type Layer, type TextureSet } from "./gl";
   import { attachInput } from "./input";
+  import { HANDLES, cursorAt, handlePoint, press, type PanelEdit } from "./panelEdit";
   import { PictureCache, type PictureRef } from "./picture";
   import type { ViewerStatus } from "./types";
   import { Player, type PlayerInfo, type PlaySpec, type Scene } from "../action/player";
@@ -25,9 +26,15 @@
     background?: string;
     /** Multiplicador de la velocidad de zoom con la rueda. */
     wheelSpeed?: number;
+    /** El usuario ha movido la cámara a mano (fuera de la reproducción). */
+    onmanual?: () => void;
+    /** Edición de viñetas: el botón izquierdo dibuja, mueve y redimensiona en vez de desplazar. */
+    editPanels?: PanelEdit | null;
   }
 
-  let { item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1 }: Props = $props();
+  let {
+    item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null,
+  }: Props = $props();
 
   interface Slot {
     key: string;
@@ -136,7 +143,10 @@
 
   /** Antes de un movimiento manual: durante la reproducción, el reproductor cede el control. */
   function manual(): boolean {
-    if (!player) return true;
+    if (!player) {
+      onmanual?.();
+      return true;
+    }
     const s = player.touch();
     if (!s) return false;
     const slot = slots.get(s.key);
@@ -173,6 +183,28 @@
   }
   export function isZoomedIn(): boolean {
     return pose[2] > 1.01;
+  }
+
+  /**
+   * Pose de la cámara. `final`: al final de la animación en curso (para guardar una clave);
+   * si no, la que se ve en este fotograma (para grabar el movimiento).
+   */
+  export function currentPose(final = true): Pose {
+    return new Float64Array(final && anim ? anim.to : pose);
+  }
+
+  /** Pone la pose sin animación (el editor la lleva al mover el cabezal). */
+  export function setPoseNow(p: Pose) {
+    if (player) return;
+    anim = null;
+    pose = new Float64Array(p);
+    dirty = true;
+    report({});
+  }
+
+  /** Ancho / alto del área de la imagen. */
+  export function aspect(): number {
+    return vp.w / Math.max(1, vp.h);
   }
 
   /** Empieza a reproducir el Modo Acción desde `spec.start`. */
@@ -249,6 +281,8 @@
 
   $effect(() => {
     void panels;
+    void editPanels?.rects;
+    void editPanels?.selected;
     dirty = true;
   });
 
@@ -287,7 +321,7 @@
   }
 
   /** Viñetas numeradas sobre la imagen (fuera de la reproducción). */
-  function drawOverlay() {
+  function drawOverlay(): void {
     const dpr = window.devicePixelRatio || 1;
     const pw = Math.round(vp.w * dpr);
     const ph = Math.round(vp.h * dpr);
@@ -298,31 +332,72 @@
     const ctx = overlay.getContext("2d")!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
-    if (!panels?.length || !shown || player) return;
+    if (!shown || player) return;
+    if (editPanels) return drawEditing(ctx, dpr);
+    if (!panels?.length) return;
     const m = viewMatrix(pose, shown.size, vp);
     const { w, h } = shown.size;
     const pt = (x: number, y: number) => [(m[0] * x * w + m[2] * y * h + m[4]) * dpr, (m[1] * x * w + m[3] * y * h + m[5]) * dpr];
+    for (let i = 0; i + 3 < panels.length; i += 4) {
+      drawRect(ctx, dpr, pt, panels.subarray(i, i + 4), i / 4 + 1, false);
+    }
+  }
+
+  type Pt = (x: number, y: number) => number[];
+
+  function drawRect(ctx: CanvasRenderingContext2D, dpr: number, pt: Pt, r: ArrayLike<number>, n: number, selected: boolean) {
+    const [x, y, rw, rh] = [r[0], r[1], r[2], r[3]];
+    const color = selected ? "251 191 36" : "56 189 248";
+    const corners = [pt(x, y), pt(x + rw, y), pt(x + rw, y + rh), pt(x, y + rh)];
     ctx.lineWidth = 2 * dpr;
+    ctx.strokeStyle = `rgb(${color} / 0.95)`;
+    ctx.fillStyle = `rgb(${color} / ${selected ? 0.14 : 0.08})`;
+    ctx.beginPath();
+    corners.forEach(([cx, cy], k) => (k ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    if (n <= 0) return;
+    const [cx, cy] = pt(x + rw / 2, y + rh / 2);
     ctx.font = `600 ${14 * dpr}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (let i = 0; i + 3 < panels.length; i += 4) {
-      const [x, y, rw, rh] = panels.subarray(i, i + 4);
-      const corners = [pt(x, y), pt(x + rw, y), pt(x + rw, y + rh), pt(x, y + rh)];
-      ctx.strokeStyle = "rgb(56 189 248 / 0.9)";
-      ctx.fillStyle = "rgb(56 189 248 / 0.08)";
+    ctx.fillStyle = "rgb(11 13 16 / 0.85)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgb(${color})`;
+    ctx.fillText(String(n), cx, cy);
+  }
+
+  /** Viñetas editables: número de lectura (de `panels`) y tiradores en la seleccionada. */
+  function drawEditing(ctx: CanvasRenderingContext2D, dpr: number) {
+    const e = editPanels!;
+    const m = viewMatrix(pose, shown!.size, vp);
+    const { w, h } = shown!.size;
+    const pt: Pt = (x, y) => [(m[0] * x * w + m[2] * y * h + m[4]) * dpr, (m[1] * x * w + m[3] * y * h + m[5]) * dpr];
+    const order = (r: number[]) => {
+      if (!panels) return 0;
+      for (let k = 0; k + 3 < panels.length; k += 4) {
+        if (panels[k] === r[0] && panels[k + 1] === r[1] && panels[k + 2] === r[2] && panels[k + 3] === r[3]) return k / 4 + 1;
+      }
+      return 0;
+    };
+    for (let i = 0; i * 4 < e.rects.length; i++) {
+      const r = e.rects.slice(i * 4, i * 4 + 4);
+      drawRect(ctx, dpr, pt, r, order(r), i === e.selected);
+    }
+    if (e.selected < 0 || e.selected * 4 >= e.rects.length) return;
+    const r = e.rects.slice(e.selected * 4, e.selected * 4 + 4);
+    ctx.fillStyle = "#fbbf24";
+    ctx.strokeStyle = "#0b0d10";
+    ctx.lineWidth = 1.5 * dpr;
+    for (const hd of HANDLES) {
+      const [hx, hy] = pt(...handlePoint(r, hd));
       ctx.beginPath();
-      corners.forEach(([cx, cy], k) => (k ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy)));
-      ctx.closePath();
+      ctx.rect(hx - 4.5 * dpr, hy - 4.5 * dpr, 9 * dpr, 9 * dpr);
       ctx.fill();
       ctx.stroke();
-      const [cx, cy] = pt(x + rw / 2, y + rh / 2);
-      ctx.fillStyle = "rgb(11 13 16 / 0.85)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, 14 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#38bdf8";
-      ctx.fillText(String(i / 4 + 1), cx, cy);
     }
   }
 
@@ -355,6 +430,16 @@
         player?.hold(active);
       },
       wheelSpeed: () => wheelSpeed,
+      press(x, y) {
+        if (!editPanels || !shown || player) return null;
+        anim = null;
+        const edit = editPanels;
+        return press(edit, () => ({ m: viewMatrix(pose, shown!.size, vp), img: shown!.size }), x, y);
+      },
+      hover(x, y) {
+        if (!editPanels || !shown || player) return null;
+        return cursorAt(editPanels, viewMatrix(pose, shown.size, vp), shown.size, x, y);
+      },
       doubleClick(x, y) {
         if (!shown) return;
         if (pose[2] > 1.01) fit();

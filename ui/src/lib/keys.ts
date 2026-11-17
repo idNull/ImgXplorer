@@ -3,7 +3,8 @@
 // el propio carácter ("r" frente a "R", "+" frente a "="), así que no se añade "Shift+".
 import { t } from "./i18n.svelte";
 
-export type Group = "viewer" | "player";
+export type Group = "viewer" | "player" | "editor";
+export const GROUPS: Group[] = ["viewer", "player", "editor"];
 
 /** Acciones de cada grupo con sus teclas por defecto, en el orden en que se muestran. */
 export const DEFAULTS = {
@@ -31,6 +32,9 @@ export const DEFAULTS = {
     openFolder: ["Ctrl+O"],
     recents: ["Ctrl+r"],
     settings: ["Ctrl+,"],
+    editor: ["e", "E"],
+    undo: ["Ctrl+z"],
+    redo: ["Ctrl+Z", "Ctrl+y"],
   },
   player: {
     toggle: [" "],
@@ -46,10 +50,21 @@ export const DEFAULTS = {
     slower: ["["],
     stop: ["Escape", "p", "P"],
   },
+  /** Con el editor abierto (y sin reproducir), por delante de las del visor. */
+  editor: {
+    toggle: [" "],
+    keyframe: ["k", "K"],
+    record: ["g", "G"],
+    remove: ["Delete"],
+    markPrev: [","],
+    markNext: ["."],
+    cancel: ["Escape"],
+  },
 } as const satisfies Record<Group, Record<string, readonly string[]>>;
 
 export type ViewerAction = keyof typeof DEFAULTS.viewer;
 export type PlayerAction = keyof typeof DEFAULTS.player;
+export type EditorAction = keyof typeof DEFAULTS.editor;
 export type ActionOf<G extends Group> = keyof (typeof DEFAULTS)[G];
 
 /** Teclas cambiadas por el usuario (solo las acciones que difieren de las de fábrica). */
@@ -116,7 +131,7 @@ function setOwn(g: Record<string, string[]>, group: Group, action: string, keys:
 export function cleanOverrides(raw: unknown): KeyOverrides {
   const out: KeyOverrides = {};
   if (!raw || typeof raw !== "object") return out;
-  for (const group of ["viewer", "player"] as const) {
+  for (const group of GROUPS) {
     const src = (raw as Record<string, unknown>)[group];
     if (!src || typeof src !== "object") continue;
     const dst: Record<string, string[]> = {};

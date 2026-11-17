@@ -2,6 +2,7 @@
 
 pub mod camera;
 pub mod easing;
+pub mod record;
 pub mod schema;
 pub mod templates;
 pub mod timeline;

@@ -51,6 +51,34 @@ impl Clip {
     }
 }
 
+fn needs_prev(clip: &Clip) -> bool {
+    match clip {
+        Clip::Hold { pose, .. } => pose.is_none(),
+        Clip::Keyframes { keys } => keys.is_empty(),
+        Clip::Recorded { samples } => samples.is_empty(),
+    }
+}
+
+/// Evalúa sobre clips ya ordenados. `depth` limita la búsqueda de la pose de llegada.
+fn eval(ordered: &[(&ClipInstance, &Clip)], t: f64, depth: u32) -> Camera {
+    let sample = |idx: usize, at: f64| {
+        let (inst, clip) = ordered[idx];
+        // La pose con la que se llega solo hace falta en esperas sin pose (y clips vacíos).
+        let prev = if needs_prev(clip) && depth < 16 { eval(&ordered[..idx], inst.start, depth + 1) } else { Camera::FIT };
+        clip.sample(inst.local_time(at, clip), prev)
+    };
+    if let Some(idx) = ordered.iter().rposition(|(i, _)| i.start <= t && t <= i.end()) {
+        return sample(idx, t);
+    }
+    // Hueco o después de todo: el que terminó más tarde (a igualdad, el que empezó después).
+    let ended = ordered.iter().enumerate().filter(|(_, (i, _))| i.end() < t).max_by(|a, b| a.1.0.end().total_cmp(&b.1.0.end()));
+    match ended {
+        Some((idx, (inst, _))) => sample(idx, inst.end()),
+        None if !ordered.is_empty() => sample(0, ordered[0].0.start),
+        None => Camera::FIT,
+    }
+}
+
 /// Resuelve las referencias a clips con nombre.
 pub trait ClipResolver {
     fn resolve(&self, id: &str) -> Option<&Clip>;
@@ -91,33 +119,20 @@ impl Timeline {
         self.camera.iter().map(ClipInstance::end).fold(0.0, f64::max)
     }
 
-    fn ordered(&self) -> Vec<&ClipInstance> {
-        let mut v: Vec<_> = self.camera.iter().collect();
-        v.sort_by(|a, b| a.start.total_cmp(&b.start));
+    /// Clips que se pueden evaluar (las referencias que no existen se ignoran), por inicio.
+    fn ordered<'a>(&'a self, lib: &'a dyn ClipResolver) -> Vec<(&'a ClipInstance, &'a Clip)> {
+        let mut v: Vec<_> = self.camera.iter().filter_map(|i| i.resolve(lib).map(|c| (i, c))).collect();
+        v.sort_by(|a, b| a.0.start.total_cmp(&b.0.start));
         v
     }
 
-    /// Pose de cámara en el tiempo `t`. Entre clips se mantiene la última pose;
-    /// si dos clips se solapan, manda el que empieza después.
+    /// Pose de cámara en el tiempo `t`.
+    /// - Si hay clips activos en `t`, manda el que empieza más tarde (así se puede grabar o poner
+    ///   un clip encima de otro sin borrarlo).
+    /// - En un hueco se mantiene la última pose del clip que terminó más tarde.
+    /// - Antes del primero, su pose inicial.
     pub fn evaluate(&self, t: f64, lib: &dyn ClipResolver) -> Camera {
-        let ordered = self.ordered();
-        let mut pose = ordered
-            .first()
-            .and_then(|i| i.resolve(lib).map(|c| c.sample(i.trim_in, Camera::FIT)))
-            .unwrap_or(Camera::FIT);
-        for inst in ordered {
-            if t < inst.start {
-                break;
-            }
-            let Some(clip) = inst.resolve(lib) else { continue };
-            let at = t.min(inst.end());
-            let p = clip.sample(inst.local_time(at, clip), pose);
-            if t <= inst.end() {
-                return p;
-            }
-            pose = p;
-        }
-        pose
+        eval(&self.ordered(lib), t, 0)
     }
 
     /// Tiempos absolutos "interesantes" (inicio/fin de clip y keyframes), ordenados,
@@ -160,7 +175,7 @@ mod tests {
     }
 
     fn inst(start: f64, duration: f64, clip: Clip) -> ClipInstance {
-        ClipInstance { start, duration, clip: ClipSource::Inline(clip), trim_in: 0.0, trim_out: 0.0 }
+        ClipInstance { name: None, start, duration, clip: ClipSource::Inline(clip), trim_in: 0.0, trim_out: 0.0 }
     }
 
     #[test]
@@ -192,6 +207,23 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(tl.evaluate(2.0, &NoClips), b);
+    }
+
+    #[test]
+    fn solapados_manda_el_que_empieza_despues() {
+        let a = cam(0.1, 0.5, 1.0);
+        let b = cam(0.9, 0.5, 1.0);
+        let tl = Timeline {
+            camera: vec![
+                inst(0.0, 10.0, Clip::Hold { length: 1.0, pose: Some(a) }),
+                inst(2.0, 2.0, Clip::Hold { length: 1.0, pose: Some(b) }),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(tl.evaluate(1.0, &NoClips), a);
+        assert_eq!(tl.evaluate(3.0, &NoClips), b);
+        assert_eq!(tl.evaluate(6.0, &NoClips), a, "al acabar el de encima, sigue el de debajo");
+        assert_eq!(tl.evaluate(12.0, &NoClips), a);
     }
 
     #[test]

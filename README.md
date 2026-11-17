@@ -14,6 +14,7 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Imágenes sueltas: al abrirlas se abre su carpeta, situada en esa imagen.
 - **Orden natural** (`pagina 2` va antes que `pagina 10`). Se respetan las subcarpetas (capítulos) y se ignoran los archivos ocultos y `__MACOSX`.
 - Se abren desde el botón, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
+- **Selector de archivos propio** para abrir y guardar: accesos a tus carpetas y unidades montadas, ruta editable, archivos ocultos y aviso antes de reemplazar. Se maneja con el teclado (flechas, `Intro` para entrar o aceptar, `Retroceso` para subir, letras para saltar, `Esc` para cancelar). Existe porque en algunos escritorios Linux (Hyprland/Omarchy…) el diálogo del sistema sale sin botón de Aceptar.
 - **Recientes**: lo último que has abierto aparece en la pantalla de inicio y en el menú 🕘 (`Ctrl+R`). Al volver a abrir un cómic o una carpeta, se va a la imagen en la que lo dejaste (salvo que abras una imagen concreta). Los que ya no existen salen tachados.
 - **Comprimidos sólidos** (7z/rar): al leer una página se guardan también las siguientes, para que pasar páginas sea fluido.
 - **Render WebGL2** con mipmaps y filtrado anisótropo.
@@ -36,6 +37,7 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
 - **Miniaturas**: mostrar u ocultar la tira y su tamaño.
 - **Zoom**: cuánto acerca cada paso con teclado y botones, y la velocidad de zoom con la rueda.
 - **Retomar**: volver a la imagen en la que lo dejaste (se puede desactivar).
+- **Selector de archivos**: el de imgxplorer, el del sistema o automático (el propio en Linux y el del sistema en macOS).
 - **Diagnóstico**: mostrar u ocultar el panel.
 - **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
 
@@ -52,6 +54,7 @@ botón 🎬 o la tecla `A`.
     - Una viñeta alta que ocupa dos filas se lee en su sitio.
     - Las viñetas se ven numeradas sobre la página mientras se ajusta la plantilla.
     - Si una página no tiene viñetas claras (ilustración a página completa), se usa la rejilla.
+    - **Corregirlas a mano** ("Editar viñetas"): arrastra en la página para dibujar una, arrástrala para moverla o usa sus tiradores para cambiar el tamaño; `Supr` la borra. Las dibujadas a mano sustituyen a la detección en esa imagen y se pueden devolver a la automática.
   - **Desplazamiento**: ajusta al ancho (o al alto) y recorre la imagen, para webtoons y panorámicas.
   - **Rebote**: ciclos de acercar y alejar subiendo y bajando.
   - **Ken Burns** e **imagen completa**.
@@ -61,7 +64,37 @@ botón 🎬 o la tecla `A`.
   - Pausa, pasos (inicio de cada movimiento), ±1 s, imagen anterior o siguiente, velocidad de 0,5× a 2×.
   - Si haces zoom o mueves la imagen a mano, la animación se detiene; un segundo después de soltar, la cámara vuelve sola a donde estaba y sigue.
   - Si cambias el tamaño de la ventana, los encuadres se recalculan. Los cambios de plantilla o de parámetros se aplican al momento, también mientras se reproduce.
+- **Deshacer y rehacer** (`Ctrl+Z` / `Ctrl+Mayús+Z`) cualquier cambio del Modo Acción y del editor; un arrastre completo cuenta como un solo paso.
 - **Guardado automático** en un archivo `.imgx` junto al original (`Tomo 1.cbz.imgx`, o `.imgxplorer.imgx` dentro de la carpeta). Si ahí no se puede escribir, va al directorio de datos de la app. Un archivo de una versión más nueva no se sobrescribe.
+
+### Editor de línea de tiempo
+
+Para hacer la animación de una imagen a medida. Se abre con el botón ✎ o la tecla `E` y aparece
+debajo de la imagen: biblioteca a la izquierda, pista de cámara en el centro e inspector a la derecha.
+La biblioteca y el inspector se ensanchan arrastrando su borde (doble clic o el botón ↔ ajustan la
+biblioteca a los nombres largos).
+
+- **Marco de reproducción** (botón ▭ Marco, activo de fábrica): al reproducir, el editor se oculta y el visor crece, así que el encuadre cambiaría. Con el marco, el visor se estrecha a la proporción que tendrá al reproducir: lo que ves dentro del recuadro ámbar es exactamente lo que se verá.
+- **Claves con la vista actual** (`K`): encuadra la imagen con el ratón, el touchpad o el teclado y pulsa `K`. La clave se guarda en el cabezal; si estás al final, el cabezal avanza 1 s para la siguiente. Pulsar `K` sobre una clave existente la sustituye.
+- **Grabar** (`G`): graba el movimiento real de la cámara mientras lo haces y lo guarda como clip ("Grabación 1"…). Se suaviza el temblor y se simplifica sin perder el ritmo. `G` o `Espacio` terminan, `Esc` descarta.
+- **Pista de cámara**:
+  - Arrastra un clip para moverlo y sus bordes para estirarlo (cambia la velocidad); con `Mayús`, los bordes recortan.
+  - Las claves (◆) se arrastran por el tiempo sin pasar a sus vecinas.
+  - Todo se pega al cabezal, a los bordes de otros clips y a las claves.
+  - Si dos clips se solapan, manda el que empieza después; cuando termina, sigue el de debajo.
+  - Rueda del ratón para moverse por la pista y `Ctrl+rueda` (o `−` `+`) para acercarla.
+  - Las pistas de voz, efectos y ambiente aparecen ya, desactivadas, para la fase de sonido.
+- **Cabezal**: clic o arrastre en la regla para ver cada momento; `,` y `.` saltan a la clave anterior o siguiente; `Espacio` reproduce la vista previa de la imagen.
+- **Inspector**:
+  - De un clip: nombre, inicio, duración, velocidad, recortes; guardarlo en la biblioteca, duplicarlo o borrarlo. En las esperas, fijar la vista actual o mantener la anterior.
+  - De una clave: instante, **curvas** y la pose exacta (x, y, zoom, giro); "Usar la vista actual" la cambia por lo que se ve.
+  - Cada clave tiene dos curvas: la de **llegada** (cómo se viene desde la clave anterior) y la de **salida** (cómo se va a la siguiente). Opciones: lineal, suave, acelerando, frenando, rebote, elástico, salto o Bézier con sus 4 valores. Cada una se dibuja con una explicación breve, y en la pista se ve la forma de la curva de cada tramo; al elegir una clave se resaltan sus dos tramos.
+- **Plantillas y editor**: si la imagen usa una plantilla, el editor muestra su animación (con borde discontinuo). Al editarla (añadir una clave, grabar, mover un clip…) se convierte en clips propios de esa imagen, que mandan sobre las plantillas. "Quitar la animación propia" vuelve a la plantilla.
+- **Biblioteca**:
+  - Clips de fábrica (acercar, alejar, paneos, balanceo, esperas) y los tuyos. Arrástralos a la pista o pulsa `+` para añadirlos al final. Doble clic para renombrar.
+  - Plantillas propias: guarda la plantilla de una imagen con sus parámetros y aplícala luego a una imagen o a todas.
+  - **Exportar e importar** clips y plantillas en paquetes `.imgxpack` para compartirlos. También se importan soltando el archivo sobre la ventana. Al importar no se duplica lo que ya tienes.
+  - Se guarda en `~/.local/share/com.imgxplorer.app/library.json` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
 
 ### Formatos
 
@@ -90,6 +123,8 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `R` / `Mayús+R` | Rotar 90° a la derecha / izquierda |
 | `T` | Mostrar u ocultar miniaturas |
 | `A` | Panel del Modo Acción |
+| `E` | Editor de línea de tiempo |
+| `Ctrl+Z` / `Ctrl+Mayús+Z` · `Ctrl+Y` | Deshacer / rehacer |
 | `P` | Reproducir desde la imagen actual / parar |
 | `D` | Panel de diagnóstico |
 | `F11` | Pantalla completa |
@@ -112,6 +147,17 @@ Durante la reproducción:
 | `Esc` · `P` | Parar |
 
 Zoom, desplazamiento y rotación (ratón, touchpad o teclado) toman el control manual.
+
+Con el editor abierto (tienen prioridad sobre las del visor):
+
+| Tecla | Acción |
+|---|---|
+| `Espacio` | Reproducir / pausar la vista previa |
+| `K` | Guardar la vista actual como clave en el cabezal |
+| `G` | Grabar el movimiento / terminar |
+| `Supr` | Borrar el clip o la clave seleccionados |
+| `,` / `.` | Clave anterior / siguiente |
+| `Esc` | Descartar la grabación, parar o deseleccionar |
 
 ### Diagnóstico y registro de errores
 
@@ -146,12 +192,14 @@ Zoom, desplazamiento y rotación (ratón, touchpad o teclado) toman el control m
   - [x] Plantillas: cómic por viñetas (con detección automática), desplazamiento, rebote, Ken Burns e imagen completa.
   - [x] Reproductor interactivo: pausa, pasos, velocidad, y control manual que luego vuelve a la animación.
   - [x] Transiciones: corte, fundido, deslizar y cámara continua.
-- [ ] **Fase 3**: editor de línea de tiempo.
-  - Capturar y grabar movimientos.
-  - Clips con nombre, mover y recortar en la línea de tiempo.
-  - Easing por tramo.
-  - Deshacer.
-  - Exportar e importar `.imgxpack`.
+- [x] **Fase 3**: editor de línea de tiempo.
+  - [x] Capturar la vista como clave y grabar movimientos.
+  - [x] Clips con nombre: mover, estirar y recortar, con ajuste magnético.
+  - [x] Curva (easing) por tramo, con llegada y salida por clave, y pose exacta en el inspector.
+  - [x] Marco de reproducción para encuadrar exactamente lo que se verá.
+  - [x] Deshacer y rehacer.
+  - [x] Biblioteca de clips y plantillas propias; exportar e importar `.imgxpack`.
+  - [x] Corrección manual de viñetas.
 - [ ] **Fase 4**: render a MP4 (ffmpeg) y paquetes: AppImage, Flatpak/AUR, `.dmg` firmado.
 - [ ] **Fase 5**: pistas de audio (voces, efectos, ambiente).
 
@@ -196,10 +244,10 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ### Estructura
 
 ```
-crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas y transiciones (Rust puro, nativo + WASM)
+crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes y recientes
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action)
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack y listado de carpetas del selector propio
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files)
 docs                Especificación del formato .imgx
 ```

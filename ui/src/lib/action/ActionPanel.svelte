@@ -28,9 +28,19 @@
     playing: boolean;
     onplay: () => void;
     onclose: () => void;
+    /** Editando las viñetas sobre la imagen. */
+    panelEdit: boolean;
+    /** Viñetas dibujadas a mano en esta imagen (null: ninguna, se detectan). */
+    manualPanels: number | null;
+    onpaneledit: () => void;
+    onresetpanels: () => void;
+    oneditor: () => void;
   }
 
-  let { store, entry, size, detected, playing, onplay, onclose }: Props = $props();
+  let { store, entry, size, detected, playing, onplay, onclose, panelEdit, manualPanels, onpaneledit, onresetpanels, oneditor }: Props = $props();
+
+  const ownTimeline = $derived(!!(entry && store.item(entry)?.timeline?.camera?.length));
+  const effective = $derived(entry ? store.templateFor(entry) : null);
 
   let scope = $state<"all" | "item">("all");
 
@@ -92,7 +102,11 @@
       <button class:on={scope === "item"} onclick={() => (scope = "item")} disabled={!entry}>{t("scopeItem")}</button>
     </div>
 
-    {#if scope === "item" && !own}
+    {#if scope === "item" && ownTimeline && !own}
+      <p class="note">{t("hasOwnTimeline")}</p>
+      <button onclick={oneditor}>✎ {t("openEditor")}</button>
+      <button onclick={() => entry && size && store.setTimeline(entry, size, null)}>{t("clearOwn")}</button>
+    {:else if scope === "item" && !own}
       <p class="note">{t("usesAll")}</p>
       <button onclick={customize}>{t("customize")}</button>
     {:else}
@@ -104,7 +118,7 @@
       </select>
       {#if editing}
         <p class="note">{label(`tpl.${editing.id}.help`)}</p>
-        {#if editing.id === "comic" && (editing.params.mode ?? "auto") === "auto"}
+        {#if editing.id === "comic" && (editing.params.mode ?? "auto") === "auto" && manualPanels === null}
           <p class="note">
             {detected === null ? t("detecting") : detected >= 2 ? t("detected", { n: detected }) : t("notDetected")}
           </p>
@@ -138,6 +152,23 @@
       {/if}
     {/if}
   </section>
+
+  {#if effective?.id === "comic" && !ownTimeline}
+    <section>
+      <h4>{t("panelsHere")}</h4>
+      <p class="note">{manualPanels !== null ? t("panelsManual", { n: manualPanels }) : t("panelsAuto")}</p>
+      <button class:on={panelEdit} onclick={onpaneledit} disabled={!size || !!store.readOnly}>
+        {panelEdit ? `✓ ${t("panelsDone")}` : `✎ ${t("panelsEdit")}`}
+      </button>
+      {#if manualPanels !== null}
+        <button onclick={onresetpanels}>{t("panelsReset")}</button>
+      {/if}
+    </section>
+  {/if}
+
+  {#if ownTimeline && scope === "all"}
+    <p class="note">{t("hasOwnTimeline")}</p>
+  {/if}
 
   {#if transition}
     <section>
@@ -205,6 +236,7 @@
   h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
   section { display: flex; flex-direction: column; gap: 6px; }
   .play { padding: 8px; font-weight: 600; border-color: var(--accent); }
+  button.on { border-color: #fbbf24; color: #fde68a; }
   .seg { display: flex; gap: 0; }
   .seg button { flex: 1; border-radius: 0; }
   .seg button:first-child { border-radius: 6px 0 0 6px; }

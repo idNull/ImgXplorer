@@ -17,8 +17,10 @@ pub struct Ctx<'a> {
     pub img: (f64, f64),
     /// Ancho / alto del viewport.
     pub aspect: f64,
-    /// Viñetas detectadas (para `comic` en modo automático). Sin orden.
+    /// Viñetas detectadas (para `comic` en modo automático) o dibujadas a mano. Sin orden.
     pub panels: Option<&'a [Rect]>,
+    /// `panels` las ha dibujado el usuario: se usan siempre (aunque sea una o el modo sea rejilla).
+    pub manual: bool,
 }
 
 impl Ctx<'_> {
@@ -223,6 +225,7 @@ impl Keys {
         let duration = self.last().t;
         Timeline {
             camera: vec![ClipInstance {
+                name: None,
                 start: 0.0,
                 duration,
                 clip: ClipSource::Inline(Clip::Keyframes { keys: self.keys }),
@@ -296,7 +299,7 @@ fn scroll(p: &Params, ctx: &Ctx) -> Keys {
 
 fn panels(p: &Params, ctx: &Ctx) -> Vec<Rect> {
     let rtl = p.choice("dir") == "rtl";
-    let detected = ctx.panels.filter(|v| v.len() >= 2 && p.choice("mode") == "auto");
+    let detected = ctx.panels.filter(|v| if ctx.manual { !v.is_empty() } else { v.len() >= 2 && p.choice("mode") == "auto" });
     let rects = match detected {
         Some(v) => v.to_vec(),
         None => grid(p.num("rows") as usize, p.num("cols") as usize),
@@ -433,7 +436,7 @@ mod tests {
     use crate::timeline::NoClips;
     use serde_json::json;
 
-    const PAGE: Ctx = Ctx { img: (2000.0, 3000.0), aspect: 16.0 / 9.0, panels: None };
+    const PAGE: Ctx = Ctx { img: (2000.0, 3000.0), aspect: 16.0 / 9.0, panels: None, manual: false };
 
     fn tpl(id: &str, params: Value) -> TemplateRef {
         TemplateRef { id: id.into(), params }
@@ -495,6 +498,9 @@ mod tests {
         let one = [r(0.0, 0.0, 1.0, 1.0)];
         let ctx = Ctx { panels: Some(&one), ..PAGE };
         assert_eq!(comic_panels(&t, &ctx).len(), 6, "con una sola detectada se usa la rejilla");
+        let ctx = Ctx { panels: Some(&one), manual: true, ..PAGE };
+        let grid = tpl("comic", serde_json::json!({"mode": "grid"}));
+        assert_eq!(comic_panels(&grid, &ctx), one.to_vec(), "las dibujadas a mano mandan siempre");
     }
 
     #[test]

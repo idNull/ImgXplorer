@@ -2,6 +2,8 @@
 
 mod diagnostics;
 mod gestures;
+mod browse;
+mod pack;
 mod prefs;
 mod project;
 mod serve;
@@ -160,6 +162,10 @@ pub fn run() {
             prefs::load_prefs,
             prefs::save_prefs,
             prefs::paths_exist,
+            pack::export_pack,
+            pack::import_pack,
+            browse::list_dir,
+            browse::places,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])

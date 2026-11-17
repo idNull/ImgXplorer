@@ -12,6 +12,13 @@ export interface InputHandlers {
   doubleClick?(x: number, y: number): void;
   /** Multiplicador de la velocidad de zoom con la rueda del ratón (ajustes). */
   wheelSpeed?(): number;
+  /**
+   * Botón izquierdo pulsado en (x, y): si devuelve un arrastre, se encarga él (edición de
+   * viñetas) en lugar de desplazar la imagen. El botón central siempre desplaza.
+   */
+  press?(x: number, y: number): { move(x: number, y: number): void; up(): void } | null;
+  /** Cursor sobre (x, y) cuando no se arrastra (`null`: el normal). */
+  hover?(x: number, y: number): string | null;
 }
 
 /** Heurística: la rueda de un ratón da saltos grandes y enteros; el touchpad, deltas finos. */
@@ -46,23 +53,32 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
     }
   };
 
-  let drag: { id: number; x: number; y: number } | null = null;
+  let drag: { id: number; x: number; y: number; own: { move(x: number, y: number): void; up(): void } | null } | null = null;
   const onDown = (e: PointerEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    const own = e.button === 0 ? (h.press?.(...local(e.clientX, e.clientY)) ?? null) : null;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, own };
     el.setPointerCapture(e.pointerId);
+    if (own) return;
     el.style.cursor = "grabbing";
     h.interaction?.(true);
   };
   const onMove = (e: PointerEvent) => {
-    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag) {
+      if (h.hover) el.style.cursor = h.hover(...local(e.clientX, e.clientY)) ?? "";
+      return;
+    }
+    if (e.pointerId !== drag.id) return;
+    if (drag.own) return drag.own.move(...local(e.clientX, e.clientY));
     h.pan(e.clientX - drag.x, e.clientY - drag.y, "arrastre");
     drag.x = e.clientX;
     drag.y = e.clientY;
   };
   const onUp = (e: PointerEvent) => {
     if (!drag || e.pointerId !== drag.id) return;
+    const own = drag.own;
     drag = null;
+    if (own) return own.up();
     el.style.cursor = "";
     h.interaction?.(false);
   };

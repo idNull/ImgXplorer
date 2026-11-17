@@ -3,7 +3,8 @@
 //! serializar JSON en cada frame.
 
 use imgx_core::Camera;
-use imgx_core::schema::{Rect, TemplateRef, Timeline, Transition};
+use imgx_core::record;
+use imgx_core::schema::{Rect, Sample, TemplateRef, Timeline, Transition};
 use imgx_core::templates::{self, Ctx};
 use imgx_core::timeline::NoClips;
 use imgx_core::transition::{self, View};
@@ -61,10 +62,11 @@ pub fn template_catalog() -> String {
 }
 
 /// Viñetas que recorrerá la plantilla `comic`, en orden de lectura (planas, como `panels`).
+/// `manual`: las viñetas las ha dibujado el usuario (mandan sobre el modo y la rejilla).
 #[wasm_bindgen]
-pub fn comic_panels(tpl: &str, img_w: f64, img_h: f64, aspect: f64, panels: &[f64]) -> Result<Vec<f64>, JsError> {
+pub fn comic_panels(tpl: &str, img_w: f64, img_h: f64, aspect: f64, panels: &[f64], manual: bool) -> Result<Vec<f64>, JsError> {
     let det = rects(panels);
-    let ctx = Ctx { img: (img_w, img_h), aspect, panels: Some(&det) };
+    let ctx = Ctx { img: (img_w, img_h), aspect, panels: Some(&det), manual };
     Ok(templates::comic_panels(&template(tpl)?, &ctx).iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect())
 }
 
@@ -110,9 +112,9 @@ impl WasmTimeline {
         Ok(WasmTimeline(serde_json::from_str(json)?))
     }
     /// Genera la timeline de una plantilla para una imagen y una proporción de viewport.
-    pub fn from_template(tpl: &str, img_w: f64, img_h: f64, aspect: f64, panels: &[f64]) -> Result<WasmTimeline, JsError> {
+    pub fn from_template(tpl: &str, img_w: f64, img_h: f64, aspect: f64, panels: &[f64], manual: bool) -> Result<WasmTimeline, JsError> {
         let det = rects(panels);
-        let ctx = Ctx { img: (img_w, img_h), aspect, panels: Some(&det) };
+        let ctx = Ctx { img: (img_w, img_h), aspect, panels: Some(&det), manual };
         Ok(WasmTimeline(templates::generate(&template(tpl)?, &ctx)?))
     }
     pub fn duration(&self) -> f64 {
@@ -124,4 +126,21 @@ impl WasmTimeline {
     pub fn marks(&self) -> Vec<f64> {
         self.0.marks(&NoClips)
     }
+    /// La timeline en JSON (para "hornear" una plantilla en clips editables).
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self.0).expect("timeline serializable")
+    }
+}
+
+/// Suaviza y simplifica un movimiento grabado. Entrada y salida planas: `[t, cx, cy, zoom, rot, …]`.
+#[wasm_bindgen]
+pub fn simplify_recording(flat: &[f64], tolerance: f64) -> Vec<f64> {
+    let samples: Vec<Sample> = flat
+        .as_chunks::<5>()
+        .0
+        .iter()
+        .map(|c| Sample { t: c[0], pose: Camera { cx: c[1], cy: c[2], zoom: c[3], rot: c[4] } })
+        .collect();
+    let tol = if tolerance > 0.0 { tolerance } else { record::DEFAULT_TOLERANCE };
+    record::simplify(&samples, tol).iter().flat_map(|s| [s.t, s.pose.cx, s.pose.cy, s.pose.zoom, s.pose.rot]).collect()
 }

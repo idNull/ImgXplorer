@@ -3,17 +3,21 @@
   import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { openFile, openFolder, fileDialog, dirOf } from "./lib/files/dialog.svelte";
+  import FileDialog from "./lib/files/FileDialog.svelte";
+  import { library } from "./lib/editor/library.svelte";
   import Viewer from "./lib/viewer/Viewer.svelte";
   import Thumbs from "./lib/Thumbs.svelte";
   import Settings from "./lib/Settings.svelte";
   import Recents from "./lib/Recents.svelte";
   import { prefs } from "./lib/settings.svelte";
   import { comboOf, display, keymap, keysFor, type ViewerAction } from "./lib/keys";
+  import Editor from "./lib/editor/Editor.svelte";
+  import { removeRect, type PanelEdit } from "./lib/viewer/panelEdit";
   import ActionPanel from "./lib/action/ActionPanel.svelte";
   import PlayerBar from "./lib/action/PlayerBar.svelte";
   import { ProjectStore, type LoadedProject } from "./lib/action/project.svelte";
-  import { FALLBACK, needsPanels } from "./lib/action/catalog";
+  import { FALLBACK, needsPanels, type TemplateRef } from "./lib/action/catalog";
   import type { PlayerInfo } from "./lib/action/player";
   import type { ViewerStatus } from "./lib/viewer/types";
   import type { PictureRef } from "./lib/viewer/picture";
@@ -57,6 +61,11 @@
   let actionOpen = $state(false);
   let playerInfo = $state<PlayerInfo | null>(null);
   let overlayPanels = $state<Float64Array | null>(null);
+  let editorOpen = $state(false);
+  let editor = $state<Editor>();
+  /** Editando las viñetas de la imagen actual sobre el visor. */
+  let panelEdit = $state(false);
+  let panelSel = $state(-1);
   let detectedCount = $state<number | null>(null);
   const store = new ProjectStore();
   // Viñetas detectadas por imagen (la detección es en Rust; se pide una vez por imagen).
@@ -103,21 +112,47 @@
     }
   }
 
+  // Mensaje breve sobre el visor (p. ej. al soltar un paquete .imgxpack).
+  let toast = $state<string | null>(null);
+  let toastTimer = 0;
+  function say(msg: string) {
+    toast = msg;
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => (toast = null), 4000);
+  }
+
+  /** Paquetes soltados sobre la ventana: se añaden a la biblioteca. */
+  async function importPacks(paths: string[]) {
+    let clips = 0;
+    let templates = 0;
+    for (const p of paths) {
+      try {
+        const r = await library.importPack(p);
+        clips += r.clips;
+        templates += r.templates;
+      } catch (e) {
+        log.warn("importar paquete:", p, e);
+        return say(t("packError", { error: String(e) }));
+      }
+    }
+    say(clips || templates ? t("imported", { clips, templates }) : t("importedNothing"));
+  }
+
   async function pickFolder() {
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir === "string") openPath(dir);
+    const dir = await openFolder({ dir: source ? dirOf(source.path) : undefined });
+    if (dir) openPath(dir);
   }
 
   async function pickFile() {
-    const file = await open({
-      multiple: false,
+    const file = await openFile({
+      dir: source ? (source.kind === "folder" ? source.path : dirOf(source.path)) : undefined,
       filters: [
         { name: t("filterAll"), extensions: [...ARCHIVES, ...IMAGES] },
         { name: t("filterArchives"), extensions: ARCHIVES },
         { name: t("filterImages"), extensions: IMAGES },
       ],
     });
-    if (typeof file === "string") openPath(file);
+    if (file) openPath(file);
   }
 
   function go(i: number) {
@@ -143,14 +178,34 @@
     return p;
   }
 
+  /** Viñetas para la plantilla: las dibujadas a mano o, si hace falta, las detectadas. */
+  async function panelsInput(i: number, tpl: TemplateRef | null): Promise<{ panels: number[]; manual: boolean }> {
+    const own = store.item(source!.entries[i].name)?.panels;
+    if (own?.length) return { panels: own.flatMap((r) => [r.x, r.y, r.w, r.h]), manual: true };
+    return { panels: needsPanels(tpl) ? await panelsFor(i) : [], manual: false };
+  }
+
+  async function templateTimeline(i: number, tpl: TemplateRef, size: Size, aspect: number): Promise<wasm.WasmTimeline> {
+    const { panels, manual } = await panelsInput(i, tpl);
+    return wasm.WasmTimeline.from_template(JSON.stringify($state.snapshot(tpl)), size.w, size.h, aspect, new Float64Array(panels), manual);
+  }
+
   async function timelineFor(i: number, size: Size, aspect: number): Promise<wasm.WasmTimeline> {
     const entry = source!.entries[i].name;
     const it = store.item(entry);
     const tpl = store.templateFor(entry);
     if (!tpl && it?.timeline?.camera?.length) return new wasm.WasmTimeline(JSON.stringify($state.snapshot(it.timeline)));
-    const use = tpl ?? FALLBACK;
-    const panels = needsPanels(use) ? await panelsFor(i) : [];
-    return wasm.WasmTimeline.from_template(JSON.stringify($state.snapshot(use)), size.w, size.h, aspect, new Float64Array(panels));
+    return templateTimeline(i, tpl ?? FALLBACK, size, aspect);
+  }
+
+  /** Para el editor: la timeline de la plantilla de la imagen actual (null si no usa). */
+  async function editorTemplate(): Promise<wasm.WasmTimeline | null> {
+    const s = source;
+    const img = status?.image;
+    if (!s || !img) return null;
+    const i = index;
+    const tpl = store.templateFor(s.entries[i].name);
+    return tpl ? templateTimeline(i, tpl, img, viewer.aspect()) : null;
   }
 
   function startPlay() {
@@ -181,22 +236,80 @@
     const i = index;
     const entry = s?.entries[i]?.name;
     const tpl = actionOpen && entry ? store.templateFor(entry) : null;
-    const json = tpl?.id === "comic" ? JSON.stringify(tpl) : null; // lee todos los parámetros: se recalcula al cambiarlos
-    if (!json) {
+    const own = entry ? store.item(entry)?.panels : undefined;
+    // Lee todos los parámetros y las viñetas propias: se recalcula al cambiarlos.
+    const json = tpl?.id === "comic" ? JSON.stringify(tpl) : null;
+    void JSON.stringify(own);
+    if (!json && !panelEdit) {
       overlayPanels = null;
       return;
     }
     let cancelled = false;
-    const auto = needsPanels(tpl);
+    const auto = needsPanels(tpl) && !own?.length;
     if (auto) detectedCount = null;
-    (auto ? panelsFor(i) : Promise.resolve([])).then((det) => {
+    panelsInput(i, tpl).then(({ panels, manual }) => {
       if (cancelled) return;
-      if (auto) detectedCount = det.length / 4;
-      overlayPanels = wasm.comic_panels(json, 1, 1, 1, new Float64Array(det));
+      if (auto) detectedCount = panels.length / 4;
+      overlayPanels = json ? wasm.comic_panels(json, 1, 1, 1, new Float64Array(panels), manual) : new Float64Array(panels);
     });
     return () => {
       cancelled = true;
     };
+  });
+
+  const curEntry = $derived(source?.entries[index]?.name ?? null);
+  // El estado del visor cambia en cada fotograma de una animación: el tamaño se deriva de
+  // números para que `curSize` solo cambie (y avise a quien lo usa) si cambia de verdad.
+  const imgW = $derived(status?.image?.w ?? 0);
+  const imgH = $derived(status?.image?.h ?? 0);
+  const curSize = $derived<[number, number] | null>(imgW && imgH ? [imgW, imgH] : null);
+  const manualPanels = $derived(curEntry ? (store.item(curEntry)?.panels ?? null) : null);
+
+  function setManualPanels(flat: number[]) {
+    if (!curEntry || !curSize) return;
+    const rects = [];
+    for (let k = 0; k + 3 < flat.length; k += 4) rects.push({ x: flat[k], y: flat[k + 1], w: flat[k + 2], h: flat[k + 3] });
+    store.setPanels(curEntry, curSize, rects);
+  }
+
+  function togglePanelEdit() {
+    if (panelEdit) return finishPanelEdit();
+    if (!curEntry || !curSize) return;
+    // Se parte de lo que se ve (detectadas o rejilla) para corregirlo.
+    if (!manualPanels) setManualPanels(overlayPanels ? Array.from(overlayPanels) : []);
+    panelSel = -1;
+    panelEdit = true;
+  }
+
+  /** Termina de editar viñetas. Si no quedó ninguna, vuelve la detección automática. */
+  function finishPanelEdit(entry = curEntry) {
+    panelEdit = false;
+    panelSel = -1;
+    const it = entry ? store.item(entry) : undefined;
+    if (it?.panels && !it.panels.length) store.setPanels(it.entry, it.size, null);
+  }
+
+  const editPanels = $derived<PanelEdit | null>(
+    panelEdit && manualPanels
+      ? {
+          rects: manualPanels.flatMap((r) => [r.x, r.y, r.w, r.h]),
+          selected: panelSel,
+          select: (i) => (panelSel = i),
+          change: setManualPanels,
+          gesture: (active) => store.batch(active),
+        }
+      : null,
+  );
+
+  // Al cambiar de imagen, cerrar el panel de Acción o reproducir, se termina de editar viñetas.
+  let lastEntry: string | null = null;
+  $effect(() => {
+    const e = curEntry;
+    const stop = !actionOpen || !!playerInfo;
+    untrack(() => {
+      if (panelEdit && (stop || (lastEntry !== null && e !== lastEntry))) finishPanelEdit(lastEntry);
+      lastEntry = e;
+    });
   });
 
   // Recientes: la fuente abierta y la imagen en la que está.
@@ -217,6 +330,21 @@
 
   const viewerKeys = $derived(keymap(prefs.settings.keys, "viewer"));
   const playerKeys = $derived(keymap(prefs.settings.keys, "player"));
+  const editorKeys = $derived(keymap(prefs.settings.keys, "editor"));
+  const editorShown = $derived(editorOpen && !!source?.entries.length && !playerInfo);
+
+  // Marco de reproducción: con el editor abierto el visor es más bajo que al reproducir (el
+  // editor se oculta), así que el encuadre cambiaría. El visor se estrecha a la proporción que
+  // tendrá al reproducir y lo que se ve dentro es exactamente lo que se verá.
+  let stageW = $state(0);
+  let stageH = $state(0);
+  let editorH = $state(0);
+  const frame = $derived.by(() => {
+    if (!editorShown || !prefs.settings.editorFrame || !stageW || !stageH || !editorH) return null;
+    const ph = stageH + editorH;
+    const w = Math.max(1, Math.round((stageH * stageW) / ph));
+    return { x: Math.round((stageW - w) / 2), w, pw: stageW, ph };
+  });
   /** Primera tecla de una acción del visor, para los títulos de los botones. */
   const kt = (a: ViewerAction) => {
     const k = keysFor(prefs.settings.keys, "viewer", a)[0];
@@ -259,7 +387,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen) return; // la ventana de ajustes gestiona sus teclas
+    if (settingsOpen || fileDialog.request) return; // los diálogos gestionan sus teclas
     const tgt = e.target;
     if (tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement || tgt instanceof HTMLTextAreaElement) return;
     if (recentsOpen && e.key === "Escape") {
@@ -269,6 +397,17 @@
     const combo = comboOf(e);
     if (!combo) return;
     if (playerKey(combo)) return e.preventDefault();
+    const ea = editorShown ? editorKeys.get(combo) : undefined;
+    if (ea && editor?.handle(ea)) return e.preventDefault();
+    if (panelEdit && (e.key === "Delete" || e.key === "Backspace") && panelSel >= 0 && editPanels) {
+      setManualPanels(removeRect(editPanels.rects, panelSel));
+      panelSel = -1;
+      return e.preventDefault();
+    }
+    if (panelEdit && e.key === "Escape") {
+      finishPanelEdit();
+      return e.preventDefault();
+    }
     const action = viewerKeys.get(combo);
     if (!action) return;
     const zoomed = viewer?.isZoomedIn();
@@ -297,6 +436,9 @@
       case "openFolder": pickFolder(); break;
       case "recents": recentsOpen = !recentsOpen; break;
       case "settings": settingsOpen = true; break;
+      case "editor": if (source) editorOpen = !editorOpen; break;
+      case "undo": store.undo(); break;
+      case "redo": store.redo(); break;
     }
     e.preventDefault();
   }
@@ -323,7 +465,10 @@
     };
     window.addEventListener("beforeunload", flush);
     const un = getCurrentWebview().onDragDropEvent((ev) => {
-      if (ev.payload.type === "drop" && ev.payload.paths.length) openPath(ev.payload.paths[0]);
+      if (ev.payload.type !== "drop" || !ev.payload.paths.length) return;
+      const packs = ev.payload.paths.filter((p) => p.toLowerCase().endsWith(".imgxpack"));
+      if (packs.length) importPacks(packs);
+      else openPath(ev.payload.paths[0]);
     });
     return () => {
       window.removeEventListener("beforeunload", flush);
@@ -360,6 +505,7 @@
     <button onclick={() => viewer.rotate(90)} title="{t('rotate')}{kt('rotateCw')}">⟳</button>
     <button onclick={toggleThumbs} class:on={prefs.settings.showThumbs} title="{t('thumbs')}{kt('thumbs')}">▦</button>
     <button onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
+    <button onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
     <button onclick={toggleFullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>
     <button onclick={() => (settingsOpen = true)} title="{t('settings')}{kt('settings')}">⚙</button>
   </header>
@@ -376,7 +522,8 @@
   {/if}
 
   <div class="body">
-  <section class="stage">
+  <section class="stage" class:framed={!!frame} bind:clientWidth={stageW} bind:clientHeight={stageH}>
+    <div class="frame" class:framed={!!frame} style:left={frame ? `${frame.x}px` : null} style:width={frame ? `${frame.w}px` : null}>
     <Viewer
       bind:this={viewer}
       item={current}
@@ -387,7 +534,16 @@
       onplayer={(p) => (playerInfo = p)}
       background={prefs.settings.background}
       wheelSpeed={prefs.settings.wheelSpeed}
+      onmanual={() => editor?.notifyManual()}
+      {editPanels}
     />
+    {#if frame}<span class="frame-tag" title={t("frameHelp")}>{t("frameTag", { w: frame.pw, h: frame.ph })}</span>{/if}
+    </div>
+    {#if panelEdit}
+      <div class="panel-hint">{t("panelEditHint")}</div>
+    {:else if toast}
+      <div class="panel-hint toast">{toast}</div>
+    {/if}
     {#if playerInfo && source}
       <PlayerBar info={playerInfo} count={source.entries.length} player={() => viewer.playback()} onstop={() => viewer.stop()} />
     {/if}
@@ -428,15 +584,34 @@
   {#if actionOpen && source}
     <ActionPanel
       {store}
-      entry={source.entries[index]?.name ?? null}
-      size={status?.image ? [status.image.w, status.image.h] : null}
+      entry={curEntry}
+      size={curSize}
       detected={detectedCount}
       playing={!!playerInfo}
       onplay={togglePlay}
       onclose={() => (actionOpen = false)}
+      {panelEdit}
+      manualPanels={manualPanels?.length ?? null}
+      onpaneledit={togglePanelEdit}
+      onresetpanels={() => { finishPanelEdit(); if (curEntry && curSize) store.setPanels(curEntry, curSize, null); }}
+      oneditor={() => (editorOpen = true)}
     />
   {/if}
   </div>
+
+  {#if editorShown && curEntry}
+    <div class="editor-wrap" bind:offsetHeight={editorH}>
+    <Editor
+      bind:this={editor}
+      {store}
+      entry={curEntry}
+      size={curSize}
+      viewer={{ currentPose: (f) => viewer.currentPose(f), setPoseNow: (p) => viewer.setPoseNow(p) }}
+      generate={editorTemplate}
+      onclose={() => (editorOpen = false)}
+    />
+    </div>
+  {/if}
 
   {#if prefs.settings.showThumbs && source && source.entries.length > 1}
     <Thumbs
@@ -454,6 +629,10 @@
   <Settings onclose={() => (settingsOpen = false)} />
 {/if}
 
+{#if fileDialog.request}
+  {#key fileDialog.request}<FileDialog req={fileDialog.request} />{/key}
+{/if}
+
 <style>
   main { display: flex; flex-direction: column; height: 100%; }
   header {
@@ -465,6 +644,14 @@
   .counter, .zoom { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
   .body { flex: 1; min-height: 0; display: flex; }
   .stage { position: relative; flex: 1; min-width: 0; }
+  .stage.framed { background: repeating-linear-gradient(135deg, #07080a 0 10px, #0d0f13 10px 20px); }
+  .frame { position: absolute; inset: 0; }
+  .frame.framed { right: auto; box-shadow: 0 0 0 1px rgb(251 191 36 / 0.7); }
+  .frame-tag {
+    position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; pointer-events: none;
+    background: rgb(0 0 0 / 0.6); color: #fde68a;
+  }
+  .editor-wrap { flex: none; }
   .hint {
     position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
     color: var(--muted); font-size: 16px;
@@ -495,5 +682,10 @@
   .start p { margin: 0 0 12px; }
   .start h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
   .start-list { width: min(560px, 100%); max-height: 50vh; overflow-y: auto; font-size: 14px; color: var(--text); }
+  .panel-hint {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%); padding: 4px 12px; border-radius: 6px; pointer-events: none;
+    background: rgb(0 0 0 / 0.7); border: 1px solid #fbbf24; color: #fde68a; font-size: 12px; white-space: nowrap;
+  }
+  .toast { border-color: var(--accent); color: var(--text); }
   .diag .name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

@@ -4,5 +4,5 @@
   "description": "Permisos de la ventana principal",
   "windows": ["main"],
   "permissions": ["core:default", "core:window:allow-set-fullscreen", "core:window:allow-is-fullscreen",
-    "core:window:allow-set-title", "dialog:allow-open", "log:default"]
+    "core:window:allow-set-title", "dialog:allow-open", "dialog:allow-save", "log:default"]
 }

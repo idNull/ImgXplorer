@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { setLang, type LangSetting } from "./i18n.svelte";
 import { cleanOverrides, type KeyOverrides } from "./keys";
 import { log } from "./log";
+import { library } from "./editor/library.svelte";
 
 export type ThumbSize = "s" | "m" | "l";
 
@@ -20,8 +21,21 @@ export interface Settings {
   wheelSpeed: number;
   /** Al volver a abrir algo, ir a la imagen en la que se dejó. */
   resume: boolean;
+  /** Selector de archivos: el propio de la app, el del sistema o según el sistema operativo. */
+  fileDialog: FileDialogMode;
+  /** Última carpeta visitada en el selector propio. */
+  lastDir: string;
+  /** Al editar, mostrar el marco exacto de la reproducción. */
+  editorFrame: boolean;
+  /** Anchos (px) de las columnas de biblioteca e inspector del editor. */
+  libWidth: number;
+  inspectorWidth: number;
   keys: KeyOverrides;
 }
+
+export type FileDialogMode = "auto" | "app" | "system";
+export const LIB_WIDTH = { min: 160, max: 640, def: 220 } as const;
+export const INSPECTOR_WIDTH = { min: 200, max: 520, def: 250 } as const;
 
 export interface Recent {
   path: string;
@@ -45,6 +59,11 @@ export const DEFAULT_SETTINGS: Settings = {
   zoomStep: 1.25,
   wheelSpeed: 1,
   resume: true,
+  fileDialog: "auto",
+  lastDir: "",
+  editorFrame: true,
+  libWidth: LIB_WIDTH.def,
+  inspectorWidth: INSPECTOR_WIDTH.def,
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -61,6 +80,13 @@ function clean(raw: unknown): Settings {
   if (typeof r.zoomStep === "number" && Number.isFinite(r.zoomStep)) s.zoomStep = Math.min(2, Math.max(1.05, r.zoomStep));
   if (typeof r.wheelSpeed === "number" && Number.isFinite(r.wheelSpeed)) s.wheelSpeed = Math.min(4, Math.max(0.25, r.wheelSpeed));
   if (typeof r.resume === "boolean") s.resume = r.resume;
+  if (r.fileDialog === "auto" || r.fileDialog === "app" || r.fileDialog === "system") s.fileDialog = r.fileDialog;
+  if (typeof r.lastDir === "string") s.lastDir = r.lastDir;
+  if (typeof r.editorFrame === "boolean") s.editorFrame = r.editorFrame;
+  const width = (v: unknown, w: { min: number; max: number; def: number }) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(w.max, Math.max(w.min, v))) : w.def;
+  s.libWidth = width(r.libWidth, LIB_WIDTH);
+  s.inspectorWidth = width(r.inspectorWidth, INSPECTOR_WIDTH);
   s.keys = cleanOverrides(r.keys);
   return s;
 }
@@ -90,9 +116,10 @@ class Prefs {
 
   async load() {
     try {
-      const p = await invoke<{ settings: string | null; recents: string | null }>("load_prefs");
+      const p = await invoke<{ settings: string | null; recents: string | null; library: string | null }>("load_prefs");
       this.settings = clean(parse(p.settings, "settings.json"));
       this.recents = cleanRecents(parse(p.recents, "recents.json"));
+      library.load(p.library);
     } catch (e) {
       log.warn("no se pudieron leer los ajustes:", e);
     }
@@ -131,6 +158,7 @@ class Prefs {
 
   /** Escribe ya lo pendiente (al cerrar). */
   flush() {
+    library.flush();
     for (const name of ["settings", "recents"] as const) {
       if (this.#timers[name] === undefined) continue;
       clearTimeout(this.#timers[name]);

@@ -108,6 +108,9 @@ pub struct Item {
     pub timeline: Timeline,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transition_out: Option<Transition>,
+    /// Viñetas dibujadas o corregidas a mano (sustituyen a la detección automática).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panels: Option<Vec<Rect>>,
 }
 
 /// Rectángulo en coordenadas normalizadas de imagen (0..1).
@@ -160,6 +163,9 @@ pub struct AudioTracks {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipInstance {
+    /// Nombre visible en el editor (p. ej. el del clip de la biblioteca del que salió).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub start: f64,
     pub duration: f64,
     pub clip: ClipSource,
@@ -278,6 +284,7 @@ mod tests {
             template: Some(TemplateRef { id: "comic-blocks".into(), params: serde_json::json!({"rows": 3}) }),
             timeline: Timeline {
                 camera: vec![ClipInstance {
+                    name: Some("Espera".into()),
                     start: 0.0,
                     duration: 2.0,
                     clip: ClipSource::Inline(Clip::Hold { length: 2.0, pose: None }),
@@ -287,6 +294,7 @@ mod tests {
                 audio: AudioTracks::default(),
             },
             transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera { dir: None }, duration: 0.8 }),
+            panels: Some(vec![Rect { x: 0.1, y: 0.1, w: 0.4, h: 0.3 }]),
         });
         let back = Project::from_json(&p.to_json()).unwrap();
         assert_eq!(p, back);

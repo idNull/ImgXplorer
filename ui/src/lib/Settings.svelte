@@ -24,8 +24,10 @@
   const GROUPS: { id: Group; title: () => string }[] = [
     { id: "viewer", title: () => t("groupViewer") },
     { id: "player", title: () => t("groupPlayer") },
+    { id: "editor", title: () => t("groupEditor") },
   ];
-  const actionLabel = (g: Group, a: string) => label(`${g === "viewer" ? "kv" : "kp"}.${a}`);
+  const PREFIX: Record<Group, string> = { viewer: "kv", player: "kp", editor: "ke" };
+  const actionLabel = (g: Group, a: string) => label(`${PREFIX[g]}.${a}`);
 
   function keys(g: Group, a: string): readonly string[] {
     return keysFor(prefs.settings.keys, g, a as ActionOf<typeof g>);
@@ -77,7 +79,7 @@
   }
 
   function resetSettings() {
-    prefs.settings = { ...DEFAULT_SETTINGS, keys: $state.snapshot(prefs.settings.keys) };
+    prefs.settings = { ...DEFAULT_SETTINGS, lastDir: prefs.settings.lastDir, keys: $state.snapshot(prefs.settings.keys) };
     save();
   }
 
@@ -148,6 +150,15 @@
           <span>{t("resume")}</span>
           <input type="checkbox" checked={s.resume} onchange={(e) => set("resume", e.currentTarget.checked)} />
         </label>
+        <label class="row" title={t("fileDialogHelp")}>
+          <span>{t("fileDialog")}</span>
+          <select value={s.fileDialog} onchange={(e) => set("fileDialog", e.currentTarget.value as typeof s.fileDialog)}>
+            <option value="auto">{t("fileDialogAuto")}</option>
+            <option value="app">{t("fileDialogApp")}</option>
+            <option value="system">{t("fileDialogSystem")}</option>
+          </select>
+        </label>
+        <p class="note">{t("fileDialogHelp")}</p>
         <label class="row">
           <span>{t("showDiag")}</span>
           <input type="checkbox" checked={s.showDiag} onchange={(e) => set("showDiag", e.currentTarget.checked)} />

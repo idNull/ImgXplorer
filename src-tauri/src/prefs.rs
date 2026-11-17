@@ -1,4 +1,4 @@
-//! Ajustes y lista de recientes: JSON en el directorio de configuración de la app. La interfaz
+//! Ajustes, lista de recientes y biblioteca de clips y plantillas propias: JSON en el directorio de configuración de la app. La interfaz
 //! define y valida su contenido; aquí solo se leen y escriben de forma segura.
 
 use serde::Serialize;
@@ -6,13 +6,14 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 /// Archivos que la interfaz puede leer y escribir (nada de rutas arbitrarias).
-const FILES: [&str; 2] = ["settings", "recents"];
+const FILES: [&str; 3] = ["settings", "recents", "library"];
 
 fn file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     if !FILES.contains(&name) {
         return Err(format!("preferencia desconocida: {name}"));
     }
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    // La biblioteca es contenido del usuario, no configuración: va al directorio de datos.
+    let dir = if name == "library" { app.path().app_data_dir() } else { app.path().app_config_dir() }.map_err(|e| e.to_string())?;
     Ok(dir.join(format!("{name}.json")))
 }
 
@@ -20,6 +21,7 @@ fn file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
 pub struct Prefs {
     settings: Option<String>,
     recents: Option<String>,
+    library: Option<String>,
 }
 
 #[tauri::command]
@@ -34,7 +36,7 @@ pub fn load_prefs(app: AppHandle) -> Prefs {
             })
             .ok()
     };
-    Prefs { settings: read("settings"), recents: read("recents") }
+    Prefs { settings: read("settings"), recents: read("recents"), library: read("library") }
 }
 
 #[tauri::command]

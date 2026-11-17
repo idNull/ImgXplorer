@@ -32,10 +32,11 @@ Son independientes de la resolución, así que un clip vale para cualquier image
     "entry": "001.jpg", "size": [2480, 3508],
     "template": { "id": "comic-blocks", "params": { "rows": 3, "cols": 2, "dir": "rtl" } },
     "timeline": {
-      "camera": [ { "start": 0, "duration": 2, "clip": { "ref": "zoom-titulo" }, "trimIn": 0, "trimOut": 0 } ],
+      "camera": [ { "name": "Zoom al título", "start": 0, "duration": 2, "clip": { "ref": "zoom-titulo" }, "trimIn": 0, "trimOut": 0 } ],
       "audio": { "voice": [], "sfx": [], "ambient": [] }
     },
-    "transitionOut": { "type": "continuous-camera", "duration": 0.8 }
+    "transitionOut": { "type": "continuous-camera", "duration": 0.8 },
+    "panels": [ { "x": 0.05, "y": 0.04, "w": 0.9, "h": 0.3 } ]
   } ]
 }
 ```
@@ -53,12 +54,18 @@ Easing: `linear`, `ease-in`, `ease-out`, `ease-in-out`, `bounce`, `elastic`, `st
 ### Timeline
 - Cada instancia de clip tiene `start` y `duration` (s). La duración natural del clip, menos
   `trimIn`/`trimOut`, se estira hasta ocupar `duration`.
-- Entre clips se mantiene la última pose. Si dos se solapan, manda el que empieza después.
+- `name` (opcional) es el nombre que muestra el editor.
+- `clip` es `{ "inline": { …clip… } }` (lo que guarda el editor) o `{ "ref": "id" }` (un clip de `clips`).
+- Si dos clips se solapan, manda el que empieza después mientras dure; al terminar, sigue el de
+  debajo. En un hueco se mantiene la última pose del clip que terminó más tarde, y antes del
+  primero, su pose inicial.
+- Una espera sin `pose` mantiene la pose con la que se llega a ella.
 - `audio` está reservado para la fase de sonido: se conserva al guardar, pero aún no se usa.
 
 ### Plantillas
 `defaults.template` se aplica a todas las imágenes sin animación propia; `items[].template`
-la sustituye para una imagen. Se guardan la plantilla y sus parámetros, no la timeline: se
+la sustituye para una imagen. Una imagen con `timeline.camera` propia (hecha en el editor) no
+usa la plantilla de todas. Se guardan la plantilla y sus parámetros, no la timeline: se
 genera al reproducir, porque depende de la proporción de la pantalla o del vídeo.
 
 | `id` | Parámetros (valor por defecto) |
@@ -74,7 +81,8 @@ limitan al rango, así que un archivo editado a mano nunca impide reproducir. El
 completo, con rangos, está en `crates/imgx-core/src/templates.rs` (`CATALOG`).
 
 En `comic` automático, las viñetas se detectan al reproducir; si no se distinguen al menos
-dos, se usa la rejilla `rows` × `cols`.
+dos, se usa la rejilla `rows` × `cols`. Si la imagen tiene `items[].panels` (dibujadas o
+corregidas a mano, en coordenadas normalizadas), se usan esas siempre, sea cual sea el modo.
 
 ### Transiciones
 `cut`, `fade`, `slide {dir}`, `continuous-camera {dir?}`. `dir` (`left|right|up|down`) es el
@@ -85,3 +93,13 @@ deduce de la plantilla de la imagen saliente (cómic D→I: `left`; scroll: su d
 ## Versionado
 `version` sube con cada cambio incompatible y `Project::from_json` aplica las migraciones en
 cadena. Un archivo con una versión mayor que la soportada se rechaza con un mensaje claro.
+
+## Paquetes `.imgxpack`
+
+Zip para compartir clips y plantillas propias:
+
+- `manifest.json`: `{ "format": "imgxpack", "version": 1, "app": "0.1.0" }`. Un paquete de una
+  versión más nueva no se importa.
+- `library.json`: `{ "clips": [ { "id", "name", "clip" } ], "templates": [ { "id", "name", "template": { "id", "params" } } ] }`.
+  Al importar se valida cada clip (tiempos crecientes, zoom positivo…) y se descarta lo que no
+  es válido o ya existe.
