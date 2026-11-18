@@ -193,10 +193,27 @@ if [ "$FFMPEG" = 1 ] && command -v ffmpeg >/dev/null; then
   if grep -qE 'libx264|h264_videotoolbox' <<< "$(ffmpeg -hide_banner -encoders 2>/dev/null)"; then ok "ffmpeg listo para exportar vídeo"; else warn "ffmpeg sin H.264"; fi
 fi
 
+# IA (opcional, solo si dices que sí).
+AIS=""
+command -v claude >/dev/null && AIS="$AIS Claude Code,"
+command -v codex >/dev/null && AIS="$AIS Codex,"
+command -v gemini >/dev/null && AIS="$AIS Gemini CLI,"
+if [ -n "$AIS" ]; then
+  echo
+  echo "Tienes estas IAs:${AIS%,}. imgxplorer puede conectarse con ellas para que monten vídeos por ti."
+  printf '¿Conectar imgxplorer con ellas? [s/N] '
+  read -r r </dev/tty
+  case "$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]')" in
+    s|si|sí|y|yes) "$DEST/Contents/MacOS/imgxplorer" --mcp-install all | sed 's/^/  /'; note "Activa «Permitir el control por IA» en Ajustes → IA." ;;
+    *) note "Podrás hacerlo cuando quieras en Ajustes → IA." ;;
+  esac
+fi
+
 MIN=$(( ($(date +%s) - START + 59) / 60 ))
 echo
 printf '%s¡Listo!%s imgxplorer está en %s (%s min).\n' "$G" "$N" "$DEST_DIR" "$MIN"
-note "Búscalo en Launchpad o en Aplicaciones. Para quitarlo, arrástralo a la Papelera."
+note "Búscalo en Launchpad o en Aplicaciones. Para quitarlo, arrástralo a la Papelera"
+note "(si lo conectaste con una IA, quítalo antes en Ajustes → IA)."
 note "La carpeta del código ya no hace falta para usarlo (ocupa unos GB por la compilación)."
 note "La app usa la libheif de Homebrew: no la desinstales con «brew uninstall libheif»."
 printf '¿Abrir imgxplorer ahora? [S/n] '

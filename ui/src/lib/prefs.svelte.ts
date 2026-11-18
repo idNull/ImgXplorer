@@ -36,6 +36,8 @@ export interface Settings {
   video: VideoPrefs;
   /** Sonido: volumen general (0..1,5), silencio y micrófono para grabar voz ("" = el del sistema). */
   sound: { master: number; mute: boolean; input: string };
+  /** Una IA puede manejar la app (servidor MCP). */
+  aiControl: boolean;
   keys: KeyOverrides;
 }
 
@@ -120,6 +122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   editorHeight: EDITOR_HEIGHT.def,
   video: DEFAULT_VIDEO,
   sound: { master: 1, mute: false, input: "" },
+  aiControl: false,
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -150,6 +153,7 @@ function clean(raw: unknown): Settings {
   if (typeof snd.master === "number" && Number.isFinite(snd.master)) s.sound.master = Math.min(1.5, Math.max(0, snd.master));
   if (typeof snd.mute === "boolean") s.sound.mute = snd.mute;
   if (typeof snd.input === "string") s.sound.input = snd.input.slice(0, 300);
+  if (typeof r.aiControl === "boolean") s.aiControl = r.aiControl;
   s.keys = cleanOverrides(r.keys);
   return s;
 }

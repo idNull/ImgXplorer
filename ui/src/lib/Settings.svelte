@@ -1,9 +1,11 @@
 <script lang="ts">
-  // Ventana de ajustes: general y atajos de teclado. Todo se aplica y se guarda al momento.
+  // Ventana de ajustes: general, atajos de teclado, IA y «Acerca de». Todo se aplica y se guarda al momento.
   import { BACKGROUNDS, DEFAULT_SETTINGS, DEFAULT_VIDEO, prefs } from "./prefs.svelte";
   import { MAX_KEYS, actionsOf, assign, comboOf, display, keysFor, type ActionOf, type Group } from "./keys";
   import { t, label } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import AiSettings from "./mcp/AiSettings.svelte";
+  import About from "./About.svelte";
 
   // Micrófonos y salida de sonido (se piden al abrir los ajustes).
   let inputs = $state<{ id: string; name: string }[]>([]);
@@ -20,7 +22,7 @@
   }
   let { onclose }: Props = $props();
 
-  let tab = $state<"general" | "keys">("general");
+  let tab = $state<"general" | "keys" | "ai" | "about">("general");
   let capturing = $state<{ group: Group; action: string } | null>(null);
   let notice = $state<string | null>(null);
 
@@ -112,6 +114,8 @@
       <div class="seg">
         <button class:on={tab === "general"} onclick={() => (tab = "general")}>{t("general")}</button>
         <button class:on={tab === "keys"} onclick={() => (tab = "keys")}>{t("shortcuts")}</button>
+        <button class:on={tab === "ai"} onclick={() => (tab = "ai")}>{t("aiTab")}</button>
+        <button class:on={tab === "about"} onclick={() => (tab = "about")}>{t("aboutTab")}</button>
       </div>
       <button class="close" onclick={onclose} title="{t('close')} (Esc)">✕</button>
     </header>
@@ -203,6 +207,10 @@
           <button onclick={() => prefs.clearRecents()} disabled={!recentCount}>{t("clearRecents")} ({recentCount})</button>
           <button onclick={resetSettings}>{t("resetSettings")}</button>
         </div>
+      {:else if tab === "ai"}
+        <AiSettings />
+      {:else if tab === "about"}
+        <About />
       {:else}
         <p class="note">{t("keysHelp")}</p>
         {#if notice}<p class="notice">{notice}</p>{/if}

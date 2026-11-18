@@ -63,6 +63,19 @@ if [ "$(id -u)" != 0 ]; then command -v sudo >/dev/null && SUDO=sudo; fi
 as_root() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -n "$SUDO" ]; then sudo "$@"; else die "Hace falta sudo para: $*"; fi; }
 in_prefix() { if [ "$SCOPE" = system ]; then as_root "$@"; else "$@"; fi; }
 
+# Que el escritorio vea los iconos nuevos. Si otra app dejó una caché (icon-theme.cache) en la carpeta,
+# GTK se fía de ella y no ve los iconos añadidos después: se rehace. Cambiar la fecha de la carpeta
+# también hace que GTK descarte una caché vieja.
+refresh_icons() {
+  local d="$1/share/icons/hicolor"
+  [ -d "$d" ] || return 0
+  in_prefix touch "$d" 2>/dev/null
+  if [ -f "$d/icon-theme.cache" ] || [ -f "$d/index.theme" ]; then
+    command -v gtk-update-icon-cache >/dev/null && in_prefix gtk-update-icon-cache -qtf "$d" 2>/dev/null
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------- desinstalar
 if [ "$MODE" = uninstall ]; then
   title "Desinstalar imgxplorer"
@@ -72,9 +85,12 @@ if [ "$MODE" = uninstall ]; then
     [ -f "$m" ] || continue
     found=1
     if [ "$p" = /usr/local ]; then SCOPE=system; else SCOPE=user; fi
+    # Quitarlo también de las IAs a las que se conectó.
+    [ -x "$p/bin/$APP" ] && "$p/bin/$APP" --mcp-uninstall all 2>/dev/null | sed 's/^/  /'
     while IFS= read -r f; do [ -n "$f" ] && in_prefix rm -f "$f" && note "borrado $f"; done < "$m"
     in_prefix rm -rf "$p/share/$APP"
     command -v update-desktop-database >/dev/null && in_prefix update-desktop-database -q "$p/share/applications" 2>/dev/null
+    refresh_icons "$p"
     ok "Quitado de $p"
   done
   [ "$found" = 1 ] || die "No encuentro ninguna instalación hecha con este instalador."
@@ -259,7 +275,7 @@ other=$(command -v $APP 2>/dev/null || true)
 if [ -n "$other" ] && [ "$other" != "$PREFIX/bin/$APP" ]; then
   warn "Ya hay otro imgxplorer en $other (de un .deb, .rpm o AUR): conviene quitarlo para no tener dos"
 fi
-[ "$NVIDIA" = 1 ] && note "Tarjeta Nvidia: el lanzador desactiva el renderizado DMA-BUF de WebKit (evita ventanas en blanco)."
+[ "$NVIDIA" = 1 ] && note "Tarjeta Nvidia: la app desactiva sola el renderizado DMA-BUF de WebKit (evita ventanas en blanco y cierres)."
 
 # ---------------------------------------------------------------- resumen
 echo
@@ -323,7 +339,6 @@ for f in "$HERE"/share/icons/hicolor/*/apps/$APP.png; do
   put "$f" "$PREFIX/share/icons/hicolor/$size/apps/$APP.png" 644
 done
 exec_line="$PREFIX/bin/$APP %f"
-[ "$NVIDIA" = 1 ] && exec_line="env WEBKIT_DISABLE_DMABUF_RENDERER=1 $exec_line"
 tmp=$(mktemp)
 sed "s|^Exec=.*|Exec=$exec_line|" "$HERE/share/applications/$APP.desktop" > "$tmp"
 put "$tmp" "$PREFIX/share/applications/$APP.desktop" 644
@@ -332,8 +347,23 @@ printf '%s\n' "${FILES[@]}" > "${tmp}.list"
 in_prefix install -Dm644 "${tmp}.list" "$MANIFEST"; rm -f "${tmp}.list"
 in_prefix install -Dm755 "$0" "$PREFIX/share/$APP/install.sh"
 command -v update-desktop-database >/dev/null && in_prefix update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null
-command -v gtk-update-icon-cache >/dev/null && [ -f "$PREFIX/share/icons/hicolor/index.theme" ] && in_prefix gtk-update-icon-cache -qtf "$PREFIX/share/icons/hicolor" 2>/dev/null
+refresh_icons "$PREFIX"
 ok "Instalado en $PREFIX"
+
+# ---------------------------------------------------------------- IA (opcional, solo si dices que sí)
+AIS=""
+command -v claude >/dev/null && AIS="$AIS Claude Code,"
+command -v codex >/dev/null && AIS="$AIS Codex,"
+command -v gemini >/dev/null && AIS="$AIS Gemini CLI,"
+if [ -n "$AIS" ] && [ "$YES" != 1 ]; then
+  echo
+  echo "Tienes estas IAs:${AIS%,}. imgxplorer puede conectarse con ellas para que monten vídeos por ti."
+  read -r -p "¿Conectar imgxplorer con ellas? [s/N] " r </dev/tty || r=n
+  case "${r,,}" in
+    s|si|sí|y|yes) "$PREFIX/bin/$APP" --mcp-install all | sed 's/^/  /'; note "Activa «Permitir el control por IA» en Ajustes → IA." ;;
+    *) note "Podrás hacerlo cuando quieras en Ajustes → IA." ;;
+  esac
+fi
 
 echo
 printf '%s¡Listo!%s Ábrelo desde el menú de aplicaciones («imgxplorer»)' "$G" "$N"

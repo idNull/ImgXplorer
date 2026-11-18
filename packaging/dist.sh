@@ -40,6 +40,7 @@ linux() {
   rm -rf "$out"
   install -Dm755 packaging/linux/install.sh "$stage/install.sh"
   install -Dm644 packaging/linux/LEEME.txt "$stage/LEEME.txt"
+  install -Dm755 packaging/linux/diagnostico.sh "$stage/diagnostico.sh"
   install -Dm644 packaging/linux/imgxplorer.desktop "$stage/share/applications/imgxplorer.desktop"
   for s in 32x32 64x64 128x128; do
     install -Dm644 "src-tauri/icons/$s.png" "$stage/share/icons/hicolor/$s/apps/imgxplorer.png"

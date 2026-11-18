@@ -1,0 +1,1291 @@
+[
+  {
+    "name": "get_guide",
+    "description": "Read this first. Workflow, timing rules for reading panels, camera style, sound and review loop for making a video with imgxplorer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "app_status",
+    "description": "What imgxplorer has open: source (comic/folder), number of images, project file, video output size, current image, whether the project is read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "open_source",
+    "description": "Open a comic archive (cbz, cbr, cb7, zip, rar, 7z), a folder of images or a single image. Its animation project is loaded (or created) automatically.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "list_images",
+    "description": "Images of the open source in order, with their index (used by every other tool), name, and what animation and sound each one has.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "integer",
+          "description": "First index (default 0)."
+        },
+        "count": {
+          "type": "integer",
+          "description": "How many (default 100)."
+        }
+      }
+    }
+  },
+  {
+    "name": "go_to",
+    "description": "Show an image in the app (so the user sees what you are working on).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Image index."
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "view_image",
+    "description": "Look at a whole page. Panels are drawn on top with their numbers in reading order (the same numbers plan_shots uses). Returns the image and the panel rectangles (normalized 0..1).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "maxSize": {
+          "type": "integer",
+          "description": "Longest side in pixels (default 1400, max 2000)."
+        },
+        "panels": {
+          "type": "boolean",
+          "description": "Draw the panels (default true)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "ltr",
+            "rtl"
+          ],
+          "description": "Reading order: ltr (western) or rtl (manga). Default: the comic template's, else ltr."
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "view_panel",
+    "description": "Look closely at one panel or any region at high resolution, to read its text and see its details before deciding the timing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "panel": {
+          "type": "integer",
+          "description": "Panel number as shown by view_image (1-based)."
+        },
+        "rect": {
+          "type": "object",
+          "description": "Region instead of a panel (normalized 0..1 of the image).",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ]
+        },
+        "maxSize": {
+          "type": "integer",
+          "description": "Longest side in pixels (default 1400, max 2000)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "ltr",
+            "rtl"
+          ]
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "get_panels",
+    "description": "Panel rectangles of an image in reading order (normalized 0..1), and whether they were detected automatically or drawn by hand.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "ltr",
+            "rtl"
+          ]
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "set_panels",
+    "description": "Fix the panels of an image when detection is wrong (missing, merged or split panels). Order does not matter (reading order is computed). reset=true goes back to automatic detection.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "panels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "w": {
+                "type": "number"
+              },
+              "h": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          }
+        },
+        "reset": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "set_output",
+    "description": "Video format. Set it BEFORE planning shots: framing depends on the aspect ratio. Presets: 720p, 1080p, 1440p, 4k with shape landscape (16:9), portrait (9:16) or square; or exact width/height.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "720p",
+            "1080p",
+            "1440p",
+            "4k"
+          ]
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "landscape",
+            "portrait",
+            "square"
+          ]
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "fps": {
+          "type": "integer",
+          "description": "Frames per second (24, 25, 30, 60)."
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "high",
+            "normal",
+            "light"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "plan_shots",
+    "description": "Animate an image as a list of camera shots (replaces its camera animation, keeps its sounds). For each shot say what to frame (a panel number, a region, or the whole page) and how long to stay; the app computes exact camera poses for the video aspect. Returns the start/hold/end time of every shot, used to place sounds.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "shots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "panel": {
+                "type": "integer",
+                "description": "Panel number (1-based, reading order)."
+              },
+              "rect": {
+                "type": "object",
+                "description": "Region to frame instead of a panel (normalized). Use it for details, faces, a single balloon.",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "w",
+                  "h"
+                ]
+              },
+              "full": {
+                "type": "boolean",
+                "description": "Frame the whole page."
+              },
+              "hold": {
+                "type": "number",
+                "description": "Seconds staying on this shot (reading time)."
+              },
+              "move": {
+                "type": "number",
+                "description": "Seconds to travel from the previous shot (default 0.8; 0 = hard cut)."
+              },
+              "easing": {
+                "type": "string",
+                "enum": [
+                  "ease-in-out",
+                  "ease-in",
+                  "ease-out",
+                  "linear",
+                  "bounce",
+                  "elastic",
+                  "step"
+                ],
+                "description": "Curve of the travel (default ease-in-out)."
+              },
+              "margin": {
+                "type": "number",
+                "description": "Air around the target, fraction per side (default 0.04)."
+              },
+              "zoom": {
+                "type": "number",
+                "description": "Extra zoom on top of the exact framing (default 1; 1.3 = closer)."
+              },
+              "rot": {
+                "type": "number",
+                "description": "Rotation in degrees (default 0). Use rarely."
+              },
+              "push": {
+                "type": "number",
+                "description": "Slow zoom during the hold (default 1 = none; 1.05 = subtle push-in, 0.95 = pull-out)."
+              },
+              "maxZoom": {
+                "type": "number",
+                "description": "Zoom limit when framing (default 6)."
+              },
+              "note": {
+                "type": "string",
+                "description": "Why (for your own summary)."
+              }
+            },
+            "required": [
+              "hold"
+            ]
+          }
+        },
+        "start": {
+          "type": "string",
+          "enum": [
+            "overview",
+            "direct"
+          ],
+          "description": "overview: show the whole page first; direct: start on the first shot (default)."
+        },
+        "end": {
+          "type": "string",
+          "enum": [
+            "overview",
+            "direct"
+          ],
+          "description": "overview: go back to the whole page at the end; direct: stay on the last shot (default)."
+        },
+        "overviewHold": {
+          "type": "number",
+          "description": "Seconds of whole page for start/end overview (default 1)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "ltr",
+            "rtl"
+          ],
+          "description": "Reading order used to number the panels (same as view_image)."
+        }
+      },
+      "required": [
+        "image",
+        "shots"
+      ]
+    }
+  },
+  {
+    "name": "get_timeline",
+    "description": "Camera keyframes (absolute seconds), template, transition and sounds of one image, and its duration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "set_keyframes",
+    "description": "Low-level camera animation: exact keyframes. cx, cy = image point at the center of the video (normalized 0..1); zoom 1 = whole image fits; rot in degrees. The easing of a key applies to the segment that starts at it. Prefer plan_shots unless you need a special move.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "t": {
+                "type": "number"
+              },
+              "cx": {
+                "type": "number"
+              },
+              "cy": {
+                "type": "number"
+              },
+              "zoom": {
+                "type": "number"
+              },
+              "rot": {
+                "type": "number"
+              },
+              "easing": {
+                "type": "string",
+                "enum": [
+                  "ease-in-out",
+                  "ease-in",
+                  "ease-out",
+                  "linear",
+                  "bounce",
+                  "elastic",
+                  "step"
+                ]
+              }
+            },
+            "required": [
+              "t",
+              "cx",
+              "cy",
+              "zoom"
+            ]
+          }
+        }
+      },
+      "required": [
+        "image",
+        "keys"
+      ]
+    }
+  },
+  {
+    "name": "apply_template",
+    "description": "Use a ready-made animation template instead of hand-made shots: comic (panel by panel), scroll, bounce, ken-burns, full (still). For some images, or as the default for every image without its own animation. template 'none' removes it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Image indexes. Omit to set the default for all images."
+        },
+        "template": {
+          "type": "string",
+          "enum": [
+            "comic",
+            "scroll",
+            "bounce",
+            "ken-burns",
+            "full",
+            "none"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "Template parameters, e.g. comic {dir: ltr|rtl, hold, move, margin, maxZoom, overview}, ken-burns {duration, zoom, focus, way}, full {duration}, scroll {dir, speed}."
+        }
+      },
+      "required": [
+        "template"
+      ]
+    }
+  },
+  {
+    "name": "set_transition",
+    "description": "Transition from an image to the next: cut, fade, slide (with dir) or continuous-camera. Omit image to set the default for all.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "cut",
+            "fade",
+            "slide",
+            "continuous-camera",
+            "default"
+          ],
+          "description": "'default' removes the image's own transition."
+        },
+        "duration": {
+          "type": "number",
+          "description": "Seconds (default 0.5)."
+        },
+        "dir": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right",
+            "up",
+            "down"
+          ]
+        }
+      },
+      "required": [
+        "type"
+      ]
+    }
+  },
+  {
+    "name": "set_hold_between",
+    "description": "Pause in seconds at the end of every image before its transition (default 0.3).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "seconds": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "seconds"
+      ]
+    }
+  },
+  {
+    "name": "list_sounds",
+    "description": "Sounds in the app's sound library (built-in effects and ambiences, imported files, recorded voices) with their id, duration and whether they loop well as ambience.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Filter by name."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "builtin",
+            "imported",
+            "recorded"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "find_audio_files",
+    "description": "List audio files (mp3, wav, flac, ogg, m4a…) in a folder the user told you about, with their duration. Then import_sounds the ones you want.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Default true."
+        }
+      },
+      "required": [
+        "folder"
+      ]
+    }
+  },
+  {
+    "name": "import_sounds",
+    "description": "Copy audio files into the sound library. Returns their sound ids.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "paths"
+      ]
+    }
+  },
+  {
+    "name": "list_tracks",
+    "description": "Sound tracks of the project (shared by all images), grouped as voice, sfx and ambient, with volume, pan, mute and effects.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "add_track",
+    "description": "New sound track in a group, e.g. one voice track per character, or separate tracks for music and rain.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "bus": {
+          "type": "string",
+          "enum": [
+            "voice",
+            "sfx",
+            "ambient"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number",
+          "description": "0..2 (1 = normal)."
+        },
+        "pan": {
+          "type": "number",
+          "description": "-1 left .. 1 right."
+        }
+      },
+      "required": [
+        "bus"
+      ]
+    }
+  },
+  {
+    "name": "edit_track",
+    "description": "Change a track: name, volume, pan, mute, effects (the effects list replaces the current one).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "track": {
+          "type": "string",
+          "description": "Track id."
+        },
+        "name": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "pan": {
+          "type": "number"
+        },
+        "mute": {
+          "type": "boolean"
+        },
+        "effects": {
+          "type": "array",
+          "description": "Effect chain in order. See effects_catalog for types, presets and params.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reverb",
+                  "delay",
+                  "eq",
+                  "filter",
+                  "compressor",
+                  "pitch",
+                  "robot",
+                  "distortion"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "description": "Parameter values, e.g. {\"mix\": 0.4}."
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "track"
+      ]
+    }
+  },
+  {
+    "name": "add_audio",
+    "description": "Place a sound on an image's timeline: a voice line (bus voice) or a sound effect (bus sfx). start is in seconds from the beginning of the image (use the shot times from plan_shots). If a voice is longer than the image's animation, the image lasts longer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "sound": {
+          "type": "string",
+          "description": "Sound id from list_sounds / import_sounds."
+        },
+        "bus": {
+          "type": "string",
+          "enum": [
+            "voice",
+            "sfx"
+          ]
+        },
+        "track": {
+          "type": "string",
+          "description": "Track id (default: first track of the bus)."
+        },
+        "start": {
+          "type": "number"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Seconds to play (default: the rest of the sound)."
+        },
+        "trimIn": {
+          "type": "number",
+          "description": "Skip this many seconds of the sound."
+        },
+        "volume": {
+          "type": "number",
+          "description": "0..2 (default 1)."
+        },
+        "fadeIn": {
+          "type": "number"
+        },
+        "fadeOut": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "description": "Effects for this clip only (same format as edit_track: [{type, preset?, params?, on?}]).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reverb",
+                  "delay",
+                  "eq",
+                  "filter",
+                  "compressor",
+                  "pitch",
+                  "robot",
+                  "distortion"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "description": "Parameter values, e.g. {\"mix\": 0.4}."
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "image",
+        "sound",
+        "bus",
+        "start"
+      ]
+    }
+  },
+  {
+    "name": "edit_audio",
+    "description": "Change a sound clip of an image (identified by image, bus and index as listed by get_timeline). Only the given fields change.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "bus": {
+          "type": "string",
+          "enum": [
+            "voice",
+            "sfx"
+          ]
+        },
+        "index": {
+          "type": "integer"
+        },
+        "track": {
+          "type": "string"
+        },
+        "start": {
+          "type": "number"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "trimIn": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "fadeIn": {
+          "type": "number"
+        },
+        "fadeOut": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "description": "Effects for this clip only (same format as edit_track: [{type, preset?, params?, on?}]).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reverb",
+                  "delay",
+                  "eq",
+                  "filter",
+                  "compressor",
+                  "pitch",
+                  "robot",
+                  "distortion"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "description": "Parameter values, e.g. {\"mix\": 0.4}."
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "image",
+        "bus",
+        "index"
+      ]
+    }
+  },
+  {
+    "name": "remove_audio",
+    "description": "Remove a sound clip from an image (bus and index from get_timeline).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "bus": {
+          "type": "string",
+          "enum": [
+            "voice",
+            "sfx"
+          ]
+        },
+        "index": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "image",
+        "bus",
+        "index"
+      ]
+    }
+  },
+  {
+    "name": "add_ambient",
+    "description": "Background sound or music that loops from one image to another (rain, city, soundtrack). It ducks under voices if the mix says so.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sound": {
+          "type": "string"
+        },
+        "from": {
+          "type": "integer",
+          "description": "First image index."
+        },
+        "to": {
+          "type": "integer",
+          "description": "Last image index (included)."
+        },
+        "track": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number",
+          "description": "0..2 (default 0.8)."
+        },
+        "fadeIn": {
+          "type": "number",
+          "description": "Seconds (default 1)."
+        },
+        "fadeOut": {
+          "type": "number",
+          "description": "Seconds (default 1.5)."
+        },
+        "name": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "description": "Effects for this clip only (same format as edit_track: [{type, preset?, params?, on?}]).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reverb",
+                  "delay",
+                  "eq",
+                  "filter",
+                  "compressor",
+                  "pitch",
+                  "robot",
+                  "distortion"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "description": "Parameter values, e.g. {\"mix\": 0.4}."
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "sound",
+        "from",
+        "to"
+      ]
+    }
+  },
+  {
+    "name": "edit_ambient",
+    "description": "Change an ambience (id from summary or add_ambient). Only the given fields change.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sound": {
+          "type": "string"
+        },
+        "from": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "integer"
+        },
+        "track": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "fadeIn": {
+          "type": "number"
+        },
+        "fadeOut": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "effects": {
+          "type": "array",
+          "description": "Effects for this clip only (same format as edit_track: [{type, preset?, params?, on?}]).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reverb",
+                  "delay",
+                  "eq",
+                  "filter",
+                  "compressor",
+                  "pitch",
+                  "robot",
+                  "distortion"
+                ]
+              },
+              "preset": {
+                "type": "string"
+              },
+              "params": {
+                "type": "object",
+                "description": "Parameter values, e.g. {\"mix\": 0.4}."
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "remove_ambient",
+    "description": "Remove an ambience or music (id from summary).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "set_mix",
+    "description": "Group levels of the project mix: voice, sfx, ambient (0..2) and duck (lower ambience under voices).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "voice": {
+          "type": "number"
+        },
+        "sfx": {
+          "type": "number"
+        },
+        "ambient": {
+          "type": "number"
+        },
+        "duck": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "effects_catalog",
+    "description": "Audio effects available for tracks and clips: their parameters (range, default, unit) and presets (e.g. reverb cathedral, filter phone, pitch monster).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "summary",
+    "description": "Overview of the project: every image with its animation, duration, shots, sounds and warnings (too short to read, image without animation, missing sound…), ambiences, tracks and total video length.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "integer"
+        },
+        "count": {
+          "type": "integer",
+          "description": "Default 40."
+        }
+      }
+    }
+  },
+  {
+    "name": "render_frames",
+    "description": "Review an image's animation: a contact sheet of video frames exactly as they will be exported, each labeled with its time. By default one frame per shot (middle of each hold); or give times.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "times": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Seconds from the start of the image."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Evenly spaced frames instead of one per shot."
+        },
+        "width": {
+          "type": "integer",
+          "description": "Width of each frame (default 400)."
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "sound_report",
+    "description": "Measure the real mix (same as the export) of a range of images: peak and average level, seconds where the limiter works, silences, loudest moments, overlapping voices and clips longer than their image. You cannot hear; use this and ask the user to listen with play.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "play",
+    "description": "Play the animation with sound in the app from an image, for the user to watch and listen. stop=true stops it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "stop": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "export_video",
+    "description": "Export the MP4 (runs in the background; poll export_status). Uses the format from set_output. Default path: next to the comic. Does not overwrite an existing file unless overwrite=true.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Output .mp4 path."
+        },
+        "from": {
+          "type": "integer",
+          "description": "First image (default 0)."
+        },
+        "to": {
+          "type": "integer",
+          "description": "Last image (default the last)."
+        },
+        "sound": {
+          "type": "boolean",
+          "description": "Include sound (default true)."
+        },
+        "overwrite": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "export_status",
+    "description": "Progress of the export: running (fraction 0..1), done (with the file path), error or cancelled.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "cancel_export",
+    "description": "Stop the running export and delete the partial file.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "inspect_video",
+    "description": "Check an exported MP4: duration, size, streams, sound level, and frames taken from the file itself at the given times (or evenly spaced).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "times": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Seconds in the video."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Evenly spaced frames if no times (default 6, max 16)."
+        },
+        "width": {
+          "type": "integer",
+          "description": "Frame width (default 480)."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "undo",
+    "description": "Undo the last change(s) to the project (yours or the user's).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "integer",
+          "description": "Default 1."
+        }
+      }
+    }
+  },
+  {
+    "name": "redo",
+    "description": "Redo project changes undone with undo.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "integer",
+          "description": "Default 1."
+        }
+      }
+    }
+  }
+]

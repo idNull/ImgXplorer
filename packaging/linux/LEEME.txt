@@ -20,3 +20,9 @@ Requisitos: PC de 64 bits (x86_64) con una distribución de 2024 o posterior, po
 Ubuntu 24.04, Linux Mint 22, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch, Manjaro o CachyOS.
 
 Si algo falla, el registro completo está en ~/.cache/imgxplorer-install.log.
+
+Si la app da problemas (ventana en blanco, cierres, no sale su icono en la barra):
+
+    bash diagnostico.sh --probar
+
+Recoge información del sistema sin cambiar nada y la deja en ~/imgxplorer-diagnostico.txt para enviarla.

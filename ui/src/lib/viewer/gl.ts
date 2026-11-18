@@ -348,7 +348,7 @@ export class GlViewer {
    * A partir de ahora se pinta en un destino de `w`×`h` píxeles (múltiplos de 4) para leerlo
    * con `readYuv`. `null` vuelve a pintar en el canvas.
    */
-  capture(size: Size | null) {
+  capture(size: Size | null, yuv = true) {
     this.dropTarget(this.out);
     this.out = null;
     if (this.yuv) {
@@ -359,6 +359,7 @@ export class GlViewer {
     if (!size) return;
     if (size.w % 4 || size.h % 4) throw new Error(`tamaño de vídeo no válido: ${size.w}×${size.h}`);
     this.out = this.makeTarget(size.w, size.h, this.gl.NEAREST);
+    if (!yuv) return;
     const prog = program(this.gl, YUV_VS, YUV_FS);
     const loc: Record<string, WebGLUniformLocation | null> = {};
     for (const n of ["u_src", "u_w", "u_h"]) loc[n] = this.gl.getUniformLocation(prog, n);
@@ -384,6 +385,22 @@ export class GlViewer {
     gl.readPixels(0, 0, y.w, y.h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     gl.enable(gl.BLEND);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /** Píxeles RGBA de la captura (filas de arriba abajo), para guardarla como imagen. */
+  readRgba(): ImageData {
+    const gl = this.gl;
+    const out = this.out;
+    if (!out) throw new Error("no hay captura activa");
+    const raw = new Uint8ClampedArray(out.w * out.h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, out.fb);
+    gl.readPixels(0, 0, out.w, out.h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // GL lee de abajo arriba.
+    const row = out.w * 4;
+    const flipped = new Uint8ClampedArray(raw.length);
+    for (let y = 0; y < out.h; y++) flipped.set(raw.subarray((out.h - 1 - y) * row, (out.h - y) * row), y * row);
+    return new ImageData(flipped, out.w, out.h);
   }
 
   /** Libera la GPU (contextos de exportación). */

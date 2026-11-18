@@ -115,6 +115,11 @@ fn probe(user: Option<&str>) -> Result<FfmpegInfo, String> {
     })
 }
 
+/// Ruta del ffmpeg que se usará (el elegido por el usuario o el que se encuentre).
+pub(crate) fn ffmpeg_path(user: Option<&str>) -> Result<String, String> {
+    probe(user).map(|i| i.path)
+}
+
 #[tauri::command]
 pub async fn ffmpeg_info(path: Option<String>) -> Result<FfmpegInfo, String> {
     tauri::async_runtime::spawn_blocking(move || probe(path.as_deref())).await.map_err(|e| e.to_string())?
@@ -243,13 +248,13 @@ pub async fn export_frame(request: Request<'_>, state: State<'_, Exporter>) -> R
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportAudio {
-    clips: Vec<crate::audio::ClipSpec>,
+    pub(crate) clips: Vec<crate::audio::ClipSpec>,
     /// Pistas del proyecto (volumen, panorama, silencio y efectos).
     #[serde(default)]
-    tracks: Vec<imgx_audio::TrackSpec>,
-    levels: imgx_audio::Levels,
+    pub(crate) tracks: Vec<imgx_audio::TrackSpec>,
+    pub(crate) levels: imgx_audio::Levels,
     /// Duración del vídeo (s).
-    seconds: f64,
+    pub(crate) seconds: f64,
 }
 
 /// Frecuencia del sonido en el vídeo.

@@ -4,6 +4,7 @@ pub mod camera;
 pub mod easing;
 pub mod record;
 pub mod schema;
+pub mod shots;
 pub mod templates;
 pub mod timeline;
 pub mod transition;

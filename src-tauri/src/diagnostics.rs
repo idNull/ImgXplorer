@@ -130,6 +130,22 @@ pub struct DiagnosticsInfo {
     os: &'static str,
     arch: &'static str,
     session_type: Option<String>,
+    webkit: Option<String>,
+}
+
+/// Versión de WebKitGTK con la que se dibuja la interfaz (solo en Linux; macOS usa el WebKit del sistema).
+pub fn webkit_version() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: funciones sin argumentos que solo devuelven constantes de la biblioteca.
+        let (ma, mi, pa) = unsafe {
+            use webkit2gtk::ffi as w;
+            (w::webkit_get_major_version(), w::webkit_get_minor_version(), w::webkit_get_micro_version())
+        };
+        Some(format!("{ma}.{mi}.{pa}"))
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
 }
 
 /// Registra el entorno y comprueba si la sesión anterior terminó de forma inesperada.
@@ -143,14 +159,8 @@ pub fn start_session(app: &AppHandle) {
         std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "?".into()),
         std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "?".into()),
     );
-    #[cfg(target_os = "linux")]
-    {
-        // SAFETY: funciones sin argumentos que solo devuelven constantes de la librería.
-        let (ma, mi, pa) = unsafe {
-            use webkit2gtk::ffi as w;
-            (w::webkit_get_major_version(), w::webkit_get_minor_version(), w::webkit_get_micro_version())
-        };
-        log::info!("WebKitGTK {ma}.{mi}.{pa}");
+    if let Some(v) = webkit_version() {
+        log::info!("WebKitGTK {v}");
     }
 
     let Ok(dir) = app.path().app_log_dir() else {
@@ -241,6 +251,7 @@ pub fn diagnostics_info(state: tauri::State<'_, Diagnostics>) -> DiagnosticsInfo
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,
         session_type: std::env::var("XDG_SESSION_TYPE").ok(),
+        webkit: webkit_version(),
     }
 }
 

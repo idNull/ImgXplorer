@@ -24,7 +24,7 @@ pub struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn vp(&self) -> (f64, f64) {
+    pub(crate) fn vp(&self) -> (f64, f64) {
         (self.aspect, 1.0)
     }
 }
@@ -200,28 +200,28 @@ pub fn reading_direction(tpl: Option<&TemplateRef>) -> Direction {
 }
 
 /// Constructor de keyframes: el easing de cada clave rige el tramo hacia la siguiente.
-struct Keys {
-    keys: Vec<Keyframe>,
+pub(crate) struct Keys {
+    pub(crate) keys: Vec<Keyframe>,
 }
 
 impl Keys {
-    fn new(pose: Camera) -> Self {
+    pub(crate) fn new(pose: Camera) -> Self {
         Self { keys: vec![Keyframe { t: 0.0, pose, easing: Easing::Linear }] }
     }
-    fn last(&self) -> &Keyframe {
+    pub(crate) fn last(&self) -> &Keyframe {
         self.keys.last().unwrap()
     }
-    fn go(&mut self, pose: Camera, dur: f64, easing: Easing) {
+    pub(crate) fn go(&mut self, pose: Camera, dur: f64, easing: Easing) {
         let t = self.last().t + dur.max(0.0);
         self.keys.last_mut().unwrap().easing = easing;
         self.keys.push(Keyframe { t, pose, easing: Easing::Linear });
     }
-    fn hold(&mut self, dur: f64) {
+    pub(crate) fn hold(&mut self, dur: f64) {
         if dur > 0.0 {
             self.go(self.last().pose, dur, Easing::Linear);
         }
     }
-    fn into_timeline(self) -> Timeline {
+    pub(crate) fn into_timeline(self) -> Timeline {
         let duration = self.last().t;
         Timeline {
             camera: vec![ClipInstance {
@@ -238,7 +238,7 @@ impl Keys {
 }
 
 /// Mantiene el centro de forma que no se vea fuera de la imagen si esta cubre el viewport.
-fn clamp_center(mut cam: Camera, ctx: &Ctx) -> Camera {
+pub(crate) fn clamp_center(mut cam: Camera, ctx: &Ctx) -> Camera {
     let s = Camera::fit_scale(ctx.img, ctx.vp()) * cam.zoom;
     let vis = (ctx.vp().0 / (s * ctx.img.0), ctx.vp().1 / (s * ctx.img.1));
     let clamp = |c: f64, v: f64| if v >= 1.0 { 0.5 } else { c.clamp(v / 2.0, 1.0 - v / 2.0) };

@@ -4,6 +4,7 @@ mod audio;
 mod diagnostics;
 mod export;
 mod gestures;
+pub mod mcp;
 mod browse;
 mod pack;
 mod prefs;
@@ -165,18 +166,14 @@ pub fn cli() -> Option<String> {
     let version = format!("imgxplorer {}", env!("CARGO_PKG_VERSION"));
     match arg.as_str() {
         "--version" | "-V" => Some(version),
+        // Conectar o quitar imgxplorer de las IAs (Claude Code, Codex, Gemini CLI).
+        "--mcp-install" | "--mcp-uninstall" => Some(mcp::install::cli(arg == "--mcp-install", std::env::args().nth(2).as_deref())),
         "--self-check" => {
             let (heif, hevc, av1) = imgx_media::heif_support();
             let yn = |b: bool| if b { "si" } else { "no" };
             let mut out = format!("{version}\nlibheif={heif}\nheic={}\navif={}", yn(hevc), yn(av1));
-            #[cfg(target_os = "linux")]
-            {
-                // SAFETY: funciones sin argumentos que solo devuelven constantes de la biblioteca.
-                let (ma, mi, pa) = unsafe {
-                    use webkit2gtk::ffi as w;
-                    (w::webkit_get_major_version(), w::webkit_get_minor_version(), w::webkit_get_micro_version())
-                };
-                out += &format!("\nwebkitgtk={ma}.{mi}.{pa}");
+            if let Some(v) = diagnostics::webkit_version() {
+                out += &format!("\nwebkitgtk={v}");
             }
             Some(out)
         }
@@ -184,8 +181,43 @@ pub fn cli() -> Option<String> {
     }
 }
 
+/// Variables de WebKitGTK que cambian cómo dibuja. Si el usuario ya puso alguna, no se toca nada.
+#[cfg(target_os = "linux")]
+const WEBKIT_RENDER_VARS: [&str; 4] =
+    ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DMABUF_RENDERER_FORCE_SHM", "WEBKIT_DISABLE_COMPOSITING_MODE", "__NV_DISABLE_EXPLICIT_SYNC"];
+
+/// ¿Alguna gráfica usa el controlador propietario de Nvidia? Se mira en sysfs, que también se ve
+/// dentro de un AppImage o un Flatpak; nouveau no cuenta (no tiene el problema).
+#[cfg(target_os = "linux")]
+fn nvidia_driver() -> bool {
+    let Ok(cards) = std::fs::read_dir("/sys/class/drm") else { return false };
+    cards.flatten().any(|c| {
+        let name = c.file_name();
+        let name = name.to_string_lossy();
+        name.starts_with("card")
+            && !name.contains('-')
+            && std::fs::read_link(c.path().join("device/driver")).ok().and_then(|d| d.file_name().map(|n| n == "nvidia")).unwrap_or(false)
+    })
+}
+
+/// Con el controlador de Nvidia, el renderizado DMA-BUF de WebKitGTK deja ventanas en blanco o hace
+/// caer el proceso web (en Ubuntu 26.04 con WebKitGTK 2.52: «WebKitWebProcess crashed with SIGFPE»).
+/// Se desactiva aquí, antes de que arranque GTK, para que valga se abra como se abra la app.
+/// Devuelve si se aplicó.
+#[cfg(target_os = "linux")]
+fn nvidia_quirk() -> bool {
+    if WEBKIT_RENDER_VARS.iter().any(|v| std::env::var_os(v).is_some()) || !nvidia_driver() {
+        return false;
+    }
+    // SAFETY: se llama al principio de `run`, antes de crear hilos o iniciar GTK/WebKit.
+    unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+    true
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    let nvidia = nvidia_quirk();
     diagnostics::install_panic_hook();
     let app = tauri::Builder::default()
         .plugin(diagnostics::log_plugin())
@@ -194,6 +226,7 @@ pub fn run() {
         .manage(diagnostics::Diagnostics::default())
         .manage(export::Exporter::default())
         .manage(audio::Audio::default())
+        .manage(mcp::host::Host::default())
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             let path = request.uri().path().to_owned();
@@ -235,20 +268,36 @@ pub fn run() {
             audio::record_start,
             audio::record_level,
             audio::record_stop,
+            mcp::host::mcp_reply,
+            mcp::host::mcp_enable,
+            mcp::host::mcp_host_info,
+            mcp::tools::mcp_find_audio,
+            mcp::tools::mcp_sound_report,
+            mcp::tools::mcp_inspect_video,
+            mcp::install::mcp_clients,
+            mcp::install::mcp_client_action,
             diagnostics::diagnostics_info,
             diagnostics::dismiss_crash_notice
         ])
-        .setup(|app| {
+        .setup(move |app| {
             diagnostics::start_session(app.handle());
+            #[cfg(target_os = "linux")]
+            if nvidia {
+                log::info!("controlador de Nvidia: WEBKIT_DISABLE_DMABUF_RENDERER=1");
+            }
             let window = app.get_webview_window("main").expect("ventana main");
             diagnostics::watch_webview(&window);
             gestures::install(&window);
+            mcp::host::start(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error al iniciar imgxplorer");
     app.run(|app, event| match event {
-        RunEvent::Exit => diagnostics::end_session(app),
+        RunEvent::Exit => {
+            mcp::host::stop(app);
+            diagnostics::end_session(app);
+        }
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         RunEvent::Opened { urls } => {
             if let Some(path) = urls.iter().find_map(|u| u.to_file_path().ok()) {

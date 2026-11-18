@@ -77,6 +77,21 @@ impl Pcm {
     }
 }
 
+/// Duración en segundos leyendo solo la cabecera (sin decodificar). `None` si el formato no la
+/// declara o no se reconoce.
+pub fn probe_seconds(path: &Path) -> Option<f64> {
+    let file = File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(&ext.to_lowercase());
+    }
+    let format = symphonia::default::get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default()).ok()?;
+    let track = format.default_track(TrackType::Audio)?;
+    let secs = track.time_base.zip(track.duration).and_then(|(tb, d)| tb.calc_duration(d)).map(|t| t.as_secs_f64());
+    secs.filter(|s| s.is_finite() && *s > 0.0)
+}
+
 /// Decodifica un archivo completo.
 pub fn decode_file(path: &Path) -> Result<Pcm, AudioError> {
     let file = File::open(path)?;

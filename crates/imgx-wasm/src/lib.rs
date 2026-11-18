@@ -5,6 +5,7 @@
 use imgx_core::Camera;
 use imgx_core::record;
 use imgx_core::schema::{Rect, Sample, TemplateRef, Timeline, Transition};
+use imgx_core::shots;
 use imgx_core::templates::{self, Ctx};
 use imgx_core::timeline::NoClips;
 use imgx_core::transition::{self, View};
@@ -99,6 +100,15 @@ pub fn transition_frame(
     out.push(f.b.alpha);
     out.push(if f.mix { 1.0 } else { 0.0 });
     Ok(out)
+}
+
+/// Planos de director → `{timeline, shots: [{arrive, hold, end}], duration}` (JSON).
+/// `plan` es un `ShotPlan` en JSON (rectángulos normalizados).
+#[wasm_bindgen]
+pub fn plan_shots(plan: &str, img_w: f64, img_h: f64, aspect: f64) -> Result<String, JsError> {
+    let p: shots::ShotPlan = serde_json::from_str(plan)?;
+    let ctx = Ctx { img: (img_w, img_h), aspect, panels: None, manual: false };
+    Ok(serde_json::to_string(&shots::plan(&p, &ctx))?)
 }
 
 /// Timeline ya parseada, para evaluar en cada frame sin volver a leer JSON.

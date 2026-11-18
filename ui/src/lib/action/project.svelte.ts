@@ -272,6 +272,33 @@ export class ProjectStore {
     this.changed();
   }
 
+  /**
+   * Transición de salida de una imagen (`entry`) o, con `null`, la de todas. Para una imagen,
+   * `tr = null` le quita la suya y vuelve a usar la general.
+   */
+  setTransition(entry: string | null, tr: Transition | null, size?: [number, number]) {
+    if (!this.data || this.readOnly) return;
+    if (entry === null) {
+      if (tr) this.data.defaults.transition = tr;
+    } else if (tr) {
+      const it = this.item(entry) ?? (size ? this.ensure(entry, size) : undefined);
+      if (!it) return;
+      it.transitionOut = tr;
+    } else {
+      const it = this.item(entry);
+      if (it) delete it.transitionOut;
+      this.prune();
+    }
+    this.changed();
+  }
+
+  /** Pausa al final de cada imagen, antes de su transición (s). */
+  setHoldBetween(seconds: number) {
+    if (!this.data || this.readOnly) return;
+    this.data.defaults.holdBetween = Math.min(10, Math.max(0, seconds));
+    this.changed();
+  }
+
   /** Ambientes del proyecto. */
   get ambients(): AmbientClip[] {
     return this.data?.ambient ?? [];

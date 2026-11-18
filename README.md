@@ -45,6 +45,7 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
 - **Retomar**: volver a la imagen en la que lo dejaste (se puede desactivar).
 - **Selector de archivos**: el de imgxplorer, el del sistema o automático (el propio en Linux y el del sistema en macOS).
 - **Diagnóstico**: mostrar u ocultar el panel.
+- **Acerca de**: versión, autor, con qué se ha hecho (tecnologías y Claude Code) y una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
 - **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
 
 Los ajustes y los recientes se guardan en `~/.config/com.imgxplorer.app/` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
@@ -178,6 +179,28 @@ Cada imagen puede llevar **voz** y **efectos**, y el proyecto, **ambientes o mú
   - Los efectos (`crates/imgx-audio/src/fx`) son propios y deterministas: Freeverb, eco con realimentación filtrada, biquads, compresor, desplazador de tono granular, modulador en anillo y saturación. La misma mesa de mezclas (pistas → grupos → general) sirve para oír y para exportar, y una prueba comprueba que el directo y la exportación dan las mismas muestras.
   - La interfaz le manda qué suena en cada imagen y su reloj. Él lleva el suyo y lo corrige si se separa más de 50 ms, sin mandar una orden en cada fotograma.
 
+### Control por IA (MCP)
+
+Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da el tiempo que pide su texto, diseña los movimientos de cámara, pone voces, efectos, ambiente y música, revisa el resultado y exporta el MP4.
+
+- **Con qué IAs**: Claude Code, Codex (también desde la app de ChatGPT de escritorio, que usa su misma configuración) y Gemini CLI. Funciona con cualquier IA que admita servidores MCP locales.
+- **Conectar**: *Ajustes → IA*. La app detecta qué IAs tienes y cada una tiene un botón **Conectar** (usa el comando oficial de cada IA; no hay que tocar archivos), **Probar** y **Quitar**.
+  - También desde la terminal: `imgxplorer --mcp-install` (todas) o `imgxplorer --mcp-install claude|codex|gemini`, y `--mcp-uninstall`.
+  - Los instaladores de Linux y Mac lo preguntan al final (solo si tienes alguna IA, y no hacen nada si no dices que sí).
+  - Si la app cambia de sitio (otra versión del AppImage, reinstalada), la fila sale como «ruta antigua» con un botón **Actualizar**.
+- **Permiso**: el control viene **apagado**; se enciende con *Permitir el control por IA* (o solo al conectar la primera IA). Apagado, ninguna IA puede tocar nada.
+- **Mientras trabaja**: en la cabecera aparece **🤖 IA** con lo que va haciendo y un botón **Detener la IA**. Ves cada cambio en directo y todo se deshace con `Ctrl+Z`. Si la app está cerrada, la IA la abre.
+- **Empezar**: abre una sesión nueva de tu IA y pídeselo con tus palabras, por ejemplo: «Usa imgxplorer para montar un vídeo de este cómic: ~/Cómics/capitulo1.cbz. Ritmo tranquilo, lluvia suave de fondo y efectos donde haya acción. Revisa y exporta en 1080p». En *Ajustes → IA* hay una frase de ejemplo para copiar.
+- **Qué puede hacer** (40 herramientas):
+  - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
+  - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
+  - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
+  - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
+  - **Terminar**: exportar, seguir el progreso y revisar el MP4 final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
+- **Límites**: la IA no oye ni ve el movimiento (revisa con fotogramas y medidas), así que te pedirá que lo reproduzcas y escuches tú. Las imágenes que mira se envían a su servicio (Anthropic, OpenAI o Google) con tu cuenta.
+- **Gemini CLI** solo activa los servidores MCP en carpetas de confianza: abre la IA en una carpeta en la que confíes.
+- **Cómo funciona**: [docs/mcp.md](docs/mcp.md).
+
 ### Formatos
 
 | Tipo | Formatos | Quién decodifica |
@@ -301,6 +324,22 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Sonidos dentro de los paquetes `.imgxpack`.
   - [x] Varias pistas por grupo (las mismas en todo el proyecto), mezclador con volumen, panorama, silencio y solo.
   - [x] Efectos de audio en pistas y clips: reverb, eco, ecualizador, filtros, compresor, tono, robot y distorsión.
+- [x] **Fase 6**: control por IA.
+  - [x] Servidor MCP (`imgxplorer --mcp`) para Claude Code, Codex/ChatGPT y Gemini CLI, que maneja la app abierta.
+  - [x] Ver páginas y viñetas, planos de director con tiempos de lectura, keyframes, plantillas y transiciones.
+  - [x] Sonido: biblioteca, importar desde una carpeta, pistas, voces, efectos, ambientes, efectos de audio y mezcla.
+  - [x] Revisión: hojas de miniaturas, resumen con avisos e informe de la mezcla; exportar y revisar el MP4.
+  - [x] Conectar con cada IA con un clic (Ajustes → IA), desde la terminal o al instalar; aviso «🤖 IA» con botón para detenerla.
+
+### Propuestas de mejora
+
+- **Instrucciones de estilo para la IA** (Ajustes → IA):
+  - Un cuadro de texto con tus preferencias, una por línea. Por ejemplo: ritmo tranquilo, sin giros de cámara, la carpeta de música o leer como manga.
+  - Botones de sugerencia que añaden las frases más comunes.
+  - El texto se añade al final de la guía (`get_guide`) como «Preferencias del usuario», así que llega igual a Claude, Codex y Gemini.
+  - Lo que se pida en el mensaje manda sobre el cuadro.
+  - Límite de unos 2.000 caracteres.
+  - Más adelante: un estilo propio para cada proyecto.
 
 El formato de animaciones está especificado en [docs/format.md](docs/format.md).
 
@@ -315,6 +354,8 @@ Los paquetes para repartir se crean con `pnpm dist` y quedan en `dist/` (detalle
 - Copia la app en `~/.local` (o en `/usr/local` con `--system`) y la añade al menú.
 - Funciona en distribuciones de 2024 en adelante: Ubuntu 24.04, Mint 22, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch y derivadas.
 - `--check` solo comprueba, y `--uninstall` desinstala.
+- Con gráfica Nvidia (controlador propietario), la app desactiva sola el renderizado DMA-BUF de WebKit al arrancar, se abra como se abra. Evita ventanas en blanco y el cierre «WebKitWebProcess crashed with SIGFPE» de Ubuntu 26.04.
+- Si algo falla, `bash diagnostico.sh --probar` recoge la información del sistema en `~/imgxplorer-diagnostico.txt` sin cambiar nada y prueba la app con distintos ajustes de WebKit.
 
 **macOS** (`imgxplorer-<versión>-mac.tar.gz`): en Terminal, `bash "Instalar imgxplorer.command"`.
 - Comprueba la versión de macOS (11 o posterior), el procesador (también si la Terminal va con Rosetta), el espacio libre y la conexión.
@@ -371,12 +412,16 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ### Estructura
 
 ```
-crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
+crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, planos de director, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg y biblioteca de sonidos
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio)
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), herramientas de la IA (ui/src/lib/mcp)
 docs                Especificación del formato .imgx y cómo crear los instaladores
 packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR y lanzador .desktop
 ```
+
+## Créditos
+
+Creado por **Pedro López del Castillo**, programado con **Claude Code** (Anthropic).

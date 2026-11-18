@@ -33,12 +33,15 @@
   import { coreVersion, wasm, type Size } from "./lib/core";
   import { t } from "./lib/i18n.svelte";
   import { log } from "./lib/log";
+  import { startMcp } from "./lib/mcp/host.svelte";
+  import McpBadge from "./lib/mcp/McpBadge.svelte";
 
   interface DiagnosticsInfo {
     logDir: string | null;
     previousCrash: { pid: number; started: number; reason: string } | null;
     os: string;
     sessionType: string | null;
+    webkit: string | null;
   }
 
   interface SourceInfo {
@@ -168,8 +171,10 @@
     getCurrentWindow().setTitle("imgxplorer").catch((e) => log.warn("título:", e));
   }
 
-  async function openPath(path: string) {
-    if (opening || !(await readyToLeave("open"))) return;
+  /** Abre una fuente. Devuelve el error (o null si se abrió). */
+  async function openPath(path: string): Promise<string | null> {
+    if (opening) return t("loading");
+    if (!(await readyToLeave("open"))) return "cancelled by the user";
     opening = true;
     viewer?.stop();
     try {
@@ -194,6 +199,7 @@
     } finally {
       opening = false;
     }
+    return openError;
   }
 
   // Mensaje breve sobre el visor (p. ej. al soltar un paquete .imgxpack).
@@ -601,8 +607,36 @@
     invoke("dismiss_crash_notice");
   }
 
+  // Control por IA: Rust no atiende a la IA hasta saber si el usuario lo permite.
+  $effect(() => {
+    if (prefs.loaded) invoke("mcp_enable", { enabled: prefs.settings.aiControl }).catch((e) => log.warn("control por IA:", e));
+  });
+
+  function stopAi() {
+    prefs.settings.aiControl = false;
+    prefs.saveSettings();
+    say(t("aiStopped"));
+  }
+
   onMount(() => {
     invoke<DiagnosticsInfo>("diagnostics_info").then((d) => (diag = d));
+    const stopMcp = startMcp({
+      source: () => source,
+      index: () => index,
+      store,
+      open: openPath,
+      go,
+      refAt: (i) => ref(source!, i),
+      detectedPanels: panelsFor,
+      sequence,
+      play: (i) => {
+        index = i;
+        startPlay();
+      },
+      stop: () => viewer?.stop(),
+      playing: () => !!playerInfo,
+      say,
+    });
     // Primero los ajustes y recientes: abrir la ruta inicial necesita saber dónde se quedó.
     prefs.load().then(() => invoke<string | null>("initial_path")).then((p) => {
       if (p) openPath(p);
@@ -631,6 +665,7 @@
       else openPath(ev.payload.paths[0]);
     });
     return () => {
+      stopMcp();
       window.removeEventListener("beforeunload", flush);
       un.then((f) => f());
       unOpen.then((f) => f());
@@ -672,6 +707,7 @@
     <button onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
     <button onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
     <button onclick={openExport} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
+    <McpBadge onstop={stopAi} />
     <button onclick={toggleFullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>
     <button onclick={() => (settingsOpen = true)} title="{t('settings')}{kt('settings')}">⚙</button>
   </header>

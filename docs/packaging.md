@@ -66,8 +66,16 @@ la escribe en `REQUISITOS`, que es lo que compara el instalador.
   la usan por debajo.
 
 - **La app.** Va a `~/.local/bin`, con su lanzador y sus iconos, solo para ti y sin contraseña.
-  Con `--system` va a `/usr/local`. Con tarjeta Nvidia, el lanzador añade
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1` (evita ventanas en blanco).
+  Con `--system` va a `/usr/local`.
+- **Nvidia.** Con el controlador propietario, la propia app pone `WEBKIT_DISABLE_DMABUF_RENDERER=1` al
+  arrancar, así vale tanto si se abre desde el menú como desde la terminal, el AppImage o el `.deb`.
+  - Evita ventanas en blanco y el cierre «WebKitWebProcess crashed with SIGFPE» de Ubuntu 26.04.
+  - Si ya está puesta alguna variable de WebKit (`WEBKIT_DISABLE_DMABUF_RENDERER`,
+    `WEBKIT_DMABUF_RENDERER_FORCE_SHM`, `WEBKIT_DISABLE_COMPOSITING_MODE` o
+    `__NV_DISABLE_EXPLICIT_SYNC`), no toca nada.
+- **Diagnóstico.** `diagnostico.sh` recoge el sistema, la gráfica, la versión de WebKitGTK, el lanzador y los
+  cierres registrados en `~/imgxplorer-diagnostico.txt`, sin cambiar nada.
+  - Con `--probar` abre además la app con distintos ajustes de WebKit y pregunta cada vez si salió el error.
 - **HEIC.** Si libheif no trae decodificador HEVC, explica cómo conseguirlo:
   - En Fedora, `libheif-freeworld` de RPM Fusion.
   - En openSUSE, el repositorio Packman.
