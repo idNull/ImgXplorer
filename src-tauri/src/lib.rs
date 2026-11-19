@@ -12,6 +12,7 @@ mod prefs;
 mod project;
 mod serve;
 mod utils;
+mod voices;
 
 use imgx_media::panels::PanelRect;
 use imgx_media::{Source, SourceKind};
@@ -280,6 +281,7 @@ pub fn run() {
         .manage(diagnostics::Diagnostics::default())
         .manage(export::Exporter::default())
         .manage(audio::Audio::default())
+        .manage(voices::Voices::default())
         .manage(mcp::host::Host::default())
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
@@ -333,6 +335,16 @@ pub fn run() {
             audio::record_start,
             audio::record_level,
             audio::record_stop,
+            voices::voices_key_status,
+            voices::voices_key_set,
+            voices::voices_key_clear,
+            voices::voices_account,
+            voices::voices_list,
+            voices::voices_design,
+            voices::voices_preview,
+            voices::voices_save_design,
+            voices::voices_estimate,
+            voices::voices_generate,
             mcp::host::mcp_reply,
             mcp::host::mcp_enable,
             mcp::host::mcp_host_info,

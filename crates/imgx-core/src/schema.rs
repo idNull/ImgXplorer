@@ -27,6 +27,83 @@ pub struct Project {
     /// del grupo (`voice`, `sfx`, `ambient`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tracks: Vec<Track>,
+    /// Reparto para las voces con IA: los personajes y su voz.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cast: Vec<CastMember>,
+}
+
+/// Un personaje del reparto. La descripción es la que se usa para diseñar su voz.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CastMember {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// Aspecto, edad, carácter y forma de hablar («guerrero veterano, voz grave y ronca»).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// Idioma de sus frases (ISO 639-1, `es`, `en`…).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice: Option<VoiceRef>,
+    /// Estabilidad, parecido, estilo y velocidad (0..1; velocidad 0,7..1,2).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub settings: std::collections::BTreeMap<String, f64>,
+}
+
+/// Voz de un proveedor (ElevenLabs…).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceRef {
+    pub provider: String,
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Qué es una frase del guion (cambia cómo se interpreta y dónde suena).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LineKind {
+    #[default]
+    Dialogue,
+    Thought,
+    Narration,
+    Crowd,
+}
+
+/// Estado de una frase: sin generar, generada, o cambiada después de generarla.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LineStatus {
+    #[default]
+    Draft,
+    Generated,
+    Stale,
+}
+
+/// Una frase del guion de una imagen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Line {
+    pub id: String,
+    /// Personaje que la dice (id del reparto).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cast: Option<String>,
+    /// Texto con sus etiquetas de interpretación (`[susurrando] ...`).
+    pub text: String,
+    #[serde(default)]
+    pub kind: LineKind,
+    /// Segundo de la imagen en que empieza (si falta, detrás de la anterior).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<f64>,
+    #[serde(default)]
+    pub status: LineStatus,
+    /// Tomas generadas (sonidos de la biblioteca); la última es la que suena.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub takes: Vec<String>,
 }
 
 /// Grupo de una pista de sonido.
@@ -221,6 +298,9 @@ pub struct Item {
     /// Ajustes de imagen propios (brillo, limpiar escaneo…); si no hay, los de `defaults`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adjust: Option<crate::adjust::Adjust>,
+    /// Guion para las voces con IA.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lines: Vec<Line>,
 }
 
 /// Rectángulo en coordenadas normalizadas de imagen (0..1).
@@ -298,6 +378,9 @@ pub struct AudioClip {
     pub track: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// Frase del guion de la que salió (voces con IA).
+    #[serde(default, rename = "gen", skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
 }
 
 fn one() -> f64 {
@@ -392,6 +475,7 @@ impl Project {
             items: Vec::new(),
             ambient: Vec::new(),
             tracks: Vec::new(),
+            cast: Vec::new(),
         }
     }
 
@@ -451,6 +535,7 @@ mod tests {
             transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera { dir: None }, duration: 0.8 }),
             panels: Some(vec![Rect { x: 0.1, y: 0.1, w: 0.4, h: 0.3 }]),
             adjust: Some(crate::adjust::Adjust { clean: 1.0, tone: crate::adjust::Tone::Gray, ..Default::default() }),
+            lines: Vec::new(),
         });
         p.defaults.adjust = Some(crate::adjust::Adjust { saturation: -0.3, ..Default::default() });
         let back = Project::from_json(&p.to_json()).unwrap();
@@ -529,5 +614,27 @@ mod tests {
         assert_eq!(back, p);
         let out = p.to_json();
         assert!(!out.contains("\"mute\":false"), "lo que está por defecto no se escribe");
+    }
+
+    #[test]
+    fn reparto_y_guion_se_conservan() {
+        let json = r##"{"format":"imgx","version":1,"source":{"kind":"archive","name":"a.cbz"},
+            "cast":[{"id":"c1","name":"Ana","color":"#f472b6","description":"Joven valiente, voz clara","language":"es",
+                     "voice":{"provider":"elevenlabs","id":"abc123","name":"Ana IA"},"settings":{"stability":0.4,"speed":1.05}}],
+            "items":[{"entry":"p1.png","size":[800,1100],
+              "lines":[{"id":"l1","cast":"c1","text":"[gritando] ¡Corre!","kind":"dialogue","start":1.5,"status":"generated","takes":["s1"]},
+                       {"id":"l2","text":"Mientras tanto…","kind":"narration"}],
+              "timeline":{"audio":{"voice":[{"sound":"s1","start":1.5,"duration":1.2,"gen":"l1"}]}}}]}"##;
+        let p = Project::from_json(json).unwrap();
+        assert_eq!(p.cast[0].voice.as_ref().unwrap().id, "abc123");
+        assert_eq!(p.items[0].lines[1].kind, LineKind::Narration);
+        assert_eq!(p.items[0].lines[1].status, LineStatus::Draft);
+        assert_eq!(p.items[0].timeline.audio.voice[0].line.as_deref(), Some("l1"));
+        let out = p.to_json();
+        assert!(out.contains("\"gen\""));
+        assert_eq!(Project::from_json(&out).unwrap(), p);
+        // Sin voces, no se escribe nada nuevo.
+        let plain = Project::from_json(r#"{"format":"imgx","version":1,"source":{"kind":"folder","name":"x"}}"#).unwrap().to_json();
+        assert!(!plain.contains("cast") && !plain.contains("lines"));
     }
 }

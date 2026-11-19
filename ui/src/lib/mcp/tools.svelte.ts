@@ -20,7 +20,10 @@ import { FrameRenderer, canvasOf, contactSheet, drawPanels, jpeg, mult4 } from "
 import { FxTrack, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
 import { fxCatalog, fxInfo } from "../fx/catalog";
 import { joinPath, dirOf } from "../files/dialog.svelte";
+import { t } from "../i18n.svelte";
 import { SLIDERS, normalize, type Adjust } from "../adjust/adjust";
+import { CAST_COLORS, LINE_KINDS, newId, type CastMember, type Line, type LineKind } from "../voices/types";
+import { approveAndGenerate, designFor, estimate, generateMany, lineRows, listVoices, provider as voicesProvider, keyStatus } from "../voices/voices.svelte";
 
 export interface McpSource {
   title: string;
@@ -1136,6 +1139,9 @@ export class McpTools {
       }
       for (const [x, y] of overlaps(audio.voice, tracks)) warnings.push(`voice clips ${x} and ${y} overlap on the same track`);
       warnings.push(...(this.fxWarnings(i, entry) ?? []));
+      const lines = this.store.linesFor(entry);
+      const draft = lines.filter((l) => l.status !== "generated").length;
+      if (draft) warnings.push(`${draft} script line(s) not generated yet (voices_generate)`);
       images.push({
         image: i,
         entry,
@@ -1144,6 +1150,7 @@ export class McpTools {
         shots: holds.length,
         voices: audio.voice.length || undefined,
         sfx: audio.sfx.length || undefined,
+        lines: lines.length || undefined,
         fx: fxl.length ? fxl.map((f) => `${f.preset ?? f.type}@${r2(f.start)}s`) : undefined,
         adjust: this.store.adjustFor(entry) ?? undefined,
         transition: last ? undefined : `${tr.type} ${tr.duration}s`,
@@ -1348,6 +1355,280 @@ export class McpTools {
       },
       images,
     );
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Voces con IA (ElevenLabs). Lo que gasta créditos pasa por el resumen del pedido en la app.
+
+  private castInfo(c: CastMember) {
+    return { id: c.id, name: c.name, description: c.description, language: c.language, color: c.color, voice: c.voice ? { id: c.voice.id, name: c.voice.name } : null, settings: c.settings };
+  }
+
+  /** Personaje por id o por nombre (sin distinguir mayúsculas). */
+  private castOf(v: unknown, what = "character"): CastMember {
+    if (typeof v !== "string" || !v.trim()) fail(`${what} must be a character id or name`);
+    const key = (v as string).trim().toLowerCase();
+    const c = this.store.cast.find((x) => x.id === v || x.name.toLowerCase() === key);
+    return c ?? fail(`unknown ${what} "${v}": use cast_get or cast_set`);
+  }
+
+  async t_cast_get(): Promise<ToolResult> {
+    let key = false;
+    try {
+      key = voicesProvider() === "mock" || (await keyStatus()).stored;
+    } catch {
+      /* sin llavero: se dice que no hay clave */
+    }
+    return json({
+      provider: voicesProvider(),
+      ready: key,
+      note: key ? undefined : "No ElevenLabs key yet: ask the user to paste it in Settings → AI voices (you cannot do it).",
+      model: prefs.settings.voicesModel,
+      cast: this.store.cast.map((c) => this.castInfo(c)),
+    });
+  }
+
+  async t_cast_set(a: Args): Promise<ToolResult> {
+    this.writable();
+    if (!Array.isArray(a.cast)) fail("cast must be an array of characters");
+    let voices: { id: string; name: string }[] | null = null;
+    const list = a.cast as Args[];
+    const changes: ((l: CastMember[]) => void)[] = [];
+    for (const raw of list) {
+      if (!raw || typeof raw !== "object") fail("each character must be an object");
+      const name = str(raw, "name")?.trim().slice(0, 60);
+      const id = str(raw, "id");
+      const existing = id ? this.store.cast.find((x) => x.id === id) : name ? this.store.cast.find((x) => x.name.toLowerCase() === name.toLowerCase()) : undefined;
+      if (id && !existing) fail(`unknown character id "${id}"`);
+      if (!existing && !name) fail("a new character needs a name");
+      if (raw.remove === true) {
+        if (!existing) fail("remove needs an existing character");
+        changes.push((l) => l.splice(l.findIndex((x) => x.id === existing!.id), 1));
+        continue;
+      }
+      const description = str(raw, "description");
+      if (description !== undefined && description.length > 1000) fail("description: at most 1000 characters");
+      const language = str(raw, "language");
+      if (language !== undefined && language !== "" && !/^[a-z]{2,3}$/.test(language)) fail("language must be an ISO 639-1 code like es or en");
+      const color = str(raw, "color");
+      if (color !== undefined && !/^#[0-9a-f]{6}$/i.test(color)) fail("color must look like #f472b6");
+      let voice: CastMember["voice"] | null | undefined;
+      if (raw.voice === null || raw.voice === "") voice = null;
+      else if (raw.voice !== undefined) {
+        const vid = str(raw, "voice")!;
+        voices ??= await listVoices().catch((e) => fail(String(e)));
+        const v = voices!.find((x) => x.id === vid || x.name.toLowerCase() === vid.toLowerCase()) ?? fail(`unknown voice "${vid}": use voice_list`);
+        voice = { provider: voicesProvider(), id: v.id, name: v.name };
+      }
+      const settings = raw.settings as Record<string, unknown> | undefined;
+      const clean: Record<string, number> = {};
+      if (settings !== undefined) {
+        if (!settings || typeof settings !== "object") fail("settings must be an object");
+        for (const [k, lim] of [["stability", [0, 1]], ["similarity", [0, 1]], ["style", [0, 1]], ["speed", [0.7, 1.2]]] as const) {
+          const v = settings[k];
+          if (v === undefined) continue;
+          if (typeof v !== "number" || !Number.isFinite(v)) fail(`settings.${k} must be a number`);
+          clean[k] = Math.min(lim[1], Math.max(lim[0], v as number));
+        }
+      }
+      changes.push((l) => {
+        let c = existing ? l.find((x) => x.id === existing.id) : undefined;
+        if (!c) {
+          c = { id: newId("c"), name: name!, color: CAST_COLORS[l.length % CAST_COLORS.length] };
+          l.push(c);
+        }
+        if (name) c.name = name;
+        if (description !== undefined) c.description = description.trim();
+        if (language !== undefined) {
+          if (language) c.language = language;
+          else delete c.language;
+        }
+        if (color) c.color = color.toLowerCase();
+        if (voice === null) delete c.voice;
+        else if (voice) c.voice = voice;
+        if (settings !== undefined) {
+          if (Object.keys(clean).length) c.settings = clean;
+          else delete c.settings;
+        }
+      });
+    }
+    const before = new Map(this.store.cast.map((c) => [c.id, JSON.stringify([c.voice?.id, c.settings, c.language])]));
+    this.edit(() => {
+      this.store.editCast((l) => changes.forEach((f) => f(l)));
+      // Si cambia cómo suena un personaje, sus frases generadas quedan desactualizadas.
+      for (const c of this.store.cast) if (before.has(c.id) && before.get(c.id) !== JSON.stringify([c.voice?.id, c.settings, c.language])) this.store.markCastStale(c.id);
+    });
+    return json({ cast: this.store.cast.map((c) => this.castInfo(c)) });
+  }
+
+  async t_voice_list(): Promise<ToolResult> {
+    const list = await listVoices().catch((e) => fail(String(e)));
+    return json({ voices: list.map((v) => ({ id: v.id, name: v.name, category: v.category ?? undefined, description: v.description ?? undefined, labels: Object.keys(v.labels).length ? v.labels : undefined })) });
+  }
+
+  async t_voice_design(a: Args): Promise<ToolResult> {
+    this.writable();
+    const c = this.castOf(a.character);
+    const description = str(a, "description")?.trim();
+    if (description !== undefined) {
+      if (description.length < 20 || description.length > 1000) fail("description: 20 to 1000 characters");
+      this.edit(() => this.store.editCast((l) => { const x = l.find((y) => y.id === c.id); if (x) x.description = description; }));
+    }
+    const cur = this.store.cast.find((x) => x.id === c.id)!;
+    if ((cur.description ?? "").length < 20) fail("the character needs a description of at least 20 characters (age, accent, tone, way of speaking)");
+    this.ctx.say(`🤖 ${cur.name}: voz nueva`);
+    const v = await designFor($state.snapshot(cur) as CastMember, true, int(a, "pick", 1)).catch((e) => fail(String(e)));
+    if (!v) fail("The user cancelled the request.");
+    this.edit(() => {
+      this.store.editCast((l) => { const x = l.find((y) => y.id === c.id); if (x) x.voice = { provider: voicesProvider(), id: v!.id, name: v!.name }; });
+      this.store.markCastStale(c.id);
+    });
+    return json({ character: this.castInfo(this.store.cast.find((x) => x.id === c.id)!), note: "Voice created from sample " + int(a, "pick", 1) + ". You cannot hear it: ask the user to try it (Voices panel → ▶ Try) and to say if it fits." });
+  }
+
+  private lineInfo(l: Line, clips: AudioClip[]) {
+    const c = this.store.cast.find((x) => x.id === l.cast);
+    const clip = clips.find((x) => x.gen === l.id);
+    return {
+      id: l.id,
+      character: c?.name,
+      kind: l.kind,
+      text: l.text,
+      start: l.start,
+      status: l.status ?? "draft",
+      clip: clip ? { start: r2(clip.start), duration: r2(clip.duration) } : undefined,
+    };
+  }
+
+  async t_script_get(a: Args): Promise<ToolResult> {
+    const { i, entry } = this.img(a);
+    const audio = this.store.audioFor(entry);
+    const clips = [...audio.voice, ...audio.sfx];
+    return json({ image: i, lines: this.store.linesFor(entry).map((l) => this.lineInfo(l, clips)) });
+  }
+
+  async t_script_set(a: Args): Promise<ToolResult> {
+    this.writable();
+    const { i, entry } = this.img(a);
+    if (!Array.isArray(a.lines)) fail("lines must be an array");
+    const size = await this.size(i);
+    const replace = a.replace !== false;
+    const old = this.store.linesFor(entry);
+    const out: Line[] = [];
+    for (const raw of a.lines as Args[]) {
+      if (!raw || typeof raw !== "object") fail("each line must be an object");
+      const text = (str(raw, "text") ?? fail("each line needs text")).trim();
+      if (!text) fail("a line has empty text");
+      if (text.length > 5000) fail("a line is longer than 5000 characters: split it");
+      const kind = (oneOf(raw, "kind", LINE_KINDS) ?? "dialogue") as LineKind;
+      const who = raw.character === undefined || raw.character === null || raw.character === "" ? undefined : this.castOf(raw.character);
+      if (!who && kind !== "narration" && kind !== "crowd") fail(`line "${text.slice(0, 30)}": dialogue and thought need a character`);
+      const id = str(raw, "id");
+      const prev = id ? old.find((x) => x.id === id) ?? fail(`unknown line id "${id}": use script_get`) : undefined;
+      const start = raw.shot !== undefined || raw.start !== undefined ? r2(await this.fxStart(i, raw)) : prev?.start;
+      const l: Line = { id: prev?.id ?? newId("l"), text, kind, status: prev?.status ?? "draft" };
+      if (who) l.cast = who.id;
+      if (start !== undefined) l.start = start;
+      if (prev?.takes) l.takes = [...prev.takes];
+      if (prev && prev.status === "generated" && (prev.text !== text || prev.cast !== l.cast || prev.kind !== kind)) l.status = "stale";
+      out.push(l);
+    }
+    this.edit(() => {
+      this.store.editLines(entry, size, (list) => {
+        if (replace) list.splice(0, list.length, ...out);
+        else
+          for (const l of out) {
+            const k = list.findIndex((x) => x.id === l.id);
+            if (k >= 0) list[k] = l;
+            else list.push(l);
+          }
+      });
+      // Las frases que ya no están se llevan su clip generado.
+      const keep = new Set(this.store.linesFor(entry).map((l) => l.id));
+      const audio = this.store.audioFor(entry);
+      if ([...audio.voice, ...audio.sfx].some((c) => c.gen && !keep.has(c.gen)))
+        this.store.editAudio(entry, size, (t) => {
+          t.voice = t.voice.filter((c) => !c.gen || keep.has(c.gen));
+          t.sfx = t.sfx.filter((c) => !c.gen || keep.has(c.gen));
+        });
+    });
+    this.show(i);
+    const audio = this.store.audioFor(entry);
+    return json({ image: i, lines: this.store.linesFor(entry).map((l) => this.lineInfo(l, [...audio.voice, ...audio.sfx])) });
+  }
+
+  /** Imágenes de `image` o `images` (por defecto, la actual). */
+  private imagesOf(a: Args): { i: number; entry: string }[] {
+    if (Array.isArray(a.images)) return (a.images as unknown[]).map((v) => this.img({ image: v }));
+    if (a.image !== undefined && a.image !== null) return [this.img(a)];
+    return [this.img({ image: this.ctx.index() })];
+  }
+
+  async t_voices_estimate(a: Args): Promise<ToolResult> {
+    const rows = [];
+    const errors: string[] = [];
+    for (const { entry } of this.imagesOf(a)) {
+      const lines = this.store.linesFor(entry).filter((l) => (a.all === true || l.status !== "generated") && l.text.trim());
+      const r = lineRows(lines, this.store.cast);
+      rows.push(...r.rows);
+      errors.push(...r.errors);
+    }
+    if (!rows.length) return json({ fragments: 0, errors: errors.length ? errors : undefined });
+    const est = await estimate(rows.map((r) => r.item as never)).catch((e) => fail(String(e)));
+    return json({
+      fragments: rows.length,
+      newCharacters: est.chars,
+      alreadyGenerated: est.cached,
+      approxUsd: Math.round(est.usd * 1000) / 1000,
+      sessionCharacters: est.session,
+      sessionLimit: prefs.settings.voicesLimit || undefined,
+      errors: errors.length ? errors : undefined,
+    });
+  }
+
+  async t_voices_generate(a: Args): Promise<ToolResult> {
+    this.writable();
+    const imgs = this.imagesOf(a);
+    const ids = Array.isArray(a.lines) ? (a.lines as unknown[]).map(String) : null;
+    const list = [];
+    for (const { i, entry } of imgs) list.push({ ctx: { store: this.store, entry, size: await this.size(i) }, ids: a.all === true ? this.store.linesFor(entry).map((l) => l.id) : ids });
+    this.ctx.say("🤖 Voces: esperando tu aprobación del pedido");
+    const r = await generateMany(list, true, (d, n) => this.ctx.say(`🤖 Voces: ${d} de ${n}`)).catch((e) => fail(String(e)));
+    if (!r) fail("The user cancelled the request: nothing was generated or spent.");
+    if (imgs.length === 1) this.show(imgs[0].i);
+    return json({ generated: r!.done, fromCache: r!.cached, errors: r!.errors.length ? r!.errors : undefined, next: "Check timing with script_get / summary and ask the user to listen." });
+  }
+
+  /** Efecto o música generados: aprobación, biblioteca y, si se pide, a la línea de tiempo. */
+  private async generateSound(item: { kind: "sfx"; text: string; seconds?: number; loop?: boolean } | { kind: "music"; prompt: string; seconds: number; instrumental?: boolean }, who: string, a: Args): Promise<ToolResult> {
+    const r = await approveAndGenerate([{ who, item, cached: false, on: true }], true).catch((e) => fail(String(e)));
+    if (!r) fail("The user cancelled the request: nothing was generated or spent.");
+    const res = r!.results[0];
+    if (res.error || !res.sound) fail(res.error ?? "nothing came back");
+    const sound = res.sound!;
+    const out: Record<string, unknown> = { sound: { id: sound.id, name: sound.name, seconds: r2(sound.seconds) }, fromCache: res.cached };
+    if (a.image !== undefined && a.image !== null) {
+      const { i, entry } = this.img(a);
+      const size = await this.size(i);
+      const c = newAudioClip(sound, await this.fxStart(i, a));
+      c.volume = num(a, "volume", item.kind === "music" ? 0.6 : 0.8, 0, 2);
+      this.edit(() => this.store.editAudio(entry, size, (t) => t.sfx.push(c)));
+      this.show(i);
+      out.placed = { image: i, bus: "sfx", start: r2(c.start) };
+    } else out.next = "Use add_ambient (music, long backgrounds) or add_audio with this sound id.";
+    return json(out);
+  }
+
+  async t_sfx_generate(a: Args): Promise<ToolResult> {
+    const text = (str(a, "description") ?? fail("description is required")).trim();
+    if (!text) fail("description is empty");
+    return this.generateSound({ kind: "sfx", text: text.slice(0, 500), seconds: optNum(a, "seconds", 0.5, 30), loop: a.loop === true }, t("voicesSfxWho"), a);
+  }
+
+  async t_music_generate(a: Args): Promise<ToolResult> {
+    const prompt = (str(a, "prompt") ?? fail("prompt is required")).trim();
+    if (!prompt) fail("prompt is empty");
+    return this.generateSound({ kind: "music", prompt: prompt.slice(0, 2000), seconds: num(a, "seconds", 30, 3, 600), instrumental: a.instrumental !== false }, t("voicesMusicWho"), a);
   }
 
   async t_undo(a: Args): Promise<ToolResult> {

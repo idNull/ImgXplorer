@@ -119,6 +119,39 @@ Starting values; adapt to the user's pace (calm ×1.3, action ×0.7):
 - `sound_report`: peaks near 0 dB with many limiter seconds mean too loud: lower track or group volumes. Fix
   overlapping voices on the same track. Long silences may be fine (dramatic) or need ambience.
 
+## Voices (AI voices with ElevenLabs)
+
+Only when the user asks for voices. Everything that spends credits (`voice_design`, `voices_generate`,
+`sfx_generate`, `music_generate`) shows the user the exact order in the app and waits for Accept: never
+promise it is done before the tool returns. If they cancel, ask what to change; do not retry the same.
+
+1. **Read before writing.** Look at each page and panel (`view_image`, `view_panel`). Transcribe the
+   balloons in reading order (manga: right to left), and find who speaks by the balloon's tail.
+2. **One consistent cast.** `cast_get` first. A character is the same in the whole comic: create it once
+   with `cast_set` and a description from its look and role (age, personality, accent, tone, pace:
+   "veteran warrior about 50, deep husky voice, speaks slowly"). Prefer a voice from `voice_list` if one
+   fits; otherwise `voice_design` once per character. You cannot hear voices: ask the user to try them.
+3. **What gets a voice:**
+   - speech balloon → `dialogue`;
+   - thought balloon → `thought` (whispered; the app adds a little room);
+   - caption box → `narration` (a narrator character, or none);
+   - drawn sound effects (BOOM) → not voice: sound effects or visual onomatopoeia;
+   - shouting crowds, an army in the background → `crowd` (generated as a background effect on the
+     effects track, quieter);
+   - an emotional moment → music or ambience: the library first; `music_generate` only if nothing fits.
+4. **Performance.** Use the comic's language and punctuation. With eleven_v3/v4 add a few tags in
+   brackets where the art shows it: `[whispers]`, `[shouting]`, `[laughs]`, `[sighs]`, `[crying]`,
+   `[angry]`, `[excited]`, `[scared]`. Do not overdo it: one tag per line is usually enough.
+5. **Timing.** Write the script with `script_set`, one image at a time, each line starting a little after
+   the camera reaches its panel (`shot` from `plan_shots` + `offset` ≈ 0.3 s). Lines must not overlap
+   (except an intended interruption) and leave reading time. The image lasts as long as its voices.
+   After generating, check with `script_get`, `summary` and `sound_report`.
+6. **Spend little.** `voices_estimate` before generating. Generate in batches (a page or a scene) with
+   `voices_generate`. Unchanged lines come free from the cache: never regenerate what did not change.
+   Test a new voice with one short line first.
+7. **Review** with `render_frames` / `sound_report` and fix timing before exporting. Ask the user to
+   listen: you cannot.
+
 ## Limits
 
 - You see still frames, not motion: describe moves clearly and ask the user to watch with `play`.

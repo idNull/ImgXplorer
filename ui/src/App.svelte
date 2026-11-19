@@ -52,6 +52,8 @@
   import { copyToClipboard, renderPage, saveTo } from "./lib/utils/imageOut";
   import KeysHelp from "./lib/help/KeysHelp.svelte";
   import Tour from "./lib/help/Tour.svelte";
+  import OrderDialog from "./lib/voices/OrderDialog.svelte";
+  import { order } from "./lib/voices/voices.svelte";
   import { tour } from "./lib/help/tour.svelte";
 
   interface DiagnosticsInfo {
@@ -290,7 +292,7 @@
   let viewMenu = $state<{ x: number; y: number } | null>(null);
   /** Ayuda de atajos (?) y pestaña con la que se abren los ajustes. */
   let helpOpen = $state(false);
-  let settingsTab = $state<"general" | "keys">("general");
+  let settingsTab = $state<"general" | "keys" | "voices">("general");
   /** Zona elegida con Mayús + arrastrar. */
   let selection = $state<Box | null>(null);
   /** Lo que se ve, apuntado al abrir «Guardar como» (antes de que el diálogo cambie nada). */
@@ -936,7 +938,7 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone || helpOpen || tour.step >= 0) return; // los diálogos gestionan sus teclas
+    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone || helpOpen || tour.step >= 0 || order.rows) return; // los diálogos gestionan sus teclas
     if ((viewMenu || moreMenu) && e.key === "Escape") return; // lo cierra el propio menú
     const tgt = e.target;
     // En los campos de texto las teclas son para escribir. En listas, deslizadores y casillas
@@ -1421,6 +1423,7 @@
 {/if}
 
 <Tour />
+<OrderDialog />
 
 {#if saveZone && source?.entries[index]}
   <SaveImage original={(/\.([^.]+)$/.exec(source.entries[index].name)?.[1] ?? "").toUpperCase()} canVisible={!!visibleAtSave}

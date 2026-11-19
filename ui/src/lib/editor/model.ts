@@ -114,6 +114,8 @@ export interface AudioClip {
   track?: string;
   /** Efectos del propio clip. */
   effects?: Effect[];
+  /** Frase del guion de la que salió (voces con IA). */
+  gen?: string;
 }
 
 export interface AudioTracks {

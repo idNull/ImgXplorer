@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { label } from "../i18n.svelte";
 import { log } from "../log";
 
-export type SoundKind = "imported" | "recorded" | "builtin";
+export type SoundKind = "imported" | "recorded" | "builtin" | "generated";
 
 export interface SoundInfo {
   id: string;

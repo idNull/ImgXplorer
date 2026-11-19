@@ -1340,6 +1340,296 @@
     }
   },
   {
+    "name": "cast_get",
+    "description": "AI voices: the cast (characters with their voice description and assigned voice), the provider and whether it is ready (key saved). Read this before creating characters so each one is created only once.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "cast_set",
+    "description": "AI voices: add or change characters (matched by id or by name), or remove them with remove:true. The description is the voice prompt: age, personality, accent, tone, way of speaking (20-1000 characters), e.g. 'veteran warrior about 50, deep husky voice, speaks slowly'. voice assigns an existing voice from voice_list (id or name); null removes it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cast": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string",
+                "description": "ISO 639-1 code of the lines (es, en, ja…)."
+              },
+              "color": {
+                "type": "string",
+                "description": "#rrggbb"
+              },
+              "voice": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Voice id or name from voice_list."
+              },
+              "settings": {
+                "type": "object",
+                "description": "stability, similarity, style (0..1) and speed (0.7..1.2)."
+              },
+              "remove": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "cast"
+      ]
+    }
+  },
+  {
+    "name": "voice_list",
+    "description": "AI voices: the voices in the user's ElevenLabs account (premade, designed, cloned), to assign one with cast_set instead of designing a new one.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "voice_design",
+    "description": "AI voices: create a new voice for a character from its description (ElevenLabs Voice Design) and assign it. The app shows the user the request and waits for Accept (it sends the description to ElevenLabs). Makes 3 samples and keeps sample `pick`. You cannot hear it: ask the user to try it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "character": {
+          "type": "string",
+          "description": "Character id or name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional: replace the character's description first."
+        },
+        "pick": {
+          "type": "integer",
+          "description": "Which of the 3 samples to keep (1-3, default 1)."
+        }
+      },
+      "required": [
+        "character"
+      ]
+    }
+  },
+  {
+    "name": "script_get",
+    "description": "AI voices: the script of an image (each line with character, kind, text, start, status draft/generated/stale and its clip).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "script_set",
+    "description": "AI voices: write the script of an image, in reading order. Each line: character (id or name; not needed for narration or crowd), text with performance tags in brackets ([whispers], [shouting], [laughs], [sighs]…; only with eleven_v3/v4), kind (dialogue, thought, narration, crowd) and when it starts: start (seconds) or shot (1-based, from plan_shots) + offset. With replace:false, lines are added or updated by id instead of replacing the whole script. Changing a generated line marks it stale (regenerate it). Nothing is generated or spent here.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "character": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "dialogue",
+                  "thought",
+                  "narration",
+                  "crowd"
+                ]
+              },
+              "start": {
+                "type": "number"
+              },
+              "shot": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "Replace the whole script (default true)."
+        }
+      },
+      "required": [
+        "image",
+        "lines"
+      ]
+    }
+  },
+  {
+    "name": "voices_estimate",
+    "description": "AI voices: what generating would cost, without sending anything: fragments, new characters, already generated (free, from the cache), approximate USD and the session usage/limit. Lines not up to date by default; all:true for every line.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Several images in one order (0-based)."
+        },
+        "all": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "voices_generate",
+    "description": "AI voices: generate the script lines (not up to date ones, or `lines` ids, or all:true) of one or several images and place them as clips on the voice track (crowd lines on the effects track). SPENDS CREDITS: the app shows the user the exact order and waits for Accept (unless it fits the budget the user approved in settings); if they cancel you get an error. Lines already generated with the same text and voice come free from the cache. Clips keep their place and effects when regenerated.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Several images in one order (0-based)."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Line ids (default: lines not up to date)."
+        },
+        "all": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "sfx_generate",
+    "description": "AI sound effect or background (crowds, battle cries, a specific creature…) from a description, 0.5-30 s, saved to the sound library. SPENDS CREDITS after the user accepts. Try the library first (list_sounds). With image (+ start or shot/offset) it is also placed on that image's effects track; otherwise use add_audio / add_ambient with the returned id.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "number"
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "Seamless loop (for ambiences)."
+        },
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        },
+        "start": {
+          "type": "number"
+        },
+        "shot": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "description"
+      ]
+    }
+  },
+  {
+    "name": "music_generate",
+    "description": "AI music from a prompt (genre, mood, instruments, tempo), 3-600 s, saved to the sound library. SPENDS CREDITS after the user accepts: keep it to the moments that need it and try the library first. Then use add_ambient with the returned id to play it across images.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "number",
+          "description": "Length (default 30)."
+        },
+        "instrumental": {
+          "type": "boolean",
+          "description": "No vocals (default true)."
+        },
+        "image": {
+          "type": "integer",
+          "description": "Image index (0-based)."
+        },
+        "start": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "prompt"
+      ]
+    }
+  },
+  {
     "name": "summary",
     "description": "Overview of the project: every image with its animation, duration, shots, sounds, visual effects and warnings (too short to read, image without animation, missing sound, flashes too close together…), ambiences, tracks and total video length.",
     "inputSchema": {
@@ -1427,7 +1717,11 @@
         },
         "format": {
           "type": "string",
-          "enum": ["mp4", "webm", "gif"],
+          "enum": [
+            "mp4",
+            "webm",
+            "gif"
+          ],
           "description": "mp4 (H.264 + AAC, default), webm (VP9 + Opus) or gif (no sound, at most 15 fps: keep it short and small)."
         },
         "srt": {

@@ -62,6 +62,8 @@ struct Activity {
 fn timeout(tool: &str) -> Duration {
     match tool {
         "open_source" | "render_frames" | "summary" | "sound_report" | "import_sounds" | "inspect_video" => Duration::from_secs(600),
+        // Esperan a que el usuario acepte el pedido y luego a que el proveedor genere.
+        "voices_generate" | "voice_design" | "sfx_generate" | "music_generate" => Duration::from_secs(1200),
         _ => Duration::from_secs(180),
     }
 }

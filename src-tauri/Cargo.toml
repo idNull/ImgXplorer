@@ -13,9 +13,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22"
 imgx-audio.workspace = true
 imgx-core.workspace = true
 imgx-media.workspace = true
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native"] }
 log = "0.4"
 serde.workspace = true
 serde_json.workspace = true
@@ -25,6 +27,7 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 trash = "5.4.0"
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

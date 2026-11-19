@@ -49,6 +49,16 @@ export interface Settings {
   hideBars: boolean;
   /** Ya se vio (o se saltó) la visita guiada del primer uso. */
   tourDone: boolean;
+  /** Voces con IA: proveedor (`mock` = simulado, para probar sin gastar). */
+  voicesProvider: "elevenlabs" | "mock";
+  /** Modelo de voz de fábrica. */
+  voicesModel: string;
+  /** Tope de caracteres de voz por sesión (0 = sin tope). */
+  voicesLimit: number;
+  /** Caracteres por sesión que una IA (MCP) puede gastar sin preguntar (0 = pregunta siempre). */
+  voicesAutoBudget: number;
+  /** Ya se aceptó el aviso de que los textos se envían al proveedor. */
+  voicesConsent: boolean;
   keys: KeyOverrides;
 }
 
@@ -148,6 +158,11 @@ export const DEFAULT_SETTINGS: Settings = {
   startView: "covers",
   hideBars: true,
   tourDone: false,
+  voicesProvider: "elevenlabs",
+  voicesModel: "eleven_v3",
+  voicesLimit: 5000,
+  voicesAutoBudget: 0,
+  voicesConsent: false,
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -184,6 +199,12 @@ function clean(raw: unknown): Settings {
   if (r.startView === "covers" || r.startView === "list") s.startView = r.startView;
   if (typeof r.hideBars === "boolean") s.hideBars = r.hideBars;
   if (typeof r.tourDone === "boolean") s.tourDone = r.tourDone;
+  if (r.voicesProvider === "elevenlabs" || r.voicesProvider === "mock") s.voicesProvider = r.voicesProvider;
+  if (typeof r.voicesModel === "string" && /^[a-z0-9_]{3,60}$/.test(r.voicesModel)) s.voicesModel = r.voicesModel;
+  const chars = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(10_000_000, Math.max(0, v))) : d);
+  s.voicesLimit = chars(r.voicesLimit, s.voicesLimit);
+  s.voicesAutoBudget = chars(r.voicesAutoBudget, s.voicesAutoBudget);
+  if (typeof r.voicesConsent === "boolean") s.voicesConsent = r.voicesConsent;
   s.keys = cleanOverrides(r.keys);
   return s;
 }

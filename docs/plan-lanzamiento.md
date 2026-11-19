@@ -191,7 +191,17 @@ Al hacerlo: la ayuda también se abre con `F1`, desde el menú del clic derecho 
 - **Avisos y menús coherentes:** revisar que todos los paneles nuevos usen los mismos estilos y variables CSS, y que todo se maneje con el teclado (foco visible, `Esc` cierra).
 - **Cabecera adaptable:** con un tamaño de ventana normal se ven todos los botones como ahora. Solo si la ventana es tan estrecha que no caben (hoy se cortarían), los que no caben pasan a un menú «⋯», sin desaparecer.
 
-## Fase 7 — Voces con IA (ElevenLabs) 🗣️
+## Fase 7 — Voces con IA (ElevenLabs) 🗣️ ✅
+> **Hecha.** Cambios respecto a lo previsto:
+> - El guion es **por imagen** (cada frase con su segundo de inicio o el plano de `plan_shots` más un desfase), no por viñeta.
+> - El panel tiene una tercera pestaña, **Sonidos**, para pedir efectos y música a mano (no solo desde la IA).
+> - Las tomas guardan solo el sonido de cada una; «↻ Otra toma» usa otra semilla.
+> - Si una toma nueva es más larga, las voces generadas que van detrás se corren para no pisarse.
+> - El efecto de los pensamientos es una sala pequeña (reverb), no un eco.
+> - Sin llavero del sistema, la clave va a un archivo `0600` y se avisa en Ajustes.
+> - Los precios del resumen del pedido son los de la API (dólares por carácter o por minuto). Los planes con suscripción cuentan caracteres, y así se enseñan.
+> - Falta probarlo con ElevenLabs de verdad, juntos y con tu cuenta.
+
 **Cuándo:** es la última fase de programación, antes de preparar el lanzamiento, como pediste.
 
 **Objetivo:**

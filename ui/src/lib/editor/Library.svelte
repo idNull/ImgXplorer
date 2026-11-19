@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   // Biblioteca: clips para arrastrar a la timeline y plantillas propias para aplicar.
   import { openFile, saveFile } from "../files/dialog.svelte";
   import { library, defaultDuration, type LibClip } from "./libstore.svelte";
@@ -29,19 +30,21 @@
     if (tab === "sounds" && !sounds.loaded) sounds.load();
   });
   // Al salir de la pestaña o cerrar el editor, se deja de escuchar.
+  // Solo al cambiar de pestaña: lo que se escucha desde otro sitio (voces IA) no se corta.
   $effect(() => {
-    if (tab !== "sounds") sounds.previewing && sounds.preview(null);
+    if (tab !== "sounds") untrack(() => sounds.previewing && sounds.preview(null));
   });
   $effect(() => () => {
     if (sounds.previewing) sounds.preview(null);
   });
 
-  const SOUND_GROUPS: { kind: SoundKind; title: "soundsMine" | "soundsRecorded" | "soundsBuiltin" }[] = [
+  const SOUND_GROUPS: { kind: SoundKind; title: "soundsMine" | "soundsRecorded" | "soundsGenerated" | "soundsBuiltin" }[] = [
     { kind: "imported", title: "soundsMine" },
     { kind: "recorded", title: "soundsRecorded" },
+    { kind: "generated", title: "soundsGenerated" },
     { kind: "builtin", title: "soundsBuiltin" },
   ];
-  const SOUND_ICON: Record<SoundKind, string> = { imported: "♪", recorded: "🎙", builtin: "✦" };
+  const SOUND_ICON: Record<SoundKind, string> = { imported: "♪", recorded: "🎙", generated: "🗣", builtin: "✦" };
   const groups = $derived.by(() => {
     const q = query.trim().toLowerCase();
     return SOUND_GROUPS.map((g) => ({

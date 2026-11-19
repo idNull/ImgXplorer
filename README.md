@@ -94,6 +94,11 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
   - **Licencias de terceros**: todas las bibliotecas que usa la app, agrupadas por licencia, con sus autores, un buscador, el texto de cada licencia y un enlace a la página de cada proyecto. Arriba van los avisos especiales: UnRAR, libheif y sus decodificadores, FFmpeg y WebKit.
   - «Ver la visita guiada» repite el primer uso guiado.
   - Una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
+- **Voces IA**:
+  - **Proveedor**: ElevenLabs o simulado (para probar sin gastar).
+  - **Clave de la API**: se pega una vez y se guarda en el **llavero del sistema** (Secret Service en Linux, Llavero en macOS). Si no hay llavero, va a un archivo que solo puede leer tu usuario. Nunca se enseña ni va en el proyecto, en los registros o a una IA.
+  - **Probar conexión**: plan, caracteres usados y los que quedan.
+  - **Modelo de voz** (Eleven v3 de fábrica, v4, Multilingual v2 o Flash v2.5, a mitad de precio), **tope por sesión** y cuánto puede gastar una IA **sin preguntar** (0 de fábrica: siempre pregunta).
 - **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
 
 Los ajustes, los recientes y el modo de lectura y los marcadores de cada cómic (`reading.json`) se guardan en `~/.config/com.imgxplorer.app/` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
@@ -190,6 +195,35 @@ Temblores, destellos, ondas expansivas y recursos del manga colocados en la lín
 - **Seguridad**: destellos y negativos no parpadean más de 3 veces por segundo.
 - **Cómo funciona**: el núcleo en Rust (`crates/imgx-core/src/fx.rs`) calcula cada fotograma de forma determinista y el visor WebGL aplica el temblor a la matriz de cámara y el resto en una sola pasada de shader. Sin efectos activos, no cuesta nada.
 
+### Voces con IA (ElevenLabs)
+
+Pon voz a los personajes con una IA externa, [ElevenLabs](https://elevenlabs.io), usando tu propia cuenta. Lo generado son clips normales: se mueven, se recortan, llevan efectos de audio y salen en el vídeo.
+
+- **Panel 🗣 Voces IA** del editor: botón 🗣 en la cabecera de la primera pista de voz o en el inspector cuando no hay nada seleccionado. Se abre en la columna del inspector, sin tapar la línea de tiempo. Tiene tres pestañas:
+  - **Reparto**: los personajes, con su color, nombre, idioma y la **descripción de su voz** (edad, carácter, acento, forma de hablar).
+    - **🎙 Crear voz**: ElevenLabs hace 3 muestras a partir de la descripción; las escuchas (▶) y eliges una, que queda guardada en tu cuenta y asignada al personaje.
+    - **Elegir de mis voces**: cualquier voz de tu cuenta (de serie, diseñada o clonada).
+    - **▶ Probar**: una frase corta con esa voz.
+    - **Ajustes de la voz**: estabilidad, estilo y velocidad (doble clic vuelve al valor de fábrica).
+    - Quitar un personaje pide una segunda pulsación.
+  - **Guion** de la imagen: una fila por frase, en orden de lectura, con su personaje, su tipo y su texto.
+    - Tipos: **💬 diálogo**, **💭 pensamiento** (con un poco de sala, como dentro de la cabeza), **📜 narración** y **👥 multitud** (gritos de fondo, un ejército: se genera como efecto en la pista de efectos, más bajo).
+    - **Etiquetas de interpretación**: botones que insertan `[shouting]`, `[whispers]`, `[laughs]`, `[crying]`… donde está el cursor. Funcionan con los modelos Eleven v3 y v4.
+    - Contador de caracteres, **⏱ inicio** (vacío: detrás de la frase anterior; ⌖ lo pone en el cabezal), ▲▼ para reordenar y 🗑 para borrar la frase con su clip.
+    - Estado de cada frase: **borrador**, **generada** o **cambiada** (si cambias el texto, el personaje o su voz después de generarla).
+    - **Revisar y generar** pide solo las frases nuevas o cambiadas. **↻ Otra toma** vuelve a pedir esa frase con otra interpretación.
+  - **Sonidos**: **efectos** (0,5–30 s, con opción de bucle para ambientes) y **música** (3 s a 10 min, instrumental o no) a partir de una descripción. Van a la biblioteca de sonidos («Generados con IA») o directamente al cabezal.
+- **Resumen del pedido**: antes de enviar nada se ve la lista exacta de fragmentos, con sus caracteres y el coste aproximado. Se puede quitar o retocar cualquiera, y lo **ya generado** sale gratis. Nada se envía sin pulsar «Generar».
+- **Colocación**: cada frase queda como clip en la pista de voz, uno detrás de otro y sin pisarse, con el color de su personaje. La imagen dura lo que sus voces. Una toma nueva sustituye el sonido de su clip sin moverlo ni quitarle los efectos; si es más larga, las voces generadas que van detrás se corren lo justo.
+- **Control del gasto**:
+  - **Caché**: la misma frase con la misma voz, modelo y ajustes no se vuelve a pagar.
+  - **Tope por sesión** de caracteres de voz (5000 de fábrica; 0 = sin tope).
+  - La primera vez, un aviso de que los textos y las descripciones se envían a ElevenLabs.
+- **Modo simulado** (Ajustes → Voces IA → Proveedor): para probarlo todo sin internet ni gastar. Las «voces» son tonos con la duración que tendría la frase.
+- **Todo se deshace** con `Ctrl+Z` y se guarda en el proyecto `.imgx` (el reparto y el guion; ver [docs/format.md](docs/format.md)). La clave nunca va en el proyecto.
+- **Con tu IA** (Claude, Codex, Gemini): puede leer los bocadillos, crear el reparto, escribir el guion, estimar el coste y generar. Lo que gasta te enseña el pedido y espera a que aceptes (ver «Control por IA»).
+- **Cómo funciona**: todas las llamadas a ElevenLabs las hace Rust (`src-tauri/src/voices/`), detrás de una interfaz `VoiceProvider` con dos proveedores: ElevenLabs y el simulado. La interfaz gráfica nunca sale a internet ni ve la clave.
+
 ### Exportar a vídeo
 
 Botón 🎞 o `Ctrl+E`. Se exporta tal cual se reproduce: la animación de cada imagen, la pausa entre
@@ -214,6 +248,7 @@ Cada imagen puede llevar **voz** y **efectos**, y el proyecto, **ambientes o mú
 - **Biblioteca de sonidos** (pestaña *Sonidos* del editor):
   - **Tuyos**: importa mp3, wav, flac, ogg o m4a con *Importar sonido* o arrastrando los archivos a la ventana. Se **copian** a tu biblioteca, así que no se rompen si mueves o borras el original. El mismo archivo importado dos veces es el mismo sonido.
   - **Grabaciones**: las voces grabadas con el micrófono.
+  - **Generados con IA**: voces, efectos y música de ElevenLabs (ver «Voces con IA»).
   - **De serie**: 14 efectos que fabrica la propia app por síntesis, sin descargas ni licencias. Hay lluvia, viento, oleaje, latido, trueno, golpe, puñetazo, zas, explosión, llamar a la puerta, pasos, campana, timbre y disparo. Los marcados con 🔁 están pensados para sonar en bucle.
   - ▶ para escuchar, doble clic para renombrar y ✕ para quitarlo de la biblioteca (el archivo original no se toca).
 - **Pistas**: hay tres grupos (**voces**, **efectos** y **ambiente**) y en cada uno puedes tener **varias pistas** («Voz Ana», «Voz Luis», «Golpes»…), las mismas en todas las imágenes, como en un programa de audio. Así se mezclan varios sonidos a la vez sin salir de la app.
@@ -283,11 +318,12 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
 - **Permiso**: el control viene **apagado**; se enciende con *Permitir el control por IA* (o solo al conectar la primera IA). Apagado, ninguna IA puede tocar nada.
 - **Mientras trabaja**: en la cabecera aparece **🤖 IA** con lo que va haciendo y un botón **Detener la IA**. Ves cada cambio en directo y todo se deshace con `Ctrl+Z`. Si la app está cerrada, la IA la abre.
 - **Empezar**: abre una sesión nueva de tu IA y pídeselo con tus palabras, por ejemplo: «Usa imgxplorer para montar un vídeo de este cómic: ~/Cómics/capitulo1.cbz. Ritmo tranquilo, lluvia suave de fondo y efectos donde haya acción. Revisa y exporta en 1080p». En *Ajustes → IA* hay una frase de ejemplo para copiar.
-- **Qué puede hacer** (46 herramientas):
+- **Qué puede hacer** (56 herramientas):
   - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
   - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
   - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
   - **Efectos especiales**: situaciones (explosión, puñetazo, sorpresa, flashback…) o efectos sueltos en el plano que toca y en el punto de la imagen donde ocurren, con sus **onomatopeyas** («¡BOOM!») y **subtítulos**, carteles o cartelas de narración.
+  - **Voces con IA**: crear el reparto (una voz por personaje, descrita por su aspecto, o una de tu cuenta), escribir el guion de cada imagen con etiquetas de interpretación y su momento, estimar el coste y generar voces, gritos de fondo, efectos y música. Todo lo que gasta abre en la app el **resumen del pedido** y espera a que pulses Aceptar; si cancelas, no se envía nada.
   - **Ajustes de imagen**: limpiar escaneos, blanco y negro, sepia, brillo, contraste… para una página o para todo el cómic.
   - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
   - **Terminar**: exportar en MP4, WebM o GIF (con el `.srt` de los subtítulos), seguir el progreso y revisar el vídeo final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
@@ -453,7 +489,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
   - [x] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
   - [x] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
-  - [ ] Voces con IA (ElevenLabs): reparto, guion por viñeta, revisión antes de pedir y automatización por IA.
+  - [x] Voces con IA (ElevenLabs): reparto, guion por imagen, resumen del pedido antes de gastar, efectos y música, clave en el llavero, caché, modo simulado y automatización por IA.
   - [ ] Pulido, pruebas en Linux, Ubuntu con Nvidia y Mac, versión 1.0.0 y documento «imgXplorer, la historia detrás».
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
 

@@ -47,6 +47,7 @@
   import FxPicker from "../fx/FxPicker.svelte";
   import { FxTrack as FxEval, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
   import Library from "./Library.svelte";
+  import VoicesPanel from "../voices/VoicesPanel.svelte";
   import { log } from "../log";
 
   interface Props {
@@ -101,6 +102,36 @@
   let voiceTok = 0;
   /** Arrastre desde la biblioteca: un clip de cámara o un sonido (y a qué pista va). */
   let libDrag = $state<{ clip?: LibClip; sound?: SoundInfo; x: number; y: number; t: number | null; track: Track | null } | null>(null);
+  /** Panel 🗣 Voces IA en la columna del inspector (se cierra al seleccionar algo). */
+  let voicesOpen = $state(false);
+  $effect(() => {
+    if (sel || asel || ambsel || tsel || fsel !== null) untrack(() => (voicesOpen = false));
+  });
+  function openVoices() {
+    sel = null;
+    asel = null;
+    ambsel = null;
+    tsel = null;
+    fsel = null;
+    voicesOpen = true;
+  }
+  /** Color del personaje de cada frase de esta imagen (para los clips generados). */
+  const genColor = $derived.by(() => {
+    const m = new Map<string, string>();
+    for (const l of store.linesFor(entry)) {
+      const c = store.cast.find((x) => x.id === l.cast);
+      if (c?.color) m.set(l.id, c.color);
+    }
+    return m;
+  });
+  function removeLineClip(lineId: string) {
+    if (!size) return;
+    editAudio((a) => {
+      a.voice = a.voice.filter((c) => c.gen !== lineId);
+      a.sfx = a.sfx.filter((c) => c.gen !== lineId);
+    });
+  }
+
   /** Clip de sonido seleccionado (excluye `sel`). */
   let asel = $state<{ bus: AudioBus; idx: number } | null>(null);
   /** Efecto especial seleccionado (posición en la lista de la imagen). */
@@ -1232,6 +1263,9 @@
                 onclick={(e) => { e.stopPropagation(); store.editTrack(tr.id, (x) => { if (x.mute) delete x.mute; else x.mute = true; }); }}>M</button>
               <button class="ms solo" class:on={solo.ids.includes(tr.id)} title={t("trackSoloHelp")}
                 onclick={(e) => { e.stopPropagation(); toggleSolo(tr.id); }}>S</button>
+              {#if tr.bus === "voice" && tracks.find((x) => x.bus === "voice")?.id === tr.id}
+                <button class="ms voices" class:on={voicesOpen} title={t("voicesOpenHelp")} onclick={(e) => { e.stopPropagation(); if (voicesOpen) voicesOpen = false; else openVoices(); }}>🗣</button>
+              {/if}
               {#if last}
                 <button class="ms add" title={t("trackAdd")} disabled={!!store.readOnly} onclick={(e) => { e.stopPropagation(); addTrack(tr.bus); }}>+</button>
               {/if}
@@ -1323,7 +1357,7 @@
             {:else}
               <div class="lane audio" class:muted={tr.mute} bind:this={laneEls[tr.id]} onpointerdown={onLaneDown}>
                 {#each laneClips.get(tr.id) ?? [] as { c, bus, i } (bus + i)}
-                  <AudioClipView clip={c} {bus} {pps} pad={PAD} height={28} selected={asel?.bus === bus && asel.idx === i} ondown={(e, part) => onAudioDown(e, bus, i, part)} />
+                  <AudioClipView clip={c} {bus} {pps} pad={PAD} height={28} selected={asel?.bus === bus && asel.idx === i} color={c.gen ? genColor.get(c.gen) : undefined} ondown={(e, part) => onAudioDown(e, bus, i, part)} />
                 {/each}
                 {#if libDrag?.sound && libDrag.track?.id === tr.id && libDrag.t != null}
                   <div class="drop audio" style:left="{PAD + libDrag.t * pps}px" style:width="{Math.max(8, libDrag.sound.seconds * pps)}px"></div>
@@ -1339,7 +1373,9 @@
     <div class="splitter" title={t("resizeHelp")} onpointerdown={(e) => startResize("inspector", e)}
       ondblclick={() => ((prefs.settings.inspectorWidth = INSPECTOR_WIDTH.def), prefs.saveSettings())}></div>
     <aside class="inspector" style:width="{prefs.settings.inspectorWidth}px">
-      {#if fsel !== null && fxList[fsel]}
+      {#if voicesOpen}
+        <VoicesPanel {store} {entry} {size} {playhead} onseek={seek} onnotice={say} onclose={() => (voicesOpen = false)} onremoveclip={removeLineClip} />
+      {:else if fsel !== null && fxList[fsel]}
         {@const fi = fsel}
         <FxInspector
           fx={fxList[fi]}
@@ -1387,6 +1423,7 @@
       {:else}
         <p class="note">{fromTemplate ? t("editorTemplate", { name: tpl ? label(`tpl.${tpl.id}`) : "" }) : t("editorHelp")}</p>
         <p class="note">{t("editorDragHelp")}</p>
+        <button class="voices-open" onclick={openVoices} title={t("voicesOpenHelp")}>🗣 {t("voicesTitle")}</button>
       {/if}
     </aside>
   </div>
@@ -1498,4 +1535,6 @@
     position: fixed; z-index: 30; pointer-events: none; padding: 2px 8px; font-size: 12px; border-radius: 6px;
     background: var(--panel-2); border: 1px solid var(--accent);
   }
+  .voices-open { margin-top: 8px; padding: 2px 10px; font-size: 12px; }
+  .ms.voices.on { border-color: var(--accent); color: var(--accent); }
 </style>

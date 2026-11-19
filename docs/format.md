@@ -161,6 +161,29 @@ El modo noche no está en el proyecto: es un ajuste de lectura de la app.
 - Orden de la mezcla: clip → sus efectos → pista (efectos, volumen, panorama) → grupo (volumen, atenuación) → volumen general y limitador.
 - Los sonidos no van dentro del `.imgx`: están en la biblioteca de sonidos del usuario y viajan en los paquetes `.imgxpack` (`sounds.json` y la carpeta `sounds/`).
 
+### Voces con IA
+
+Todo es opcional: un proyecto sin voces no lleva nada de esto y los de antes se abren igual.
+
+- **Reparto** (`cast[]`, en el proyecto): `{ id, name, color?, description?, language?, voice?, settings? }`.
+  - `description` es la descripción de la voz (edad, carácter, acento, tono), de la que sale con Voice Design.
+  - `voice`: `{ provider: "elevenlabs" | "mock", id, name? }`.
+  - `settings`: `stability`, `similarity`, `style` (0..1) y `speed` (0,7..1,2).
+- **Guion** (`items[].lines[]`): `{ id, cast?, text, kind, start?, status, takes? }`.
+  - `kind`: `dialogue`, `thought`, `narration` o `crowd` (multitud: se genera como efecto de fondo).
+  - `text` lleva las etiquetas de interpretación entre corchetes (`[whispers] …`).
+  - `status`: `draft` (sin generar), `generated` o `stale` (cambiada después de generarla).
+  - `takes`: sonidos de la biblioteca generados para esa frase; el último es el que suena.
+- **Clip generado**: un clip normal de `voice[]` o `sfx[]` con `gen` = id de su frase. Así una toma nueva sustituye el sonido del clip sin moverlo ni quitarle los efectos.
+
+```json
+"cast": [ { "id": "c1", "name": "Ana", "color": "#f472b6", "description": "Joven valiente, voz clara", "language": "es",
+            "voice": { "provider": "elevenlabs", "id": "abc123", "name": "Ana" } } ],
+"items": [ { "entry": "001.jpg", "size": [800, 1100],
+  "lines": [ { "id": "l1", "cast": "c1", "text": "[shouting] ¡Corre!", "kind": "dialogue", "start": 1.5, "status": "generated", "takes": ["7f3a…"] } ],
+  "timeline": { "audio": { "voice": [ { "sound": "7f3a…", "start": 1.5, "duration": 1.2, "gen": "l1" } ] } } } ]
+```
+
 ### Plantillas
 `defaults.template` se aplica a todas las imágenes sin animación propia; `items[].template`
 la sustituye para una imagen. Una imagen con `timeline.camera` propia (hecha en el editor) no

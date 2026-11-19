@@ -5,6 +5,7 @@
   import { t, label } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import AiSettings from "./mcp/AiSettings.svelte";
+  import VoicesSettings from "./voices/VoicesSettings.svelte";
   import About from "./About.svelte";
 
   // Micrófonos y salida de sonido (se piden al abrir los ajustes).
@@ -17,7 +18,7 @@
     prefs.saveSettings();
   }
 
-  type Tab = "general" | "keys" | "ai" | "about";
+  type Tab = "general" | "keys" | "ai" | "voices" | "about";
   interface Props {
     onclose: () => void;
     /** Pestaña con la que se abre (por defecto, «General»). */
@@ -103,6 +104,7 @@
       sound: { ...DEFAULT_SETTINGS.sound, input: prefs.settings.sound.input },
       keys: $state.snapshot(prefs.settings.keys),
       tourDone: prefs.settings.tourDone,
+      voicesConsent: prefs.settings.voicesConsent,
     };
     save();
   }
@@ -120,6 +122,7 @@
         <button class:on={tab === "general"} onclick={() => (tab = "general")}>{t("general")}</button>
         <button class:on={tab === "keys"} onclick={() => (tab = "keys")}>{t("shortcuts")}</button>
         <button class:on={tab === "ai"} onclick={() => (tab = "ai")}>{t("aiTab")}</button>
+        <button class:on={tab === "voices"} onclick={() => (tab = "voices")}>{t("voicesTab")}</button>
         <button class:on={tab === "about"} onclick={() => (tab = "about")}>{t("aboutTab")}</button>
       </div>
       <button class="close" onclick={onclose} title="{t('close')} (Esc)">✕</button>
@@ -218,6 +221,8 @@
         </div>
       {:else if tab === "ai"}
         <AiSettings />
+      {:else if tab === "voices"}
+        <VoicesSettings />
       {:else if tab === "about"}
         <About />
       {:else}

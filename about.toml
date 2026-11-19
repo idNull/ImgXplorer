@@ -18,6 +18,8 @@ accepted = [
     "MPL-2.0",
     "NCSA",
     "bzip2-1.0.6",
+    # Lista de certificados de Mozilla (webpki-roots), para las conexiones seguras de las voces con IA.
+    "CDLA-Permissive-2.0",
 ]
 
 # Lo que va dentro del ejecutable de Linux y de Mac.

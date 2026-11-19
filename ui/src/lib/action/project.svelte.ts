@@ -2,6 +2,7 @@
 // Se guarda solo (con un pequeño retraso) en cuanto cambia algo; Rust lo valida antes de escribir.
 // Deshacer/rehacer guarda instantáneas del proyecto entero (es pequeño): cada pausa en la
 // edición, o cada gesto completo (`batch`), es un paso.
+import type { CastMember, Line } from "../voices/types";
 import { invoke } from "@tauri-apps/api/core";
 import type { TemplateRef } from "./catalog";
 import { audioOf, hasAudio, type AudioTracks, type Timeline } from "../editor/model";
@@ -38,6 +39,8 @@ export interface Item {
   panels?: Rect[];
   /** Ajustes de imagen propios (🎨). */
   adjust?: Adjust;
+  /** Guion para las voces con IA. */
+  lines?: Line[];
 }
 
 export interface ProjectData {
@@ -51,6 +54,8 @@ export interface ProjectData {
   ambient?: AmbientClip[];
   /** Pistas de sonido (si no hay, una por grupo). */
   tracks?: Track[];
+  /** Reparto para las voces con IA. */
+  cast?: CastMember[];
 }
 
 /** Sonido de fondo de una imagen a otra (en bucle). */
@@ -517,6 +522,51 @@ export class ProjectStore {
     this.changed();
   }
 
+  /** Reparto de las voces con IA. */
+  get cast(): CastMember[] {
+    return this.data?.cast ?? [];
+  }
+
+  /** Cambia el reparto (añadir, quitar o editar personajes). */
+  editCast(fn: (list: CastMember[]) => void) {
+    if (!this.data || this.readOnly) return;
+    this.data.cast ??= [];
+    fn(this.data.cast);
+    if (!this.data.cast.length) delete this.data.cast;
+    this.changed();
+  }
+
+  /** Las frases ya generadas de un personaje quedan desactualizadas (se cambió su voz). */
+  markCastStale(castId: string) {
+    if (!this.data || this.readOnly) return;
+    let n = 0;
+    for (const it of this.data.items)
+      for (const l of it.lines ?? [])
+        if (l.cast === castId && l.status === "generated") {
+          l.status = "stale";
+          n++;
+        }
+    if (n) this.changed();
+  }
+
+  /** Guion de la imagen. */
+  linesFor(entry: string): Line[] {
+    return this.item(entry)?.lines ?? [];
+  }
+
+  /** Cambia el guion de la imagen. */
+  editLines(entry: string, size: [number, number], fn: (list: Line[]) => void) {
+    if (!this.data || this.readOnly) return;
+    const it = this.ensure(entry, size);
+    it.lines ??= [];
+    fn(it.lines);
+    if (!it.lines.length) {
+      delete it.lines;
+      this.prune();
+    }
+    this.changed();
+  }
+
   /** Ajustes de imagen que se le aplican: los suyos o, si no tiene, los de todas. */
   adjustFor(entry: string): Adjust | null {
     return normalize(this.item(entry)?.adjust) ?? normalize(this.data?.defaults.adjust);
@@ -559,7 +609,7 @@ export class ProjectStore {
   /** Quita las entradas que ya no aportan nada. */
   private prune() {
     if (!this.data) return;
-    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.timeline?.fx?.length || i.panels || i.adjust);
+    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.timeline?.fx?.length || i.panels || i.adjust || i.lines?.length);
   }
 
   changed() {

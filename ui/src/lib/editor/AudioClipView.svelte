@@ -13,9 +13,11 @@
     pad: number;
     height: number;
     selected: boolean;
+    /** Color del personaje (voces con IA): una franja a la izquierda. */
+    color?: string;
     ondown: (e: PointerEvent, part: "body" | "start" | "end") => void;
   }
-  let { clip, bus, pps, pad, height, selected, ondown }: Props = $props();
+  let { clip, bus, pps, pad, height, selected, color, ondown }: Props = $props();
 
   const info = $derived(sounds.get(clip.sound));
   const missing = $derived(sounds.loaded && !info);
@@ -78,7 +80,8 @@
     {#if clip.fadeIn > 0}<polygon class="fade" points="0,0 {Math.min(w, clip.fadeIn * pps)},0 0,{height}" />{/if}
     {#if clip.fadeOut > 0}<polygon class="fade" points="{w},0 {Math.max(0, w - clip.fadeOut * pps)},0 {w},{height}" />{/if}
   </svg>
-  <span class="name">{missing ? "⚠ " : ""}{name}</span>
+  {#if color}<span class="who" style:background={color}></span>{/if}
+  <span class="name" class:gen={!!color}>{missing ? "⚠ " : ""}{clip.gen ? "🗣 " : ""}{name}</span>
   <span class="edge start" onpointerdown={(e) => ondown(e, "start")}></span>
   <span class="edge end" onpointerdown={(e) => ondown(e, "end")}></span>
 </div>
@@ -96,6 +99,8 @@
   .sfx .wave { fill: rgb(253 186 116 / 0.45); }
   .fade { fill: rgb(0 0 0 / 0.35); }
   .name { position: absolute; left: 6px; right: 6px; top: 1px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  .who { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; pointer-events: none; }
+  .name.gen { left: 9px; }
   .edge { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
   .edge.start { left: -1px; }
   .edge.end { right: -1px; }

@@ -50,6 +50,7 @@ Los nombres y las descripciones están en inglés, que es lo que mejor entienden
 | Sonido | `list_sounds`, `find_audio_files`, `import_sounds`, `list_tracks`, `add_track`, `edit_track`, `add_audio`, `edit_audio`, `remove_audio`, `add_ambient`, `edit_ambient`, `remove_ambient`, `set_mix`, `effects_catalog` |
 | Ajustes de imagen | `get_adjust`, `set_adjust` (limpiar escaneo, brillo, contraste, color, nitidez, blanco y negro o sepia; una imagen o todas) |
 | Efectos especiales | `fx_catalog`, `add_fx` (situación o efecto suelto, en segundos o en un plano de `plan_shots` con desfase, y con punto), `edit_fx`, `remove_fx` |
+| Voces con IA | `cast_get`, `cast_set`, `voice_list`, `voice_design`, `script_get`, `script_set`, `voices_estimate`, `voices_generate`, `sfx_generate`, `music_generate` |
 | Revisar | `summary`, `render_frames`, `sound_report`, `play` |
 | Terminar | `export_video`, `export_status`, `cancel_export`, `inspect_video` |
 
@@ -93,6 +94,23 @@ La IA decide **qué** encuadrar y **cuánto tiempo**; las poses las calcula `img
 - Textos: `type: "text"` es una onomatopeya animada (`params.text`, `anim`…) y `type: "caption"` un subtítulo, cartel o narración (`params.text`, `style`). `export_video` guarda los subtítulos también como `.srt` (salvo `srt: false`) y admite `format`: `mp4`, `webm` o `gif`.
 - `shot` cuenta como `plan_shots`: la vista de la página entera del principio no es un plano. El efecto empieza cuando la cámara llega a ese plano, más `offset`.
 - `render_frames` añade por su cuenta un fotograma en el momento fuerte de cada efecto, y `summary` avisa de destellos demasiado seguidos o de efectos que alargan la imagen.
+
+### Voces con IA
+
+- **Reparto y guion** se guardan en el proyecto (`cast` y `items[].lines`, ver [format.md](format.md)). Escribirlos (`cast_set`, `script_set`) no gasta nada.
+- **Lo que gasta** (`voice_design`, `voices_generate`, `sfx_generate`, `music_generate`) abre en la app el **resumen del pedido** y espera a que el usuario pulse Aceptar. Si cancela, la herramienta devuelve un error y no se envía nada. Solo se salta el resumen si todo sale de la caché o si cabe en el «presupuesto que la IA puede gastar sin preguntar» (Ajustes → Voces IA, 0 de fábrica).
+- **La clave** no la ve la IA ni la interfaz: la usa Rust (`src-tauri/src/voices/`), que es quien llama a ElevenLabs.
+- **Caché**: la misma frase con la misma voz, modelo y ajustes no se vuelve a pagar. «Otra toma» usa otra semilla.
+- **Tiempo máximo**: estas herramientas esperan hasta 20 minutos (aprobación más generación).
+
+**Plantilla para pedírselo a tu IA:**
+
+```text
+Usa imgxplorer para poner voces al capítulo 1 (~/Cómics/capitulo1.cbz). Lee los bocadillos de cada
+página, crea el reparto (una voz por personaje, descrita por su aspecto) y escribe el guion en orden
+de lectura. Las cartelas, como narración; los gritos del ejército, como multitud de fondo; y música
+suave en la última página. Estima el coste antes de generar y genera página a página.
+```
 
 ### Tiempos de lectura
 

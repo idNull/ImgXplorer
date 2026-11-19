@@ -22,6 +22,8 @@ pub enum SoundKind {
     Imported,
     Recorded,
     Builtin,
+    /// Generado con IA (voces, efectos o música de ElevenLabs).
+    Generated,
 }
 
 /// Un sonido de la biblioteca (lo que guarda `sounds.json`).
@@ -218,6 +220,12 @@ impl Audio {
         self.with_index(app, |l| l.push(entry))?;
         self.save_index(app)?;
         Ok(info)
+    }
+
+    /// Un sonido de la biblioteca (si sigue en ella).
+    pub(crate) fn info(&self, app: &AppHandle, id: &str) -> Option<SoundInfo> {
+        let d = dir(app).ok()?;
+        self.with_index(app, |l| l.iter().find(|e| e.id == id && d.join(&e.file).exists()).map(SoundInfo::from)).ok()?
     }
 
     /// Los sonidos propios (importados y grabados) con la ruta de su archivo.
