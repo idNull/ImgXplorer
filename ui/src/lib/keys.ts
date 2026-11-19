@@ -54,6 +54,7 @@ export const DEFAULTS = {
     saveImage: ["Ctrl+s"],
     reveal: [],
     trash: ["Delete"],
+    help: ["?", "F1"],
   },
   player: {
     toggle: [" "],

@@ -24,6 +24,10 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Clic derecho: abrir, **abrir su carpeta** o **quitar de la lista** (también con la ✕ al pasar el ratón).
   - Con más de 12, un **buscador** y orden por recientes, nombre o progreso.
   - Siguen los botones para abrir y se puede arrastrar algo a la ventana, como siempre.
+- **Ayuda de atajos** (`?` o `F1`): una ventana con todos los atajos agrupados (moverse, zoom, lectura, la imagen, Modo Acción, archivos, reproducción, editor y ratón) y un buscador. Sale de la lista de atajos de la app, así que enseña los que hayas cambiado. «Cambiar atajos…» lleva a Ajustes → Atajos. También está en el menú del clic derecho y en la pantalla de inicio.
+- **Pantalla completa limpia** (`F11`): la cabecera y las miniaturas flotan sobre la imagen y se esconden a los 2 s sin mover el ratón; vuelven al acercarlo al borde de arriba o de abajo, y el puntero también se esconde. `Esc` sale de la pantalla completa. Con el editor abierto las barras se quedan. Se desactiva en Ajustes («Ocultar las barras en pantalla completa») para volver a lo de antes.
+- **Primer uso guiado**: la primera vez, cuatro pasos señalan los botones (abrir un cómic; 🎨 y 📖; Modo Acción; editor, vídeo e IA). Se puede saltar, moverse con las flechas y repetir desde Ajustes → Acerca de.
+- **Cabecera adaptable**: con un tamaño de ventana normal se ven todos los botones. Si la ventana es tan estrecha que no caben, los que no caben pasan a un menú «⋯» con sus atajos (primero Exportar, Editor y Modo Acción), en vez de cortarse o partirse en dos líneas.
 - **Cerrar** (botón ✕ junto al título o `Ctrl+W`): cierra lo que estás viendo y vuelve a la pantalla de inicio con los recientes.
   - Las animaciones se guardan solas medio segundo después de cada cambio, así que normalmente cierra sin preguntar.
   - Si una grabación está en curso, la termina y la guarda.
@@ -82,11 +86,13 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
 - **Retomar**: volver a la imagen en la que lo dejaste (se puede desactivar).
 - **Selector de archivos**: el de imgxplorer, el del sistema o automático (el propio en Linux y el del sistema en macOS).
 - **Diagnóstico**: mostrar u ocultar el panel.
+- **Pantalla completa**: ocultar o no las barras solas.
 - **Acerca de**:
   - Versión, autor y con qué se ha hecho (tecnologías y Claude Code).
   - La licencia (MIT), con su texto.
   - **Agradecimientos especiales** a los amigos y colaboradores que han ayudado (probando la app, dando ideas…). Se añaden en `ui/src/lib/about/thanks.ts`, con su nombre y, si se quiere, qué hicieron.
   - **Licencias de terceros**: todas las bibliotecas que usa la app, agrupadas por licencia, con sus autores, un buscador, el texto de cada licencia y un enlace a la página de cada proyecto. Arriba van los avisos especiales: UnRAR, libheif y sus decodificadores, FFmpeg y WebKit.
+  - «Ver la visita guiada» repite el primer uso guiado.
   - Una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
 - **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
 
@@ -276,10 +282,10 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
   - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
   - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
   - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
-  - **Efectos especiales**: situaciones (explosión, puñetazo, sorpresa, flashback…) o efectos sueltos en el plano que toca y en el punto de la imagen donde ocurren.
+  - **Efectos especiales**: situaciones (explosión, puñetazo, sorpresa, flashback…) o efectos sueltos en el plano que toca y en el punto de la imagen donde ocurren, con sus **onomatopeyas** («¡BOOM!») y **subtítulos**, carteles o cartelas de narración.
   - **Ajustes de imagen**: limpiar escaneos, blanco y negro, sepia, brillo, contraste… para una página o para todo el cómic.
   - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
-  - **Terminar**: exportar, seguir el progreso y revisar el MP4 final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
+  - **Terminar**: exportar en MP4, WebM o GIF (con el `.srt` de los subtítulos), seguir el progreso y revisar el vídeo final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
 - **Límites**: la IA no oye ni ve el movimiento (revisa con fotogramas y medidas), así que te pedirá que lo reproduzcas y escuches tú. Las imágenes que mira se envían a su servicio (Anthropic, OpenAI o Google) con tu cuenta.
 - **Gemini CLI** solo activa los servidores MCP en carpetas de confianza: abre la IA en una carpeta en la que confíes.
 - **Cómo funciona**: [docs/mcp.md](docs/mcp.md).
@@ -316,7 +322,7 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `Ctrl+Z` / `Ctrl+Mayús+Z` · `Ctrl+Y` | Deshacer / rehacer |
 | `P` | Reproducir desde la imagen actual / parar |
 | `D` | Panel de diagnóstico |
-| `F11` | Pantalla completa |
+| `F11` | Pantalla completa (`Esc` también sale) |
 | `Ctrl+O` / `Ctrl+Mayús+O` | Abrir archivo / abrir carpeta |
 | `Ctrl+R` | Recientes |
 | `Ctrl+W` | Cerrar y volver al inicio |
@@ -338,6 +344,7 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `Supr` | Mover la imagen a la papelera (carpetas) |
 | Botón derecho (clic corto) | Menú de la imagen |
 | `Ctrl+,` | Ajustes |
+| `?` · `F1` | Ver todos los atajos |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
 
@@ -440,7 +447,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
   - [x] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
   - [x] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
-  - [ ] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
+  - [x] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
   - [ ] Voces con IA (ElevenLabs): reparto, guion por viñeta, revisión antes de pedir y automatización por IA.
   - [ ] Pulido, pruebas en Linux, Ubuntu con Nvidia y Mac, versión 1.0.0 y documento «imgXplorer, la historia detrás».
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.

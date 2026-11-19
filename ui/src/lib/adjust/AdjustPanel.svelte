@@ -115,8 +115,8 @@
   .adjust {
     position: absolute; top: 10px; right: 10px; z-index: 5; width: 290px; max-height: calc(100% - 20px); overflow-y: auto;
     display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; font-size: 13px;
-    background: rgb(20 23 28 / 0.94); border: 1px solid var(--border); border-radius: 10px;
-    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45); backdrop-filter: blur(6px);
+    background: var(--float); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); backdrop-filter: blur(6px);
   }
   header { display: flex; align-items: center; justify-content: space-between; }
   .x { padding: 1px 7px; }

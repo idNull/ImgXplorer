@@ -8,6 +8,7 @@
   import ThirdParty from "./about/ThirdParty.svelte";
   import { loadLicenses, type Licenses } from "./about/licenses";
   import { THANKS, type Thanks } from "./about/thanks";
+  import { tour } from "./help/tour.svelte";
 
   const AUTHOR = "Pedro López del Castillo";
 
@@ -106,6 +107,7 @@
       <span class="chips">{#each s.items as it (it)}<span class="chip">{it}</span>{/each}</span>
     {/each}
   </div>
+  <button class="third" onclick={() => tour.start()}>🧭 {t("tourAgain")}</button>
   {#if licenses}
     <button class="third" onclick={() => (thirdParty = true)}>
       📜 {t("aboutThirdParty", { n: licenses.packages.length + licenses.special.length })}

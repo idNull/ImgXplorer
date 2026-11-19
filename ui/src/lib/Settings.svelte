@@ -17,12 +17,16 @@
     prefs.saveSettings();
   }
 
+  type Tab = "general" | "keys" | "ai" | "about";
   interface Props {
     onclose: () => void;
+    /** Pestaña con la que se abre (por defecto, «General»). */
+    initialTab?: Tab;
   }
-  let { onclose }: Props = $props();
+  let { onclose, initialTab = "general" }: Props = $props();
 
-  let tab = $state<"general" | "keys" | "ai" | "about">("general");
+  // svelte-ignore state_referenced_locally
+  let tab = $state<Tab>(initialTab);
   let capturing = $state<{ group: Group; action: string } | null>(null);
   let notice = $state<string | null>(null);
 
@@ -98,6 +102,7 @@
       video: { ...DEFAULT_VIDEO, ffmpeg: prefs.settings.video.ffmpeg },
       sound: { ...DEFAULT_SETTINGS.sound, input: prefs.settings.sound.input },
       keys: $state.snapshot(prefs.settings.keys),
+      tourDone: prefs.settings.tourDone,
     };
     save();
   }
@@ -146,6 +151,10 @@
         <label class="row">
           <span>{t("thumbsShow")}</span>
           <input type="checkbox" checked={s.showThumbs} onchange={(e) => set("showThumbs", e.currentTarget.checked)} />
+        </label>
+        <label class="row" title={t("hideBarsHelp")}>
+          <span>{t("hideBars")}</span>
+          <input type="checkbox" checked={s.hideBars} onchange={(e) => set("hideBars", e.currentTarget.checked)} />
         </label>
         <div class="row">
           <span>{t("thumbsSize")}</span>

@@ -32,7 +32,7 @@
   import type { ViewerStatus } from "./lib/viewer/types";
   import type { PictureRef } from "./lib/viewer/picture";
   import { coreVersion, wasm, type Size } from "./lib/core";
-  import { t } from "./lib/i18n.svelte";
+  import { label, t } from "./lib/i18n.svelte";
   import { log } from "./lib/log";
   import { startMcp } from "./lib/mcp/host.svelte";
   import McpBadge from "./lib/mcp/McpBadge.svelte";
@@ -50,6 +50,9 @@
   import ViewMenu, { type MenuItem } from "./lib/utils/ViewMenu.svelte";
   import SaveImage, { type SaveOptions, type SaveZone } from "./lib/utils/SaveImage.svelte";
   import { copyToClipboard, renderPage, saveTo } from "./lib/utils/imageOut";
+  import KeysHelp from "./lib/help/KeysHelp.svelte";
+  import Tour from "./lib/help/Tour.svelte";
+  import { tour } from "./lib/help/tour.svelte";
 
   interface DiagnosticsInfo {
     logDir: string | null;
@@ -285,6 +288,9 @@
   let infoOpen = $state(false);
   let saveZone = $state<SaveZone | null>(null);
   let viewMenu = $state<{ x: number; y: number } | null>(null);
+  /** Ayuda de atajos (?) y pestaña con la que se abren los ajustes. */
+  let helpOpen = $state(false);
+  let settingsTab = $state<"general" | "keys">("general");
   /** Zona elegida con Mayús + arrastrar. */
   let selection = $state<Box | null>(null);
   /** Lo que se ve, apuntado al abrir «Guardar como» (antes de que el diálogo cambie nada). */
@@ -390,6 +396,8 @@
       null,
       { label: `📂 ${t("infoReveal")}`, key: k("reveal"), run: reveal },
       { label: `🗑 ${t("trashGo")}`, key: k("trash"), danger: true, disabled: !folder, run: trashCurrent },
+      null,
+      { label: `⌨️ ${t("menuHelp")}`, key: k("help"), run: () => (helpOpen = true) },
     ];
   });
 
@@ -798,11 +806,138 @@
 
   async function toggleFullscreen() {
     const w = getCurrentWindow();
-    w.setFullscreen(!(await w.isFullscreen()));
+    await w.setFullscreen(!(await w.isFullscreen()));
+    await syncFullscreen();
   }
 
+  // Pantalla completa limpia: la cabecera y las miniaturas flotan sobre la imagen y se esconden
+  // a los 2 s sin mover el ratón cerca del borde (Ajustes → «Ocultar las barras…» lo desactiva).
+  let fullscreen = $state(false);
+  /** Menú «⋯» de la cabecera adaptable (abajo). */
+  let moreMenu = $state<{ x: number; y: number } | null>(null);
+  async function syncFullscreen() {
+    const was = fullscreen;
+    fullscreen = await getCurrentWindow().isFullscreen().catch(() => false);
+    if (fullscreen && !was) {
+      wakeBars();
+      if (prefs.settings.hideBars) say(t("fullscreenHint"));
+    }
+  }
+  const clean = $derived(fullscreen && prefs.settings.hideBars && !!source?.entries.length && !editorShown);
+  let barsAwake = $state(true);
+  let pointerIdle = $state(false);
+  let overBars = false;
+  let barsTimer = 0;
+  let idleTimer = 0;
+  let thumbsH = $state(0);
+  const barsHidden = $derived(clean && !barsAwake && !recentsOpen && !readingOpen && !moreMenu);
+  function wakeBars() {
+    barsAwake = true;
+    clearTimeout(barsTimer);
+    barsTimer = window.setTimeout(() => {
+      if (!overBars) barsAwake = false;
+    }, 2000);
+  }
+  function onPointerMove(e: PointerEvent) {
+    if (!clean) return;
+    pointerIdle = false;
+    clearTimeout(idleTimer);
+    idleTimer = window.setTimeout(() => (pointerIdle = true), 2000);
+    const edge = e.clientY < 56 || e.clientY > window.innerHeight - Math.max(40, thumbsH + 16);
+    if (edge || overBars) wakeBars();
+  }
+  $effect(() => {
+    if (!clean) {
+      barsAwake = true;
+      pointerIdle = false;
+    } else wakeBars();
+  });
+
+  // Cabecera adaptable: si la ventana es tan estrecha que los botones no caben, los que van al
+  // final de esta lista pasan (en este orden) al menú «⋯». Con un tamaño normal se ven todos.
+  type Fold = "export" | "editor" | "action" | "fullscreen" | "thumbs" | "rotate" | "actual" | "fit" | "zoom" | "open";
+  const FOLDS: Fold[] = ["export", "editor", "action", "fullscreen", "thumbs", "rotate", "actual", "fit", "zoom", "open"];
+  let folded = $state(0);
+  let headerEl: HTMLElement | undefined = $state();
+  let moreBtn: HTMLButtonElement | undefined = $state();
+  const shows = (f: Fold) => FOLDS.indexOf(f) >= folded;
+  function headerOverflows(): boolean {
+    const h = headerEl!;
+    const cs = getComputedStyle(h);
+    // El hueco y el título se estiran o encogen solos: no cuentan.
+    const kids = ([...h.children] as HTMLElement[]).filter((k) => !k.classList.contains("spacer") && !k.classList.contains("title"));
+    const gap = parseFloat(cs.columnGap) || 0;
+    const used = kids.reduce((a, k) => a + k.offsetWidth, 0) + gap * (kids.length + 1) + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    return used > h.clientWidth + 0.5;
+  }
+  let fitting = false;
+  async function fitHeader() {
+    if (!headerEl || fitting) return;
+    fitting = true;
+    try {
+      folded = 0;
+      await tick();
+      while (folded < FOLDS.length && headerOverflows()) {
+        folded++;
+        await tick();
+      }
+    } finally {
+      fitting = false;
+    }
+  }
+  $effect(() => {
+    // Cambia lo que ocupa la cabecera: título, idioma, botón de la IA…
+    void [source?.title, t("open"), prefs.settings.aiControl, clean];
+    void tick().then(fitHeader);
+  });
+  $effect(() => {
+    if (!headerEl) return;
+    const ro = new ResizeObserver(() => void fitHeader());
+    ro.observe(headerEl);
+    return () => ro.disconnect();
+  });
+  function openMore() {
+    const r = moreBtn!.getBoundingClientRect();
+    moreMenu = { x: r.left, y: r.bottom + 4 };
+  }
+  const moreItems = $derived.by((): MenuItem[] => {
+    const k = (a: ViewerAction) => kt(a).trim().replace(/^\(|\)$/g, "");
+    const all: [Fold, MenuItem[]][] = [
+      ["open", [
+        { label: `📄 ${t("openFile")}`, key: k("openFile"), run: pickFile },
+        { label: `📁 ${t("open")}`, key: k("openFolder"), run: pickFolder },
+      ]],
+      ["zoom", [
+        { label: `＋ ${label("kv.zoomIn")}`, key: k("zoomIn"), disabled: !source, run: zoomIn },
+        { label: `－ ${label("kv.zoomOut")}`, key: k("zoomOut"), disabled: !source, run: zoomOut },
+      ]],
+      ["fit", [{ label: `⤢ ${t("fit")}`, key: k("fit"), disabled: !source, run: () => viewer.fit() }]],
+      ["actual", [{ label: `1:1 ${t("actual")}`, key: k("actual"), disabled: !source, run: () => viewer.actualSize() }]],
+      ["rotate", [{ label: `⟳ ${t("rotate")}`, key: k("rotateCw"), disabled: !source, run: () => viewer.rotate(90) }]],
+      ["thumbs", [{ label: `▦ ${t("thumbs")}${prefs.settings.showThumbs ? " ✓" : ""}`, key: k("thumbs"), run: toggleThumbs }]],
+      ["fullscreen", [{ label: `⛶ ${t("fullscreen")}${fullscreen ? " ✓" : ""}`, key: k("fullscreen"), run: toggleFullscreen }]],
+      ["action", [{ label: `🎬 ${t("action")}${actionOpen ? " ✓" : ""}`, key: k("action"), disabled: !source, run: () => (actionOpen = !actionOpen) }]],
+      ["editor", [{ label: `✎ ${t("editor")}${editorOpen ? " ✓" : ""}`, key: k("editor"), disabled: !source, run: () => (editorOpen = !editorOpen) }]],
+      ["export", [{ label: `🎞 ${t("exportVideo")}`, key: k("exportVideo"), disabled: !source?.entries.length, run: openExport }]],
+    ];
+    // En el orden de la cabecera (de izquierda a derecha).
+    return all.filter(([f]) => !shows(f)).flatMap(([, items]) => items);
+  });
+
+  // Primer uso guiado: sale sola una vez, cuando ya se saben los ajustes.
+  $effect(() => {
+    if (prefs.loaded && !prefs.settings.tourDone && tour.step < 0) untrack(() => tour.start());
+  });
+  $effect(() => {
+    if (tour.step >= 0) untrack(() => {
+      settingsOpen = false;
+      helpOpen = false;
+    });
+  });
+
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone) return; // los diálogos gestionan sus teclas
+    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone || helpOpen || tour.step >= 0) return; // los diálogos gestionan sus teclas
+    if ((viewMenu || moreMenu) && e.key === "Escape") return; // lo cierra el propio menú
     const tgt = e.target;
     // En los campos de texto las teclas son para escribir. En listas, deslizadores y casillas
     // solo se quedan las teclas sueltas (flechas…): los atajos con Ctrl siguen funcionando.
@@ -848,6 +983,10 @@
       return e.preventDefault();
     }
     const action = viewerKeys.get(combo);
+    if (!action && e.key === "Escape" && fullscreen) {
+      void getCurrentWindow().setFullscreen(false).then(syncFullscreen);
+      return e.preventDefault();
+    }
     if (!action) return;
     const zoomed = viewer?.isZoomedIn();
     const step = e.shiftKey ? 240 : 80;
@@ -878,7 +1017,7 @@
       case "openFile": pickFile(); break;
       case "openFolder": pickFolder(); break;
       case "recents": recentsOpen = !recentsOpen; break;
-      case "settings": settingsOpen = true; break;
+      case "settings": settingsTab = "general"; settingsOpen = true; break;
       case "editor": if (source) editorOpen = !editorOpen; break;
       case "exportVideo": openExport(); break;
       case "closeSource": closeSource(); break;
@@ -902,6 +1041,7 @@
       case "reveal": reveal(); break;
       // Con el editor abierto, Supr es para borrar lo seleccionado en él (nunca la imagen).
       case "trash": if (source?.entries.length && !editorShown && !panelEdit) trashCurrent(); break;
+      case "help": helpOpen = true; break;
     }
     e.preventDefault();
   }
@@ -981,6 +1121,8 @@
       prefs.flush();
     });
     // macOS: archivo abierto desde Finder con la app ya en marcha.
+    void syncFullscreen();
+    const unResize = getCurrentWindow().onResized(() => void syncFullscreen());
     const unOpen = listen<string>("open-path", (e) => {
       void invoke("initial_path"); // ya atendido: que no se vuelva a abrir al recargar
       openPath(e.payload);
@@ -999,18 +1141,22 @@
       un.then((f) => f());
       unOpen.then((f) => f());
       unClose.then((f) => f());
+      unResize.then((f) => f());
     };
   });
 </script>
 
 <svelte:window onkeydown={onKey} onkeyup={onKeyUp} onblur={onBlur} />
 
-<main>
-  <header>
-    <button onclick={pickFile} title="{t('openFile')}{kt('openFile')}">{t("openFile")}</button>
-    <button onclick={pickFolder} title="{t('open')}{kt('openFolder')}">{t("open")}</button>
+<main class:clean class:bars-off={barsHidden} class:idle={clean && pointerIdle && barsHidden} onpointermove={onPointerMove}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <header bind:this={headerEl} onpointerenter={() => (overBars = true)} onpointerleave={() => { overBars = false; if (clean) wakeBars(); }}>
+    {#if shows("open")}
+      <button data-tour="open" onclick={pickFile} title="{t('openFile')}{kt('openFile')}">{t("openFile")}</button>
+      <button data-tour="open" onclick={pickFolder} title="{t('open')}{kt('openFolder')}">{t("open")}</button>
+    {/if}
     <div class="menu">
-      <button onclick={() => (recentsOpen = !recentsOpen)} class:on={recentsOpen} title="{t('recents')}{kt('recents')}">🕘 ▾</button>
+      <button data-tour="open" onclick={() => (recentsOpen = !recentsOpen)} class:on={recentsOpen} title="{t('recents')}{kt('recents')}">🕘 ▾</button>
       {#if recentsOpen}
         <div class="backdrop" role="presentation" onclick={() => (recentsOpen = false)}></div>
         <div class="popup">
@@ -1026,16 +1172,18 @@
     <button onclick={() => pageStep(-1)} disabled={!source || spreadNow[0] === 0} title="{t('prev')}{kt('prev')}">◀</button>
     <span class="counter">{source && source.entries.length ? `${spreadNow.map((i) => i + 1).join("–")} / ${source.entries.length}` : "–"}</span>
     <button onclick={() => pageStep(1)} disabled={!source || spreadNow[spreadNow.length - 1] >= source.entries.length - 1} title="{t('next')}{kt('next')}">▶</button>
-    <button onclick={zoomOut} title={kt("zoomOut").trim()}>−</button>
-    <span class="zoom">{status?.image ? `${status.zoomPercent}%` : ""}</span>
-    <button onclick={zoomIn} title={kt("zoomIn").trim()}>+</button>
-    <button onclick={() => viewer.fit()} title="{t('fit')}{kt('fit')}">{t("fit")}</button>
-    <button onclick={() => viewer.actualSize()} title="{t('actual')}{kt('actual')}">1:1</button>
-    <button onclick={() => viewer.rotate(90)} title="{t('rotate')}{kt('rotateCw')}">⟳</button>
-    <button class="adj-btn" onclick={() => (adjustOpen = !adjustOpen)} class:on={adjustOpen} class:dot={!!curAdjust || prefs.settings.night}
+    {#if shows("zoom")}
+      <button onclick={zoomOut} title="{label('kv.zoomOut')}{kt('zoomOut')}">−</button>
+      <span class="zoom">{status?.image ? `${status.zoomPercent}%` : ""}</span>
+      <button onclick={zoomIn} title="{label('kv.zoomIn')}{kt('zoomIn')}">+</button>
+    {/if}
+    {#if shows("fit")}<button onclick={() => viewer.fit()} title="{t('fit')}{kt('fit')}">{t("fit")}</button>{/if}
+    {#if shows("actual")}<button onclick={() => viewer.actualSize()} title="{t('actual')}{kt('actual')}">1:1</button>{/if}
+    {#if shows("rotate")}<button onclick={() => viewer.rotate(90)} title="{t('rotate')}{kt('rotateCw')}">⟳</button>{/if}
+    <button class="adj-btn" data-tour="adjust" onclick={() => (adjustOpen = !adjustOpen)} class:on={adjustOpen} class:dot={!!curAdjust || prefs.settings.night}
       disabled={!source} title="{t('adjButton')}{kt('adjust')}">🎨</button>
     <div class="menu">
-      <button class="adj-btn read-btn" onclick={() => (readingOpen = !readingOpen)} class:on={readingOpen}
+      <button class="adj-btn read-btn" data-tour="reading" onclick={() => (readingOpen = !readingOpen)} class:on={readingOpen}
         class:dot={rd.fit !== "window" || rd.crop || rd.double || rd.strip || rd.rtl} disabled={!source} title="{t('readButton')}{kt('reading')}">📖</button>
       {#if readingOpen && source}
         <div class="backdrop" role="presentation" onclick={() => (readingOpen = false)}></div>
@@ -1045,13 +1193,22 @@
         </div>
       {/if}
     </div>
-    <button onclick={toggleThumbs} class:on={prefs.settings.showThumbs} title="{t('thumbs')}{kt('thumbs')}">▦</button>
-    <button onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
-    <button onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
-    <button onclick={openExport} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
+    {#if shows("thumbs")}<button onclick={toggleThumbs} class:on={prefs.settings.showThumbs} title="{t('thumbs')}{kt('thumbs')}">▦</button>{/if}
+    {#if shows("action")}
+      <button data-tour="action" onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
+    {/if}
+    {#if shows("editor")}
+      <button data-tour="editor" onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
+    {/if}
+    {#if shows("export")}
+      <button data-tour="export" onclick={openExport} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
+    {/if}
     <McpBadge onstop={stopAi} />
-    <button onclick={toggleFullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>
-    <button onclick={() => (settingsOpen = true)} title="{t('settings')}{kt('settings')}">⚙</button>
+    {#if shows("fullscreen")}<button onclick={toggleFullscreen} class:on={fullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>{/if}
+    {#if folded > 0}
+      <button bind:this={moreBtn} data-tour="more" class:on={!!moreMenu} onclick={openMore} title={t("moreButtons")} aria-haspopup="menu">⋯</button>
+    {/if}
+    <button data-tour="settings" onclick={() => { settingsTab = "general"; settingsOpen = true; }} title="{t('settings')}{kt('settings')}">⚙</button>
   </header>
 
   {#if diag?.previousCrash}
@@ -1152,6 +1309,7 @@
             <div class="start-list"><Recents onopen={openRecent} /></div>
           {/if}
         {/if}
+        <button class="start-keys" onclick={() => (helpOpen = true)}>⌨️ {t("startKeysHint")}</button>
       </div>
     {:else if !source.entries.length}
       <div class="hint">{t("noImages")}</div>
@@ -1212,6 +1370,8 @@
   {/if}
 
   {#if prefs.settings.showThumbs && source && source.entries.length > 1}
+    <div class="thumbs-wrap" bind:offsetHeight={thumbsH} role="presentation"
+      onpointerenter={() => (overBars = true)} onpointerleave={() => { overBars = false; if (clean) wakeBars(); }}>
     <Thumbs
       count={source.entries.length}
       current={index}
@@ -1222,11 +1382,12 @@
       marks={markSet}
       shown={spreadNow}
     />
+    </div>
   {/if}
 </main>
 
 {#if settingsOpen}
-  <Settings onclose={() => (settingsOpen = false)} />
+  <Settings initialTab={settingsTab} onclose={() => (settingsOpen = false)} />
 {/if}
 
 {#if exportOpen && source}
@@ -1250,6 +1411,13 @@
 {#if confirmSpec}<Confirm spec={confirmSpec} onanswer={answer} />{/if}
 
 {#if viewMenu}<ViewMenu x={viewMenu.x} y={viewMenu.y} items={viewMenuItems} onclose={() => (viewMenu = null)} />{/if}
+{#if moreMenu}<ViewMenu x={moreMenu.x} y={moreMenu.y} items={moreItems} onclose={() => (moreMenu = null)} />{/if}
+
+{#if helpOpen}
+  <KeysHelp onclose={() => (helpOpen = false)} onedit={() => { helpOpen = false; settingsTab = "keys"; settingsOpen = true; }} />
+{/if}
+
+<Tour />
 
 {#if saveZone && source?.entries[index]}
   <SaveImage original={(/\.([^.]+)$/.exec(source.entries[index].name)?.[1] ?? "").toUpperCase()} canVisible={!!visibleAtSave}
@@ -1257,15 +1425,30 @@
 {/if}
 
 <style>
-  main { display: flex; flex-direction: column; height: 100%; }
+  main { position: relative; display: flex; flex-direction: column; height: 100%; }
+  /* Pantalla completa limpia: las barras flotan sobre la imagen y se esconden solas. */
+  main.clean header, main.clean .thumbs-wrap {
+    position: absolute; left: 0; right: 0; z-index: 30; transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  main.clean header { top: 0; box-shadow: 0 4px 18px rgb(0 0 0 / 0.4); }
+  main.clean .thumbs-wrap { bottom: 0; }
+  main.bars-off header { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+  main.bars-off .thumbs-wrap { transform: translateY(100%); opacity: 0; pointer-events: none; }
+  main.idle, main.idle :global(*) { cursor: none !important; }
+  .thumbs-wrap { flex: none; }
+  .start-keys { margin-top: 10px; background: none; border-color: transparent; color: var(--muted); font-size: 12px; }
+  .start-keys:hover { color: var(--text); }
   header {
     display: flex; align-items: center; gap: 6px; padding: 6px 10px;
     background: var(--panel); border-bottom: 1px solid var(--border); user-select: none;
   }
-  .title { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Los botones no se encogen ni parten su texto: si no caben, pasan al menú «⋯». */
+  header > :global(*) { flex-shrink: 0; }
+  header :global(button) { white-space: nowrap; }
+  .title { flex-shrink: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .close-src { padding: 0 6px; background: none; border-color: transparent; color: var(--muted); flex-shrink: 0; }
   .close-src:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
-  .spacer { flex: 1; }
+  .spacer { flex: 1 1 0; }
   .counter, .zoom { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
   .body { flex: 1; min-height: 0; display: flex; }
   .stage { position: relative; flex: 1; min-width: 0; }
@@ -1303,14 +1486,14 @@
   .reading-popup { width: 330px; left: auto; right: 0; }
   .ask {
     position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 8px;
-    padding: 6px 10px; border-radius: 8px; background: rgb(20 23 28 / 0.95); border: 1px solid var(--accent); font-size: 13px;
-    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+    padding: 6px 10px; border-radius: 8px; background: var(--float); border: 1px solid var(--accent); font-size: 13px;
+    box-shadow: var(--shadow);
   }
   .ask button { padding: 2px 10px; font-size: 12px; }
   .sel-bar {
     position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; border-radius: 8px; background: rgb(20 23 28 / 0.95); border: 1px solid #fbbf24; font-size: 12.5px;
-    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+    padding: 5px 8px; border-radius: 8px; background: var(--float); border: 1px solid #fbbf24; font-size: 12.5px;
+    box-shadow: var(--shadow);
   }
   .sel-bar button { padding: 2px 9px; font-size: 12px; }
   .ask .primary { background: var(--accent); color: #04121b; border-color: var(--accent); font-weight: 600; }
@@ -1318,7 +1501,7 @@
   .menu .backdrop { position: fixed; inset: 0; z-index: 9; }
   .popup {
     position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; width: 440px; max-height: 60vh; overflow-y: auto;
-    padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+    padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
   }
   .start {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;

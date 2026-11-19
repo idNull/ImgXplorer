@@ -174,7 +174,8 @@ Al hacerlo: los subtítulos son un tipo de efecto más (`caption`) en la fila *�
   - **GIF** (en dos pasadas, con paleta, y aviso si va a pesar mucho);
   - ajuste rápido **«Para redes (vertical 9:16)»**, sobre la forma «vertical» que ya existe.
 
-## Fase 6 — Comodidad y diseño ✨
+## Fase 6 — Comodidad y diseño ✨ ✅
+Al hacerlo: la ayuda también se abre con `F1`, desde el menú del clic derecho y desde la pantalla de inicio, e incluye los gestos del ratón y del touchpad. En pantalla completa limpia las barras flotan sobre la imagen (así no se recoloca al aparecer), el puntero se esconde y `Esc` sale. La visita guiada señala los botones de la cabecera (o «⋯» si están plegados). Los botones de la cabecera ya no se encogen ni parten su texto en dos líneas: pasan a «⋯» en este orden: Exportar, Editor, Modo Acción, pantalla completa, miniaturas, rotar, 1:1, Ajustar, zoom y abrir. Los paneles flotantes comparten las variables `--float` y `--shadow`, y hay un foco visible común para el teclado.
 - **Ayuda de atajos** (`?`): ventana con los atajos agrupados y un buscador. Se genera desde `keys.ts`, así siempre está al día, y respeta los atajos cambiados.
 - **Pantalla completa limpia:**
   - la cabecera y las miniaturas se ocultan solas al cabo de 2 s sin mover el ratón;

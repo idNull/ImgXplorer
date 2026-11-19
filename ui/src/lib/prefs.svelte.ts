@@ -45,6 +45,10 @@ export interface Settings {
   progressBar: boolean;
   /** Pantalla de inicio: estantería con portadas o la lista de siempre. */
   startView: "covers" | "list";
+  /** Pantalla completa limpia: la cabecera y las miniaturas se ocultan solas (desactivado = siempre a la vista). */
+  hideBars: boolean;
+  /** Ya se vio (o se saltó) la visita guiada del primer uso. */
+  tourDone: boolean;
   keys: KeyOverrides;
 }
 
@@ -142,6 +146,8 @@ export const DEFAULT_SETTINGS: Settings = {
   night: false,
   progressBar: true,
   startView: "covers",
+  hideBars: true,
+  tourDone: false,
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -176,6 +182,8 @@ function clean(raw: unknown): Settings {
   if (typeof r.night === "boolean") s.night = r.night;
   if (typeof r.progressBar === "boolean") s.progressBar = r.progressBar;
   if (r.startView === "covers" || r.startView === "list") s.startView = r.startView;
+  if (typeof r.hideBars === "boolean") s.hideBars = r.hideBars;
+  if (typeof r.tourDone === "boolean") s.tourDone = r.tourDone;
   s.keys = cleanOverrides(r.keys);
   return s;
 }

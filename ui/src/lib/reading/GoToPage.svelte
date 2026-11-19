@@ -46,7 +46,7 @@
 <style>
   .goto {
     position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; padding: 8px 12px;
-    background: rgb(20 23 28 / 0.96); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+    background: var(--float); border: 1px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow);
   }
   label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   input { width: 76px; font-variant-numeric: tabular-nums; }

@@ -20,6 +20,14 @@
   };
 </script>
 
+<svelte:window onkeydowncapture={(e) => {
+  if (open && e.key === "Escape") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    open = false;
+  }
+}} />
+
 {#if shown}
   <div class="wrap">
     <button class="badge" class:busy={!!mcp.busy} onclick={() => (open = !open)} title={t("aiConnectedHelp")}>
