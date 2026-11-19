@@ -4,7 +4,7 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { openFile, openFolder, fileDialog, dirOf } from "./lib/files/dialog.svelte";
+  import { openFile, openFolder, saveFile, fileDialog, dirOf } from "./lib/files/dialog.svelte";
   import FileDialog from "./lib/files/FileDialog.svelte";
   import ExportDialog from "./lib/export/ExportDialog.svelte";
   import type { ExportSpec } from "./lib/export/exporter";
@@ -45,6 +45,11 @@
   import { reading, type Reading } from "./lib/reading/reading.svelte";
   import { boxes } from "./lib/reading/boxes.svelte";
   import { spreadOf, spreadStep, type Framing, type ReadLayout } from "./lib/reading/layout";
+  import type { Box } from "./lib/reading/boxes.svelte";
+  import InfoPanel from "./lib/utils/InfoPanel.svelte";
+  import ViewMenu, { type MenuItem } from "./lib/utils/ViewMenu.svelte";
+  import SaveImage, { type SaveOptions, type SaveZone } from "./lib/utils/SaveImage.svelte";
+  import { copyToClipboard, renderPage, saveTo } from "./lib/utils/imageOut";
 
   interface DiagnosticsInfo {
     logDir: string | null;
@@ -275,6 +280,118 @@
     });
     if (file) openPath(file);
   }
+
+  // ── Utilidades (ℹ️): información, copiar, guardar, recortar, carpeta y papelera ──
+  let infoOpen = $state(false);
+  let saveZone = $state<SaveZone | null>(null);
+  let viewMenu = $state<{ x: number; y: number } | null>(null);
+  /** Zona elegida con Mayús + arrastrar. */
+  let selection = $state<Box | null>(null);
+  /** Lo que se ve, apuntado al abrir «Guardar como» (antes de que el diálogo cambie nada). */
+  let visibleAtSave = $state<Box | null>(null);
+
+  async function outCanvas(zone: SaveZone, withAdjust: boolean): Promise<HTMLCanvasElement> {
+    const s = source!;
+    const i = index;
+    const adj = withAdjust ? await sequence.adjust!(i) : null;
+    const box = zone === "selection" ? selection : zone === "visible" ? visibleAtSave : null;
+    return renderPage(ref(s, i), adj, box);
+  }
+
+  async function copyImage() {
+    if (!source?.entries.length) return;
+    say(t("copying"));
+    try {
+      await copyToClipboard(await outCanvas(selection ? "selection" : "page", true));
+      say(t(selection ? "copiedZone" : "copiedImage"));
+    } catch (e) {
+      log.warn("copiar imagen:", e);
+      say(t("copyError", { error: String(e) }));
+    }
+  }
+
+  function openSave() {
+    if (!source?.entries.length) return;
+    visibleAtSave = viewer.visibleBox();
+    saveZone = selection ? "selection" : "page";
+  }
+
+  async function doSave(o: SaveOptions) {
+    saveZone = null;
+    const s = source;
+    if (!s) return;
+    const i = index;
+    const name = s.entries[i].name;
+    const file = name.slice(name.lastIndexOf("/") + 1);
+    const stem = file.replace(/\.[^.]+$/, "");
+    const ext = o.format === "original" ? (/\.([^.]+)$/.exec(file)?.[1] ?? "png") : o.format === "png" ? "png" : "jpg";
+    const suffix = o.zone === "page" ? "" : o.zone === "visible" ? t("saveImgSuffixVisible") : t("saveImgSuffixCrop");
+    const path = await saveFile({
+      title: t("saveImgTitle"),
+      dir: s.kind === "folder" ? s.path : dirOf(s.path),
+      defaultName: `${stem}${suffix}.${ext}`,
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+    });
+    if (!path) return;
+    say(t("saving"));
+    try {
+      if (o.format === "original") await invoke("save_original", { generation: s.generation, index: i, path });
+      else await saveTo(path, await outCanvas(o.zone, o.adjust), o.format === "png" ? "image/png" : "image/jpeg");
+      say(t("savedImage", { path }));
+    } catch (e) {
+      log.warn("guardar imagen:", e);
+      say(t("saveImgError", { error: String(e) }));
+    }
+  }
+
+  function reveal() {
+    if (source?.entries.length) invoke("reveal_entry", { generation: source.generation, index }).catch((e) => say(String(e)));
+  }
+
+  /** Mover a la papelera del sistema (solo en carpetas), preguntando antes. */
+  async function trashCurrent() {
+    const s = source;
+    const name = curEntry;
+    if (!s || name === null) return;
+    if (s.kind !== "folder") return say(t("trashArchive"));
+    const v = await askUser({
+      title: t("trashTitle"),
+      message: t("trashMessage", { name }),
+      detail: t("trashDetail"),
+      buttons: [
+        { label: t("cancel"), value: "cancel" },
+        { label: t("trashGo"), value: "go", danger: true },
+      ],
+      cancel: "cancel",
+    });
+    if (v !== "go") return;
+    try {
+      await invoke("trash_entry", { generation: s.generation, index });
+      // La lista de la carpeta ha cambiado: se vuelve a abrir en la misma posición.
+      await openPath(s.path);
+      say(t("trashed", { name }));
+    } catch (e) {
+      log.warn("papelera:", e);
+      say(t("trashError", { error: String(e) }));
+    }
+  }
+
+  const viewMenuItems = $derived.by((): (MenuItem | null)[] => {
+    const k = (a: ViewerAction) => kt(a).trim().replace(/^\(|\)$/g, "");
+    const folder = source?.kind === "folder";
+    return [
+      { label: `ℹ️ ${t("infoTitle")}`, key: k("info"), run: () => (infoOpen = !infoOpen) },
+      { label: `📋 ${t(selection ? "menuCopyZone" : "menuCopy")}`, key: k("copyImage"), run: copyImage },
+      { label: `💾 ${t("saveImgTitle")}`, key: k("saveImage"), run: openSave },
+      { label: `✂ ${t("menuCropHint")}`, hint: true },
+      null,
+      { label: `🔖 ${t(markSet.has(index) ? "menuUnmark" : "menuMark")}`, key: k("bookmark"), run: toggleMark },
+      { label: `↪ ${t("readGoTo")}`, key: k("goTo"), run: () => (gotoOpen = true) },
+      null,
+      { label: `📂 ${t("infoReveal")}`, key: k("reveal"), run: reveal },
+      { label: `🗑 ${t("trashGo")}`, key: k("trash"), danger: true, disabled: !folder, run: trashCurrent },
+    ];
+  });
 
   function go(i: number) {
     if (!source || !source.entries.length) return;
@@ -685,7 +802,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec) return; // los diálogos gestionan sus teclas
+    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone) return; // los diálogos gestionan sus teclas
     const tgt = e.target;
     // En los campos de texto las teclas son para escribir. En listas, deslizadores y casillas
     // solo se quedan las teclas sueltas (flechas…): los atajos con Ctrl siguen funcionando.
@@ -712,6 +829,14 @@
     }
     if (panelEdit && e.key === "Escape") {
       finishPanelEdit();
+      return e.preventDefault();
+    }
+    if (selection && e.key === "Escape") {
+      viewer?.clearSelection();
+      return e.preventDefault();
+    }
+    if (infoOpen && e.key === "Escape" && !editorShown) {
+      infoOpen = false;
       return e.preventDefault();
     }
     if (gotoOpen && e.key === "Escape") {
@@ -771,6 +896,12 @@
       case "loupe": lensKey = true; viewer?.setLens(true); break;
       case "goTo": if (source?.entries.length) gotoOpen = true; break;
       case "bookmark": toggleMark(); break;
+      case "info": if (source?.entries.length) infoOpen = !infoOpen; break;
+      case "copyImage": copyImage(); break;
+      case "saveImage": openSave(); break;
+      case "reveal": reveal(); break;
+      // Con el editor abierto, Supr es para borrar lo seleccionado en él (nunca la imagen).
+      case "trash": if (source?.entries.length && !editorShown && !panelEdit) trashCurrent(); break;
     }
     e.preventDefault();
   }
@@ -955,11 +1086,25 @@
       {framing}
       onsize={onSize}
       onindex={(i) => (index = i)}
+      onselect={(b) => (selection = b)}
+      oncontext={(x, y) => source?.entries.length && (viewMenu = { x, y })}
     />
     {#if frame}<span class="frame-tag" title={t("frameHelp")}>{t(frame.video ? "frameTagVideo" : "frameTag", { w: frame.pw, h: frame.ph })}</span>{/if}
     </div>
     {#if adjustOpen && source}
       <AdjustPanel {store} entry={curEntry} size={curSize} {analyzing} onclose={() => (adjustOpen = false)} />
+    {/if}
+    {#if infoOpen && source?.entries[index]}
+      <InfoPanel generation={source.generation} {index} count={source.entries.length} name={source.entries[index].name}
+        bytes={source.entries[index].size} pixels={status?.image ?? null} source={source.path} onreveal={reveal} onclose={() => (infoOpen = false)} />
+    {/if}
+    {#if selection}
+      <div class="sel-bar" role="toolbar">
+        <span>✂ {t("selTitle")}</span>
+        <button onclick={copyImage}>📋 {t("menuCopy")}</button>
+        <button onclick={openSave}>💾 {t("selSave")}</button>
+        <button onclick={() => viewer.clearSelection()} title={t("close")}>✕</button>
+      </div>
     {/if}
     {#if gotoOpen && source}
       <GoToPage count={source.entries.length} current={index} ongo={go} onclose={() => (gotoOpen = false)} />
@@ -1104,6 +1249,13 @@
 
 {#if confirmSpec}<Confirm spec={confirmSpec} onanswer={answer} />{/if}
 
+{#if viewMenu}<ViewMenu x={viewMenu.x} y={viewMenu.y} items={viewMenuItems} onclose={() => (viewMenu = null)} />{/if}
+
+{#if saveZone && source?.entries[index]}
+  <SaveImage original={(/\.([^.]+)$/.exec(source.entries[index].name)?.[1] ?? "").toUpperCase()} canVisible={!!visibleAtSave}
+    canSelection={!!selection} adjusted={!!curAdjust} zone={saveZone} onsave={doSave} oncancel={() => (saveZone = null)} />
+{/if}
+
 <style>
   main { display: flex; flex-direction: column; height: 100%; }
   header {
@@ -1155,6 +1307,12 @@
     box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
   }
   .ask button { padding: 2px 10px; font-size: 12px; }
+  .sel-bar {
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 8px; background: rgb(20 23 28 / 0.95); border: 1px solid #fbbf24; font-size: 12.5px;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+  }
+  .sel-bar button { padding: 2px 9px; font-size: 12px; }
   .ask .primary { background: var(--accent); color: #04121b; border-color: var(--accent); font-weight: 600; }
   .menu { position: relative; }
   .menu .backdrop { position: fixed; inset: 0; z-index: 9; }

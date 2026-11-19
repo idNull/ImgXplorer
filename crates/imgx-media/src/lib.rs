@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod decode;
 pub mod folder;
+pub mod info;
 pub mod levels;
 pub mod natural;
 pub mod panels;

@@ -11,6 +11,7 @@ mod pack;
 mod prefs;
 mod project;
 mod serve;
+mod utils;
 
 use imgx_media::panels::PanelRect;
 use imgx_media::{Source, SourceKind};
@@ -274,6 +275,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(diagnostics::log_plugin())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::default())
         .manage(diagnostics::Diagnostics::default())
         .manage(export::Exporter::default())
@@ -295,6 +297,12 @@ pub fn run() {
             covers::cover,
             covers::forget_cover,
             covers::show_in_folder,
+            utils::image_info,
+            utils::copy_image,
+            utils::save_image,
+            utils::save_original,
+            utils::reveal_entry,
+            utils::trash_entry,
             project::save_project,
             prefs::load_prefs,
             prefs::save_prefs,

@@ -138,7 +138,9 @@ Se recuerda **por cómic**. Al hacerlo, se guardó en un archivo propio, `readin
 - **Buscador** (solo si hay más de 12) y orden por «recientes · nombre · progreso».
 - Se mantienen la zona para soltar archivos y los botones Abrir.
 
-## Fase 4 — Utilidades ℹ️
+## Fase 4 — Utilidades ℹ️ ✅
+Al hacerlo: las utilidades se abren con un **clic corto del botón derecho** (mantenerlo sigue siendo la lupa), sin botón nuevo en la cabecera. Al guardar, en vez de teselas, el lado mayor se limita a 8192 px (lo que admiten la GPU y el lienzo de WebKit), y se añadió «Original» para guardar una copia exacta del archivo.
+
 - **Información** (`I`): panel lateral pequeño con:
   - nombre, tamaño en píxeles, peso, formato y posición en el cómic;
   - **datos de la cámara (EXIF)**: modelo, fecha, objetivo y exposición, con `kamadak-exif`, que ya es dependencia;

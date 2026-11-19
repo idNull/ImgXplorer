@@ -49,6 +49,11 @@ export const DEFAULTS = {
     loupe: ["z", "Z"],
     goTo: ["Ctrl+g"],
     bookmark: ["b", "B"],
+    info: ["i", "I"],
+    copyImage: ["Ctrl+c"],
+    saveImage: ["Ctrl+s"],
+    reveal: [],
+    trash: ["Delete"],
   },
   player: {
     toggle: [" "],

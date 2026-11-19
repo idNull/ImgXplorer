@@ -44,11 +44,15 @@
     onsize?: (index: number, size: Size) => void;
     /** En la tira vertical, la página del centro de la vista ha cambiado. */
     onindex?: (index: number) => void;
+    /** Mayús + arrastrar ha elegido una zona de la imagen (normalizada); `null` al quitarla. */
+    onselect?: (box: Box | null) => void;
+    /** Clic corto con el botón derecho (mantenerlo es la lupa): menú de la imagen. */
+    oncontext?: (x: number, y: number) => void;
   }
 
   let {
     item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null, adjust = null,
-    layout = null, framing = null, onsize, onindex,
+    layout = null, framing = null, onsize, onindex, onselect, oncontext,
   }: Props = $props();
 
   interface Slot {
@@ -160,6 +164,10 @@
 
   function show(slot: Slot, resetPose: boolean, sp: typeof spread = null) {
     const changed = shown !== slot || spread?.key !== sp?.key;
+    if (changed && sel) {
+      sel = null;
+      onselect?.(null);
+    }
     spread = sp;
     shown = touchSlot(slot);
     if (resetPose) {
@@ -337,6 +345,56 @@
   }
 
   /** La próxima imagen que se muestre se encuadra por el final (volviendo atrás al leer). */
+  /** Zona de la imagen que se ve ahora (normalizada), en una sola página; `null` si no aplica. */
+  export function visibleBox(): Box | null {
+    if (!shown || spread || strip || player) return null;
+    const { w, h } = shown.size;
+    const [a, b, c, d, ex, fy] = viewMatrix(pose, shown.size, vp);
+    const det = a * d - b * c;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const [px, py] of [[0, 0], [vp.w, 0], [0, vp.h], [vp.w, vp.h]]) {
+      const x = px - ex;
+      const y = py - fy;
+      xs.push((d * x - c * y) / det / w);
+      ys.push((-b * x + a * y) / det / h);
+    }
+    const x0 = Math.max(0, Math.min(...xs));
+    const y0 = Math.max(0, Math.min(...ys));
+    const x1 = Math.min(1, Math.max(...xs));
+    const y1 = Math.min(1, Math.max(...ys));
+    return x1 - x0 > 1e-3 && y1 - y0 > 1e-3 ? [x0, y0, x1 - x0, y1 - y0] : null;
+  }
+
+  /** Zona elegida con Mayús + arrastrar (coordenadas normalizadas de la imagen actual). */
+  let sel: { x0: number; y0: number; x1: number; y1: number; dragging: boolean } | null = null;
+
+  export function clearSelection() {
+    if (!sel) return;
+    sel = null;
+    dirty = true;
+    onselect?.(null);
+  }
+
+  function selBox(): Box | null {
+    if (!sel) return null;
+    const x0 = Math.max(0, Math.min(sel.x0, sel.x1));
+    const y0 = Math.max(0, Math.min(sel.y0, sel.y1));
+    const x1 = Math.min(1, Math.max(sel.x0, sel.x1));
+    const y1 = Math.min(1, Math.max(sel.y0, sel.y1));
+    return x1 - x0 > 0.005 && y1 - y0 > 0.005 ? [x0, y0, x1 - x0, y1 - y0] : null;
+  }
+
+  /** Punto de la vista → punto normalizado de la imagen actual (sin límites). */
+  function toImage(clientX: number, clientY: number): [number, number] {
+    const r = canvas.getBoundingClientRect();
+    const [a, b, c, d, ex, fy] = viewMatrix(pose, shown!.size, vp);
+    const x = clientX - r.left - ex;
+    const y = clientY - r.top - fy;
+    const det = a * d - b * c;
+    return [(d * x - c * y) / det / shown!.size.w, (-b * x + a * y) / det / shown!.size.h];
+  }
+
   export function arriveAtEnd() {
     arriveEnd = true;
   }
@@ -394,6 +452,16 @@
   }
 
   function onPickDown(e: PointerEvent) {
+    if (!picking && e.shiftKey && e.button === 0 && shown && !spread && !strip && !player && !editPanels) {
+      // Mayús + arrastrar: elegir una zona para copiarla o guardarla.
+      e.stopPropagation();
+      e.preventDefault();
+      const [x, y] = toImage(e.clientX, e.clientY);
+      sel = { x0: x, y0: y, x1: x, y1: y, dragging: true };
+      capture(e);
+      dirty = true;
+      return;
+    }
     if (!picking) return;
     e.stopPropagation();
     e.preventDefault();
@@ -681,6 +749,28 @@
       ctx.stroke();
     }
     if (!shown || player || spread) return;
+    const sb = selBox();
+    if (sb && sel) {
+      const m = viewMatrix(pose, shown.size, vp);
+      const { w, h } = shown.size;
+      const pt = (x: number, y: number) => [(m[0] * x * w + m[2] * y * h + m[4]) * dpr, (m[1] * x * w + m[3] * y * h + m[5]) * dpr];
+      const c = [pt(sb[0], sb[1]), pt(sb[0] + sb[2], sb[1]), pt(sb[0] + sb[2], sb[1] + sb[3]), pt(sb[0], sb[1] + sb[3])];
+      // Fuera de la zona, oscurecido; la zona, con borde discontinuo.
+      ctx.fillStyle = "rgb(0 0 0 / 0.45)";
+      ctx.beginPath();
+      ctx.rect(0, 0, pw, ph);
+      c.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill("evenodd");
+      ctx.setLineDash([6 * dpr, 4 * dpr]);
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.strokeStyle = "#fbbf24";
+      ctx.beginPath();
+      c.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     if (editPanels) return drawEditing(ctx, dpr);
     if (!panels?.length) return;
     const m = viewMatrix(pose, shown.size, vp);
@@ -749,22 +839,58 @@
     }
   }
 
-  // Lupa con el botón derecho: mientras se mantiene pulsado.
+  /** Seguir recibiendo el puntero aunque salga del visor (si el navegador lo permite). */
+  function capture(e: PointerEvent) {
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Sin captura: el arrastre termina al salir del visor.
+    }
+  }
+
+  // Botón derecho: mantenerlo pulsado es la lupa; un clic corto abre el menú de la imagen.
+  let rightTimer = 0;
+  let rightDown = false;
   function onLensDown(e: PointerEvent) {
     if (e.button !== 2 || player || editPanels) return;
     onMouse(e);
-    lensBits |= 1;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dirty = true;
+    rightDown = true;
+    capture(e);
+    clearTimeout(rightTimer);
+    rightTimer = window.setTimeout(() => {
+      rightTimer = 0;
+      if (!rightDown) return;
+      lensBits |= 1;
+      dirty = true;
+    }, 180);
   }
   function onLensUp(e: PointerEvent) {
-    if (!(lensBits & 1) || (e.type === "pointerup" && e.button !== 2)) return;
+    if (sel?.dragging && e.button === 0) {
+      sel.dragging = false;
+      const b = selBox();
+      if (!b) sel = null;
+      dirty = true;
+      onselect?.(b);
+      return;
+    }
+    if (!rightDown || (e.type === "pointerup" && e.button !== 2)) return;
+    rightDown = false;
+    if (rightTimer) {
+      clearTimeout(rightTimer);
+      rightTimer = 0;
+      if (e.type === "pointerup") oncontext?.(e.clientX, e.clientY);
+      return;
+    }
     lensBits &= ~1;
     dirty = true;
   }
   function onMouse(e: PointerEvent) {
     const r = canvas.getBoundingClientRect();
     mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    if (sel?.dragging && shown) {
+      [sel.x1, sel.y1] = toImage(e.clientX, e.clientY);
+      dirty = true;
+    }
     if (lensBits) dirty = true;
   }
 

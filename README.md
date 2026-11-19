@@ -56,6 +56,13 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - **Sentido**: occidental o **manga** (de derecha a izquierda). En manga, `←` avanza y `→` retrocede, la doble página se ordena de derecha a izquierda y la barra de progreso se llena desde la derecha.
   - Los modos de lectura son para leer: con el editor, el panel del Modo Acción o durante la reproducción se ve una página como siempre.
 - **🔍 Lupa**: mantén pulsada `Z` o el botón derecho y aparece un círculo ampliado ×2,5 que sigue al ratón (con los ajustes de imagen aplicados).
+- **Menú de la imagen**: un clic corto con el botón derecho (mantenerlo es la lupa) abre las utilidades, cada una con su atajo:
+  - **ℹ️ Información** (`I`): nombre, posición, tamaño en píxeles, peso, formato, subcarpeta y origen. Con fotos, los **datos de la cámara** (marca, modelo, objetivo, fecha, exposición, diafragma, ISO, focal…). Si la foto lleva su ubicación GPS, solo se avisa: no se enseña.
+  - **📋 Copiar imagen** (`Ctrl+C`): al portapapeles, tal como se ve (con los ajustes de imagen).
+  - **💾 Guardar imagen como…** (`Ctrl+S`): la **página entera**, **lo que se ve** o la **zona elegida**, como el **original** (copia exacta del archivo, también desde un comprimido), **PNG** o **JPEG**, con o sin los ajustes de imagen. Se dibuja a tamaño real (el lado mayor, hasta 8192 px).
+  - **✂ Recortar**: `Mayús` + arrastrar elige una zona (por ejemplo, una viñeta). Aparece una barra para copiarla o guardarla; `Esc` la quita.
+  - **📂 Mostrar en la carpeta**: abre el gestor de archivos en la imagen (en un comprimido, en el comprimido).
+  - **🗑 Mover a la papelera** (`Supr`, solo imágenes de una carpeta): pregunta antes y la manda a la papelera del sistema, de donde se puede recuperar. Con el editor abierto, `Supr` sigue siendo para borrar lo seleccionado en él.
 - **Ir a página** (`Ctrl+G`): escribe el número e `Intro`.
 - **Marcadores** (`B`): marca o desmarca la página. Salen con 🔖 en las miniaturas, como muescas en la barra de progreso y en el menú 📖, donde un clic salta a cada uno.
 - **Barra de progreso**: una línea fina abajo del visor que muestra cuánto llevas. Al pasar el ratón dice «12 / 48» y un clic salta a ese punto. Se oculta desde el menú 📖.
@@ -314,6 +321,12 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `Z` (mantener) · botón derecho | Lupa |
 | `Ctrl+G` | Ir a página |
 | `B` | Marcar o desmarcar la página |
+| `I` | Información de la imagen |
+| `Ctrl+C` | Copiar la imagen (o la zona elegida) |
+| `Ctrl+S` | Guardar imagen como… |
+| `Mayús` + arrastrar | Elegir una zona para copiarla o guardarla |
+| `Supr` | Mover la imagen a la papelera (carpetas) |
+| Botón derecho (clic corto) | Menú de la imagen |
 | `Ctrl+,` | Ajustes |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
@@ -415,7 +428,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Ajustes rápidos de imagen: limpiar escaneo, blanco y negro, sepia, modo noche, brillo, contraste, nitidez…
   - [x] Lectura: ajustar al ancho, al alto o al contenido, doble página, sentido manga, tira vertical (webtoon), lupa, ir a página, marcadores y barra de progreso.
   - [x] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
-  - [ ] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
+  - [x] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
   - [ ] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
   - [ ] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
   - [ ] Voces con IA (ElevenLabs): reparto, guion por viñeta, revisión antes de pedir y automatización por IA.
