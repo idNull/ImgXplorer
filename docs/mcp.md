@@ -48,6 +48,7 @@ Los nombres y las descripciones están en inglés, que es lo que mejor entienden
 | Ver | `view_image` (página con viñetas numeradas), `view_panel` (viñeta o zona a alta resolución), `get_panels`, `set_panels` |
 | Animar | `set_output`, `plan_shots`, `get_timeline`, `set_keyframes`, `apply_template`, `set_transition`, `set_hold_between` |
 | Sonido | `list_sounds`, `find_audio_files`, `import_sounds`, `list_tracks`, `add_track`, `edit_track`, `add_audio`, `edit_audio`, `remove_audio`, `add_ambient`, `edit_ambient`, `remove_ambient`, `set_mix`, `effects_catalog` |
+| Efectos especiales | `fx_catalog`, `add_fx` (situación o efecto suelto, en segundos o en un plano de `plan_shots` con desfase, y con punto), `edit_fx`, `remove_fx` |
 | Revisar | `summary`, `render_frames`, `sound_report`, `play` |
 | Terminar | `export_video`, `export_status`, `cancel_export`, `inspect_video` |
 
@@ -77,6 +78,12 @@ La IA decide **qué** encuadrar y **cuánto tiempo**; las poses las calcula `img
 - **Inicio y final**: `start`/`end` `overview` enseñan la página entera al empezar o acabar.
 - **Lo que devuelve**: los tiempos de cada plano (`arrive`, `hold`, `end`), que la IA usa para colocar voces y efectos.
 - **El resultado** es un clip de keyframes normal («Planos»), editable en el editor. Conserva los sonidos de la imagen.
+
+### Efectos especiales
+
+- `add_fx` con `situation` añade varios efectos sincronizados y su sonido de serie (salvo `sound: false`). Con `type` (y `preset`, `params`) añade uno suelto.
+- `shot` cuenta como `plan_shots`: la vista de la página entera del principio no es un plano. El efecto empieza cuando la cámara llega a ese plano, más `offset`.
+- `render_frames` añade por su cuenta un fotograma en el momento fuerte de cada efecto, y `summary` avisa de destellos demasiado seguidos o de efectos que alargan la imagen.
 
 ### Tiempos de lectura
 
@@ -112,6 +119,7 @@ En la app: **Ajustes → IA → Conectar**. Desde la terminal: `imgxplorer --mcp
 
 - **`cargo test`**:
   - `shots.rs`: encuadre en 16:9 y en vertical, tiempos, curvas, detalle con zoom y entradas disparatadas.
+  - `fx.rs`: forma de cada efecto en el tiempo, mismo resultado al repetir, límite de parpadeos, punto con la cámara movida y situaciones.
   - `mcp::server`: protocolo, lista de herramientas, imágenes en los dos formatos y conversación con una app simulada por el socket, incluido el «aún arranca».
   - `mcp::tools`: análisis de la mezcla y búsqueda de audio.
   - `mcp::install`: tabla de Codex y comillas.

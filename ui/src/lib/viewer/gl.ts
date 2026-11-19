@@ -26,6 +26,26 @@ export interface Layer {
   alpha: number;
 }
 
+/**
+ * Efectos especiales de un instante, tal como los calcula el núcleo (`WasmFx.frame`): 50 valores
+ * `[post, cam(6), flash(4), shock(5), chroma(3), blur(3), lines(11), impact(2), color(7),
+ * vignette(5), wave(3)]`, o vacío si no hay ninguno activo.
+ */
+export type FxFrame = ArrayLike<number>;
+export const FX_LEN = 50;
+
+/** Compone dos afines: primero `m`, luego `s` (mismo orden que el núcleo). */
+function then(m: Affine, s: ArrayLike<number>): Affine {
+  return new Float64Array([
+    s[0] * m[0] + s[2] * m[1],
+    s[1] * m[0] + s[3] * m[1],
+    s[0] * m[2] + s[2] * m[3],
+    s[1] * m[2] + s[3] * m[3],
+    s[0] * m[4] + s[2] * m[5] + s[4],
+    s[1] * m[4] + s[3] * m[5] + s[5],
+  ]) as Affine;
+}
+
 /** La imagen no cabe en la memoria de la GPU. */
 export class TextureError extends Error {}
 
@@ -93,6 +113,113 @@ void main() {
   color = vec4(byteAt(base), byteAt(base + 1), byteAt(base + 2), byteAt(base + 3));
 }`;
 
+// Pasada de efectos especiales sobre la escena ya dibujada. Trabaja en píxeles CSS con y hacia
+// abajo (como el núcleo). `u_f` son los 50 valores de `FxFrame`.
+const FX_FS = `#version 300 es
+precision highp float;
+uniform sampler2D u_src;
+uniform vec2 u_res;
+uniform vec2 u_vp;
+uniform float u_f[50];
+out vec4 color;
+const float TAU = 6.2831853;
+float hash(float x) { return fract(sin(x * 12.9898 + 78.233) * 43758.5453); }
+vec3 samp(vec2 p) { return texture(u_src, vec2(p.x / u_vp.x, 1.0 - p.y / u_vp.y)).rgb; }
+vec3 chroma(vec2 q, float a) {
+  if (a <= 0.0) return samp(q);
+  vec2 d = (q - u_vp * 0.5) / (length(u_vp) * 0.5);
+  return vec3(samp(q + d * a).r, samp(q).g, samp(q - d * a).b);
+}
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y) / u_res * u_vp;
+  // Ondulación
+  float wa = u_f[47];
+  if (wa > 0.0) {
+    p.x += wa * sin(p.y / u_vp.y * u_f[48] * TAU + u_f[49]);
+    p.y += wa * 0.5 * sin(p.x / u_vp.x * u_f[48] * 0.7 * TAU + u_f[49] * 1.3);
+  }
+  // Onda expansiva: un anillo que empuja la imagen hacia fuera.
+  float ss = u_f[15];
+  if (ss != 0.0) {
+    vec2 d = p - vec2(u_f[11], u_f[12]);
+    float r = length(d);
+    float x = (r - u_f[13]) / max(u_f[14], 1.0);
+    if (abs(x) < 1.0) p -= d / max(r, 1e-3) * sin(x * 3.14159) * (1.0 - x * x) * ss;
+  }
+  // Glitch: franjas horizontales desplazadas.
+  float g = u_f[17];
+  if (g > 0.0) {
+    float row = floor(p.y / (u_vp.y / 24.0));
+    if (hash(row + u_f[18]) < g * 0.5) p.x += (hash(row * 1.7 + u_f[18]) - 0.5) * g * u_vp.x * 0.08;
+  }
+  // Desenfoque radial y aberración cromática.
+  vec3 c;
+  float ba = u_f[21];
+  if (ba > 0.0) {
+    vec2 bc = vec2(u_f[19], u_f[20]);
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 12; i++) acc += chroma(bc + (p - bc) * (1.0 - ba * 0.25 * float(i) / 11.0), u_f[16]);
+    c = acc / 12.0;
+  } else {
+    c = chroma(p, u_f[16]);
+  }
+  // Líneas de concentración (1) o de velocidad (2).
+  float kind = u_f[22];
+  if (kind > 0.0 && u_f[29] > 0.0) {
+    float seed = u_f[30];
+    float mask = 0.0;
+    if (kind < 1.5) {
+      vec2 d = p - vec2(u_f[23], u_f[24]);
+      float r = length(d);
+      float cell = (atan(d.y, d.x) / TAU + 0.5) * floor(u_f[25]);
+      float id = floor(cell);
+      float w = u_f[26] * (0.25 + 0.75 * hash(id + seed)) * 0.7;
+      float inner = u_f[27] * (0.75 + 0.6 * hash(id * 3.1 + seed));
+      float taper = smoothstep(inner, inner + u_vp.y * 0.5, r);
+      float hw = w * taper;
+      float line = 1.0 - smoothstep(hw * 0.6, hw + 0.02, abs(fract(cell) - 0.5));
+      mask = hash(id * 7.3 + seed) < 0.2 ? 0.0 : line * smoothstep(inner, inner * 1.1 + 2.0, r);
+    } else {
+      float an = u_f[31];
+      vec2 q = vec2(cos(an) * p.x + sin(an) * p.y, -sin(an) * p.x + cos(an) * p.y);
+      float rows = q.y / u_vp.y * u_f[25];
+      float id = floor(rows);
+      float hw = u_f[26] * (0.06 + 0.44 * hash(id + seed)) * 0.5;
+      float line = 1.0 - smoothstep(hw * 0.6, hw + 0.02, abs(fract(rows) - 0.5));
+      // Trazos sueltos de largo variable que corren a lo largo de la línea.
+      float seg = fract(q.x / u_vp.x * (0.4 + 0.8 * hash(id * 2.1 + seed)) + u_f[32] * (0.5 + hash(id * 4.7 + seed)) + hash(id * 9.1 + seed));
+      float len = 0.25 + 0.4 * hash(id * 5.3 + seed);
+      mask = hash(id * 7.3 + seed) < 0.55 ? 0.0 : line * smoothstep(0.0, 0.08, seg) * (1.0 - smoothstep(len - 0.08, len, seg));
+    }
+    c = mix(c, vec3(u_f[28]), clamp(mask, 0.0, 1.0) * u_f[29]);
+  }
+  // Fotograma de impacto: tinta en blanco y negro y negativo.
+  if (u_f[34] > 0.0) c = mix(c, vec3(smoothstep(0.42, 0.58, luma(c))), u_f[34]);
+  if (u_f[33] > 0.0) c = mix(c, 1.0 - c, u_f[33]);
+  // Color: sepia, gris, tinte y contraste.
+  if (u_f[35] > 0.0) {
+    vec3 sep = vec3(dot(c, vec3(0.393, 0.769, 0.189)), dot(c, vec3(0.349, 0.686, 0.168)), dot(c, vec3(0.272, 0.534, 0.131)));
+    c = mix(c, min(sep, 1.0), u_f[35]);
+  }
+  if (u_f[36] > 0.0) c = mix(c, vec3(luma(c)), u_f[36]);
+  if (u_f[40] > 0.0) {
+    // Colorear conservando la luminosidad.
+    vec3 tc = vec3(u_f[37], u_f[38], u_f[39]);
+    c = mix(c, luma(c) * tc / max(luma(tc), 0.1), u_f[40]);
+  }
+  if (u_f[41] != 0.0) c = (c - 0.5) * (1.0 + u_f[41] * 1.5) + 0.5;
+  // Viñeta
+  if (u_f[42] > 0.0) {
+    float v = length((p / u_vp - 0.5) * vec2(u_vp.x / u_vp.y, 1.0));
+    float m = smoothstep(u_f[43] * 0.45, u_f[43] * 0.45 + 0.5, v) * u_f[42];
+    c = mix(c, vec3(u_f[44], u_f[45], u_f[46]), m);
+  }
+  // Destello
+  c = mix(c, vec3(u_f[7], u_f[8], u_f[9]), u_f[10]);
+  color = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
 function program(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
   const prog = gl.createProgram()!;
   gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vs));
@@ -125,6 +252,9 @@ export class GlViewer {
   private aniso: { ext: EXT_texture_filter_anisotropic; max: number } | null = null;
   /** Destino intermedio para los fundidos (se crea al primer uso). */
   private fbo: { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number } | null = null;
+  /** Escena antes de la pasada de efectos, y su programa (se crean al primer uso). */
+  private scene: Target | null = null;
+  private fxProg: { prog: WebGLProgram; loc: Record<string, WebGLUniformLocation | null> } | null = null;
   /** Color de fondo (RGB 0..1). */
   private bg: [number, number, number] = [0.043, 0.051, 0.063];
 
@@ -280,11 +410,25 @@ export class GlViewer {
 
   /**
    * Pinta las capas en orden. Con `mix`, la segunda se mezcla con la primera usando su alfa
-   * como peso (fundido real: se pinta aparte con su fondo y se compone encima).
+   * como peso (fundido real: se pinta aparte con su fondo y se compone encima). `fx`: efectos
+   * especiales de ese instante (temblor, destello…); sin ellos el camino es el de siempre.
    */
-  draw(layers: Layer[], vp: Size, mix = false): void {
+  draw(layers: Layer[], vp: Size, mix = false, fx: FxFrame | null = null): void {
+    const on = !!fx && fx.length >= FX_LEN;
+    if (on) {
+      // Temblor y golpe de zoom: un movimiento de pantalla después de la cámara.
+      const cam = Array.prototype.slice.call(fx, 1, 7) as number[];
+      const identity = cam[0] === 1 && cam[1] === 0 && cam[2] === 0 && cam[3] === 1 && cam[4] === 0 && cam[5] === 0;
+      if (!identity) layers = layers.map((l) => ({ ...l, m: then(l.m, cam) }));
+    }
+    const post = on && fx![0] > 0;
+    const final = this.out?.fb ?? null;
+    this.drawLayers(layers, vp, mix, post ? this.sceneTarget().fb : final);
+    if (post) this.applyFx(fx!, vp, final);
+  }
+
+  private drawLayers(layers: Layer[], vp: Size, mix: boolean, dest: WebGLFramebuffer | null): void {
     const gl = this.gl;
-    const dest = this.out?.fb ?? null;
     const size = this.size();
     gl.useProgram(this.prog);
     gl.uniform1i(this.loc.u_tex, 0);
@@ -319,6 +463,41 @@ export class GlViewer {
   /** Tamaño en píxeles del destino de dibujo (la captura, si la hay, o el canvas). */
   private size(): Size {
     return this.out ? { w: this.out.w, h: this.out.h } : { w: this.canvas.width, h: this.canvas.height };
+  }
+
+  /** Destino donde se pinta la escena cuando luego hay pasada de efectos (del tamaño de salida). */
+  private sceneTarget(): Target {
+    const { w, h } = this.size();
+    if (this.scene && (this.scene.w !== w || this.scene.h !== h)) {
+      this.dropTarget(this.scene);
+      this.scene = null;
+    }
+    this.scene ??= this.makeTarget(w, h, this.gl.LINEAR);
+    return this.scene;
+  }
+
+  private applyFx(fx: FxFrame, vp: Size, dest: WebGLFramebuffer | null): void {
+    const gl = this.gl;
+    if (!this.fxProg) {
+      const prog = program(gl, YUV_VS, FX_FS);
+      const loc: Record<string, WebGLUniformLocation | null> = {};
+      for (const n of ["u_src", "u_res", "u_vp", "u_f"]) loc[n] = gl.getUniformLocation(prog, n);
+      this.fxProg = { prog, loc };
+    }
+    const { prog, loc } = this.fxProg;
+    const size = this.size();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.scene!.tex);
+    gl.uniform1i(loc.u_src, 0);
+    gl.uniform2f(loc.u_res, size.w, size.h);
+    gl.uniform2f(loc.u_vp, vp.w, vp.h);
+    gl.uniform1fv(loc.u_f, Float32Array.from({ length: FX_LEN }, (_, i) => fx[i]));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.enable(gl.BLEND);
   }
 
   private makeTarget(w: number, h: number, filter: number): Target {
@@ -408,6 +587,10 @@ export class GlViewer {
     this.capture(null);
     this.dropTarget(this.fbo);
     this.fbo = null;
+    this.dropTarget(this.scene);
+    this.scene = null;
+    if (this.fxProg) this.gl.deleteProgram(this.fxProg.prog);
+    this.fxProg = null;
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 }

@@ -17,6 +17,8 @@ import { trackSpecs, type SoundBus, type Track } from "../audio/tracks";
 import { nameOf } from "../audio/names";
 import { ambientRange, ambientSpecs, SoundSchedule, type ClipSpec } from "../audio/sync";
 import { FrameRenderer, canvasOf, contactSheet, drawPanels, jpeg, mult4 } from "./frames";
+import { FxTrack, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
+import { fxCatalog, fxInfo } from "../fx/catalog";
 import { joinPath, dirOf } from "../files/dialog.svelte";
 
 export interface McpSource {
@@ -468,16 +470,18 @@ export class McpTools {
         return r && i >= r[0] && i <= r[1];
       })
       .map((x) => ({ id: x.id, sound: x.sound, name: x.name }));
+    const fxl = this.store.fxFor(entry);
     const res = {
       image: i,
       entry,
-      duration: r2(itemDuration(tl, audio)),
+      duration: r2(itemDuration(tl, audio, fxl)),
       cameraDuration: r2(tl.duration()),
       camera,
       transitionOut: this.store.transitionFor(entry),
       holdBetween: this.store.data?.defaults.holdBetween ?? 0.3,
       voice: audio.voice.map((c, k) => this.clipInfo(c, "voice", k, tracks)),
       sfx: audio.sfx.map((c, k) => this.clipInfo(c, "sfx", k, tracks)),
+      fx: fxl.length ? fxl.map((f, k) => this.fxInfoOut(f, k)) : undefined,
       ambients,
     };
     tl.free();
@@ -822,6 +826,202 @@ export class McpTools {
     return json({ mix: this.store.mix });
   }
 
+  // -------------------------------------------------------------------------------------------
+  // Efectos especiales visuales
+
+  async t_fx_catalog(): Promise<ToolResult> {
+    const cat = fxCatalog();
+    return json({
+      effects: cat.effects.map((e) => ({
+        type: e.type,
+        kind: e.sustained ? "sustained (fades in/out)" : "impact (hits and decays)",
+        duration: e.duration,
+        params: e.params,
+        presets: e.presets.map((p) => ({ id: p.id, duration: p.duration, params: Object.fromEntries(p.params) })),
+      })),
+      situations: cat.situations,
+      notes: [
+        "Percent units are of the video height. Times in seconds from the start of the image.",
+        "at: normalized image point (0..1) where the effect happens; it follows the image when the camera moves. Without it, the center of the screen.",
+        "Flashes and impact frames blink at most 3 times per second (photosensitivity).",
+      ],
+    });
+  }
+
+  private fxInfoOut(f: Fx, k: number) {
+    return { id: f.id, index: k, type: f.type, preset: f.preset, start: r2(f.start), duration: r2(f.duration), intensity: f.intensity, params: f.params, at: f.at };
+  }
+
+  private fxById(entry: string, id: string): { list: Fx[]; k: number } {
+    const list = this.store.fxFor(entry);
+    const k = list.findIndex((f) => f.id === id);
+    if (k < 0) fail(`no effect "${id}" in this image: use get_timeline`);
+    return { list, k };
+  }
+
+  private fxParams(type: string, v: unknown): Record<string, number | string> | undefined {
+    if (v === undefined || v === null) return undefined;
+    if (typeof v !== "object" || Array.isArray(v)) fail("params must be an object");
+    const info = fxInfo(type)!;
+    const out: Record<string, number | string> = {};
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      const p = info.params.find((q) => q.key === k);
+      if (!p) fail(`${type} has no parameter "${k}" (fx_catalog lists them)`);
+      if (x === null) continue;
+      if (p!.kind === "number") {
+        if (typeof x !== "number" || !Number.isFinite(x)) fail(`${k} must be a number`);
+        out[k] = Math.min(p!.max, Math.max(p!.min, x as number));
+      } else if (p!.kind === "choice") {
+        if (typeof x !== "string" || !p!.options.includes(x)) fail(`${k} must be one of: ${p!.options.join(", ")}`);
+        out[k] = x as string;
+      } else {
+        if (typeof x !== "string" || !/^#[0-9a-f]{6}$/i.test(x)) fail(`${k} must be a color like #ff2020`);
+        out[k] = (x as string).toLowerCase();
+      }
+    }
+    return out;
+  }
+
+  private pointOf(v: unknown): { x: number; y: number } {
+    const p = v as { x: number; y: number };
+    if (!p || typeof p !== "object" || ![p.x, p.y].every((n) => typeof n === "number" && Number.isFinite(n))) fail("at needs numbers x and y (0..1)");
+    return { x: r4(Math.min(1, Math.max(0, p.x))), y: r4(Math.min(1, Math.max(0, p.y))) };
+  }
+
+  /** Segundo de la imagen donde empieza: `start` o la llegada del plano `shot` más `offset`. */
+  private async fxStart(i: number, a: Args): Promise<number> {
+    if (a.shot === undefined || a.shot === null) return num(a, "start", 0, 0, 3600);
+    const shot = int(a, "shot");
+    const { tl } = await this.playTimeline(i);
+    try {
+      let holds = this.holds(tl);
+      // Como en plan_shots: la vista de la página entera del principio no cuenta como plano.
+      const first = holds[0] && Float64Array.from(tl.evaluate(holds[0][0]));
+      if (first && holds[0][0] < 0.01 && Math.abs(first[0] - 0.5) < 0.01 && Math.abs(first[1] - 0.5) < 0.01 && Math.abs(first[2] - 1) < 0.02) holds = holds.slice(1);
+      if (shot < 1 || shot > holds.length) fail(`shot ${shot} out of range: this image has ${holds.length} shots (1..${holds.length})`);
+      return Math.max(0, holds[shot - 1][0] + num(a, "offset", 0, -60, 60));
+    } finally {
+      tl.free();
+    }
+  }
+
+  async t_add_fx(a: Args): Promise<ToolResult> {
+    const { i, entry } = this.img(a);
+    const situation = str(a, "situation");
+    const type = str(a, "type");
+    if (!situation === !type) fail("give either situation or type");
+    const start = await this.fxStart(i, a);
+    const size = await this.size(i);
+    const at = a.at === undefined || a.at === null ? undefined : this.pointOf(a.at);
+    let added: Fx[];
+    let sound: string | null = null;
+    if (situation) {
+      const sit = fxCatalog().situations.find((x) => x.id === situation);
+      if (!sit) fail(`unknown situation "${situation}": ${fxCatalog().situations.map((x) => x.id).join(", ")}`);
+      const r = JSON.parse(wasm.fx_situation(situation, fxId(), start, at?.x ?? NaN, at?.y ?? NaN)) as { fx: Fx[]; sound?: string | null };
+      added = r.fx;
+      if (a.intensity !== undefined) for (const f of added) f.intensity = r2((f.intensity ?? 1) * num(a, "intensity", 1, 0, 3));
+      if (a.sound !== false) sound = r.sound ?? null;
+    } else {
+      const info = fxInfo(type!);
+      if (!info) fail(`unknown effect type "${type}": ${fxCatalog().effects.map((x) => x.type).join(", ")}`);
+      const preset = str(a, "preset");
+      if (preset && !info!.presets.some((p) => p.id === preset)) fail(`${type} has no preset "${preset}": ${info!.presets.map((p) => p.id).join(", ")}`);
+      const f = JSON.parse(wasm.fx_new(fxId(), type!, preset ?? "", start)) as Fx;
+      const d = optNum(a, "duration", MIN_FX_DURATION, 120);
+      if (d !== undefined) f.duration = d;
+      if (a.intensity !== undefined) f.intensity = num(a, "intensity", 1, 0, 3);
+      const params = this.fxParams(type!, a.params);
+      if (params && Object.keys(params).length) {
+        f.params = { ...(f.params ?? {}), ...params };
+        delete f.preset;
+      }
+      if (at) f.at = at;
+      added = [f];
+    }
+    let clip: AudioClip | null = null;
+    if (sound) {
+      await this.soundList();
+      const s = sounds.get(sound);
+      if (s) clip = newAudioClip(s, start);
+    }
+    let first = 0;
+    this.edit(() => {
+      this.store.editFx(entry, size, (list) => {
+        first = list.length;
+        list.push(...added);
+      });
+      if (clip) this.store.editAudio(entry, size, (t) => void t.sfx.push(clip!));
+    });
+    this.show(i);
+    const list = this.store.fxFor(entry);
+    return json({
+      image: i,
+      added: added.map((_, k) => this.fxInfoOut(list[first + k], first + k)),
+      sound: clip ? { sound: clip.sound, bus: "sfx", index: this.store.audioFor(entry).sfx.length - 1, start: r2(clip.start) } : undefined,
+      warnings: this.fxWarnings(i, entry),
+    });
+  }
+
+  async t_edit_fx(a: Args): Promise<ToolResult> {
+    const { i, entry } = this.img(a);
+    const id = str(a, "id") ?? fail("id is required");
+    const { list, k } = this.fxById(entry, id!);
+    const copy = JSON.parse(JSON.stringify(list[k])) as Fx;
+    const info = fxInfo(copy.type) ?? fail(`effect ${id} has an unknown type`);
+    if (a.start !== undefined) copy.start = num(a, "start", 0, 0, 3600);
+    if (a.duration !== undefined) copy.duration = num(a, "duration", 1, MIN_FX_DURATION, 120);
+    if (a.intensity !== undefined) copy.intensity = num(a, "intensity", 1, 0, 3);
+    const preset = str(a, "preset");
+    if (preset) {
+      const p = info!.presets.find((x) => x.id === preset) ?? fail(`${copy.type} has no preset "${preset}"`);
+      copy.preset = p!.id;
+      copy.params = Object.fromEntries(p!.params);
+    }
+    if (a.params !== undefined && a.params !== null) {
+      const raw = a.params as Record<string, unknown>;
+      const set = this.fxParams(copy.type, raw) ?? {};
+      const merged: Record<string, number | string> = { ...(copy.params ?? {}), ...set };
+      for (const [key, v] of Object.entries(raw)) if (v === null) delete merged[key];
+      copy.params = merged;
+      delete copy.preset;
+    }
+    if (copy.params && !Object.keys(copy.params).length) delete copy.params;
+    if (a.resetPoint === true) delete copy.at;
+    else if (a.at !== undefined && a.at !== null) copy.at = this.pointOf(a.at);
+    const size = await this.size(i);
+    this.edit(() =>
+      this.store.editFx(entry, size, (l) => {
+        const n = l.findIndex((f) => f.id === id);
+        if (n >= 0) l[n] = copy;
+      }),
+    );
+    this.show(i);
+    return json({ image: i, fx: this.fxInfoOut(copy, k), warnings: this.fxWarnings(i, entry) });
+  }
+
+  async t_remove_fx(a: Args): Promise<ToolResult> {
+    const { i, entry } = this.img(a);
+    const id = str(a, "id") ?? fail("id is required");
+    this.fxById(entry, id!);
+    const size = await this.size(i);
+    this.edit(() => this.store.editFx(entry, size, (l) => void l.splice(l.findIndex((f) => f.id === id), 1)));
+    return json({ image: i, removed: id });
+  }
+
+  /** Avisos de los efectos de una imagen (destellos seguidos, efectos que alargan la imagen…). */
+  private fxWarnings(i: number, entry: string): string[] | undefined {
+    const list = this.store.fxFor(entry);
+    if (!list.length) return undefined;
+    void i;
+    const audio = this.store.audioFor(entry);
+    const it = this.store.item(entry);
+    const cam = it?.timeline?.camera?.length && !this.store.templateFor(entry) ? Math.max(...it.timeline.camera.map((c) => c.start + c.duration)) : 0;
+    const end = Math.max(cam, audioEndOf(audio));
+    const w = JSON.parse(wasm.fx_warnings(JSON.stringify($state.snapshot(list)), end > 0 ? end : fxEnd(list))) as string[];
+    return w.length ? w : undefined;
+  }
+
   async t_effects_catalog(): Promise<ToolResult> {
     return json({
       effects: FX_TYPES.map((type) => ({
@@ -869,7 +1069,8 @@ export class McpTools {
       const it = this.store.item(entry);
       const { tl } = await this.playTimeline(i);
       const audio = this.store.audioFor(entry);
-      const dur = itemDuration(tl, audio);
+      const fxl = this.store.fxFor(entry);
+      const dur = itemDuration(tl, audio, fxl);
       const tr = this.store.transitionFor(entry);
       const last = i === s.entries.length - 1;
       total += dur + hold + (last || tr.type === "cut" ? 0 : tr.duration);
@@ -889,6 +1090,7 @@ export class McpTools {
         });
       }
       for (const [x, y] of overlaps(audio.voice, tracks)) warnings.push(`voice clips ${x} and ${y} overlap on the same track`);
+      warnings.push(...(this.fxWarnings(i, entry) ?? []));
       images.push({
         image: i,
         entry,
@@ -897,6 +1099,7 @@ export class McpTools {
         shots: holds.length,
         voices: audio.voice.length || undefined,
         sfx: audio.sfx.length || undefined,
+        fx: fxl.length ? fxl.map((f) => `${f.preset ?? f.type}@${r2(f.start)}s`) : undefined,
         transition: last ? undefined : `${tr.type} ${tr.duration}s`,
         warnings: warnings.length ? warnings : undefined,
       });
@@ -917,8 +1120,10 @@ export class McpTools {
     const { i } = this.img(a);
     const { tl } = await this.playTimeline(i);
     try {
-      const audio = this.store.audioFor(this.src().entries[i].name);
-      const dur = itemDuration(tl, audio);
+      const entry = this.src().entries[i].name;
+      const audio = this.store.audioFor(entry);
+      const fxl = $state.snapshot(this.store.fxFor(entry)) as Fx[];
+      const dur = itemDuration(tl, audio, fxl);
       let times: number[];
       if (Array.isArray(a.times) && a.times.length) times = (a.times as unknown[]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)).map((v) => Math.min(dur, Math.max(0, v)));
       else if (a.count !== undefined) {
@@ -927,15 +1132,23 @@ export class McpTools {
       } else {
         times = this.holds(tl).map(([h0, h1]) => (h0 + h1) / 2);
         if (!times.length) times = [0, dur / 2, dur].map((t) => Math.min(dur, t));
+        // El momento fuerte de cada efecto (poco después de empezar o a mitad si es sostenido).
+        for (const f of fxl) times.push(f.start + (fxInfo(f.type)?.sustained ? f.duration / 2 : Math.min(0.08, f.duration / 3)));
+        times = [...new Set(times.map(r2))].sort((x, y) => x - y);
       }
       times = times.slice(0, 16);
       const v = this.video();
       const fw = mult4(num(a, "width", 400, 128, 960));
       const fh = mult4(fw / v.aspect);
       const frames = [];
-      for (const [k, t] of times.entries()) {
-        const pose = Float64Array.from(tl.evaluate(Math.min(t, tl.duration())));
-        frames.push({ img: await this.frames().render(this.ctx.refAt(i), pose, fw, fh, prefs.settings.background), label: `${k + 1} · ${t.toFixed(1)} s` });
+      const track = FxTrack.of(fxl);
+      try {
+        for (const [k, t] of times.entries()) {
+          const pose = Float64Array.from(tl.evaluate(Math.min(t, tl.duration())));
+          frames.push({ img: await this.frames().render(this.ctx.refAt(i), pose, fw, fh, prefs.settings.background, { track, t }), label: `${k + 1} · ${t.toFixed(2)} s` });
+        }
+      } finally {
+        track?.free();
       }
       const sheet = contactSheet(frames);
       return json({ image: i, duration: r2(dur), output: `${v.width}x${v.height}`, frames: times.map((t, k) => ({ n: k + 1, t: r2(t) })) }, [jpeg(sheet)]);
@@ -959,7 +1172,7 @@ export class McpTools {
       const entry = s.entries[i].name;
       const { tl } = await this.playTimeline(i);
       const audio = this.ctx.sequence.audio?.(i);
-      const dur = itemDuration(tl, audio);
+      const dur = itemDuration(tl, audio, this.ctx.sequence.fx?.(i));
       tl.free();
       schedule.image(t, audio, this.ctx.sequence.ambient?.(i) ?? []);
       starts.push({ image: i, start: r2(t), end: r2(t + dur + hold) });

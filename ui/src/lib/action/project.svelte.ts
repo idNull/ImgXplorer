@@ -5,6 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TemplateRef } from "./catalog";
 import { audioOf, hasAudio, type AudioTracks, type Timeline } from "../editor/model";
+import type { Fx } from "../fx/fx";
 import { log } from "../log";
 import { DEFAULT_LEVELS, type MixLevels } from "../audio/director";
 import type { Effect } from "../audio/effects";
@@ -253,19 +254,24 @@ export class ProjectStore {
    */
   setTimeline(entry: string, size: [number, number], tl: Timeline | null) {
     if (!this.data) return;
-    // El sonido de la imagen no depende de la cámara: se conserva aunque esta cambie.
+    // El sonido y los efectos de la imagen no dependen de la cámara: se conservan aunque esta cambie.
     const audio = hasAudio(this.item(entry)?.timeline) ? this.item(entry)!.timeline!.audio : undefined;
+    const fx = this.item(entry)?.timeline?.fx?.length ? this.item(entry)!.timeline!.fx : undefined;
     if (tl?.camera.length) {
       const it = this.ensure(entry, size);
       if (!hasAudio(tl)) {
         if (audio) tl.audio = audio;
         else delete tl.audio;
       }
+      if (!tl.fx?.length) {
+        if (fx) tl.fx = fx;
+        else delete tl.fx;
+      }
       it.timeline = tl;
       delete it.template;
     } else {
       const it = this.item(entry);
-      if (it && audio) it.timeline = { camera: [], audio };
+      if (it && (audio || fx)) it.timeline = { camera: [], ...(audio ? { audio } : {}), ...(fx ? { fx } : {}) };
       else if (it) delete it.timeline;
       this.prune();
     }
@@ -423,7 +429,7 @@ export class ProjectStore {
       }
       if (!hasAudio(it.timeline)) {
         delete it.timeline!.audio;
-        if (!it.timeline!.camera.length) delete it.timeline;
+        if (!it.timeline!.camera.length && !it.timeline!.fx?.length) delete it.timeline;
       }
     }
     if (this.data.ambient) {
@@ -455,7 +461,28 @@ export class ProjectStore {
     fn(a as AudioTracks);
     if (!hasAudio(tl)) {
       delete tl.audio;
-      if (!tl.camera.length) delete it.timeline;
+      if (!tl.camera.length && !tl.fx?.length) delete it.timeline;
+      this.prune();
+    }
+    this.changed();
+  }
+
+  /** Efectos especiales de la imagen. */
+  fxFor(entry: string): Fx[] {
+    return this.item(entry)?.timeline?.fx ?? [];
+  }
+
+  /** Cambia los efectos de la imagen sin tocar su cámara, su plantilla ni su sonido. */
+  editFx(entry: string, size: [number, number], fn: (list: Fx[]) => void) {
+    if (!this.data || this.readOnly) return;
+    const it = this.ensure(entry, size);
+    it.timeline ??= { camera: [] };
+    const tl = it.timeline;
+    tl.fx ??= [];
+    fn(tl.fx);
+    if (!tl.fx.length) {
+      delete tl.fx;
+      if (!tl.camera.length && !hasAudio(tl)) delete it.timeline;
       this.prune();
     }
     this.changed();
@@ -476,7 +503,7 @@ export class ProjectStore {
   /** Quita las entradas que ya no aportan nada. */
   private prune() {
     if (!this.data) return;
-    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.panels);
+    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.timeline?.fx?.length || i.panels);
   }
 
   changed() {

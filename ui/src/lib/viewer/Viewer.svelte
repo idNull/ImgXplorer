@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { GlViewer, TextureError, type Layer, type TextureSet } from "./gl";
+  import { GlViewer, TextureError, type FxFrame, type Layer, type TextureSet } from "./gl";
   import { attachInput } from "./input";
+  import type { FxTrack } from "../fx/fx";
   import { HANDLES, cursorAt, handlePoint, press, type PanelEdit } from "./panelEdit";
   import { PictureCache, type PictureRef } from "./picture";
   import type { ViewerStatus } from "./types";
@@ -193,6 +194,52 @@
     return new Float64Array(final && anim ? anim.to : pose);
   }
 
+  /** Efectos especiales que se ven fuera de la reproducción (el editor, en el cabezal). */
+  let fxNow: { track: FxTrack; t: number } | null = null;
+
+  /**
+   * Efectos a mostrar con la pose actual en el segundo `t` de la imagen (el editor los manda al
+   * mover el cabezal); `null` los quita.
+   */
+  export function setFxNow(track: FxTrack | null, t = 0) {
+    if (player || (!track && !fxNow)) return;
+    fxNow = track ? { track, t } : null;
+    dirty = true;
+  }
+
+  /** Esperando un clic en la imagen («Elegir punto» del editor). */
+  let picking = $state<((p: { x: number; y: number } | null) => void) | null>(null);
+
+  /** El siguiente clic en el visor devuelve ese punto de la imagen (0..1); `null` si se cancela. */
+  export function pickPoint(): Promise<{ x: number; y: number } | null> {
+    picking?.(null);
+    return new Promise((resolve) => {
+      picking = (p) => {
+        picking = null;
+        resolve(p);
+      };
+    });
+  }
+
+  export function cancelPick() {
+    picking?.(null);
+  }
+
+  function onPickDown(e: PointerEvent) {
+    if (!picking) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (!shown || e.button !== 0) return picking(null);
+    const r = canvas.getBoundingClientRect();
+    const [a, b, c, d, ex, fy] = viewMatrix(pose, shown.size, vp);
+    const x = e.clientX - r.left - ex;
+    const y = e.clientY - r.top - fy;
+    const det = a * d - b * c;
+    const ix = (d * x - c * y) / det / shown.size.w;
+    const iy = (-b * x + a * y) / det / shown.size.h;
+    picking({ x: Math.min(1, Math.max(0, ix)), y: Math.min(1, Math.max(0, iy)) });
+  }
+
   /** Pone la pose sin animación (el editor la lleva al mover el cabezal). */
   export function setPoseNow(p: Pose) {
     if (player) return;
@@ -297,7 +344,7 @@
         pose = scene.pose;
         anim = null;
       }
-      return drawShown();
+      return drawShown(scene.fx ?? null);
     }
     const a = slots.get(scene.a);
     const b = slots.get(scene.b);
@@ -311,8 +358,8 @@
     clearOverlay();
   }
 
-  function drawShown() {
-    gl.draw(shown ? [{ set: shown.set, m: viewMatrix(pose, shown.size, vp), alpha: 1 }] : [], vp);
+  function drawShown(fx: FxFrame | null = player || !fxNow || !shown ? null : fxNow.track.frame(fxNow.t, shown.size, pose, vp)) {
+    gl.draw(shown ? [{ set: shown.set, m: viewMatrix(pose, shown.size, vp), alpha: 1 }] : [], vp, false, fx);
     drawOverlay();
   }
 
@@ -497,7 +544,7 @@
   });
 </script>
 
-<div class="viewer">
+<div class="viewer" class:picking={!!picking} onpointerdowncapture={onPickDown}>
   <canvas bind:this={canvas}></canvas>
   <canvas class="overlay" bind:this={overlay}></canvas>
 </div>
@@ -508,6 +555,7 @@
     width: 100%;
     height: 100%;
   }
+  .viewer.picking, .viewer.picking canvas { cursor: crosshair; }
   canvas {
     display: block;
     width: 100%;

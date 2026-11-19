@@ -325,6 +325,7 @@
     },
     holdBetween: () => store.data?.defaults.holdBetween ?? 0.3,
     audio: (i) => store.audioFor(source!.entries[i].name),
+    fx: (i) => $state.snapshot(store.fxFor(source!.entries[i].name)),
     ambient: (i) => ambientSpecs(store.ambients, i, indexOfEntry),
     tracks: () => trackSpecs($state.snapshot(store.tracks)),
   };
@@ -811,7 +812,7 @@
       {store}
       entry={curEntry}
       size={curSize}
-      viewer={{ currentPose: (f) => viewer.currentPose(f), setPoseNow: (p) => viewer.setPoseNow(p) }}
+      viewer={{ currentPose: (f) => viewer.currentPose(f), setPoseNow: (p) => viewer.setPoseNow(p), setFxNow: (tr, t) => viewer.setFxNow(tr, t), pickPoint: () => viewer.pickPoint(), cancelPick: () => viewer.cancelPick() }}
       generate={editorTemplate}
       onclose={() => (editorOpen = false)}
       {index}

@@ -106,6 +106,35 @@ biblioteca a los nombres largos).
   - **Exportar e importar** clips y plantillas en paquetes `.imgxpack` para compartirlos. También se importan soltando el archivo sobre la ventana. Al importar no se duplica lo que ya tienes.
   - Se guarda en `~/.local/share/com.imgxplorer.app/library.json` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
 
+### Efectos especiales
+
+Temblores, destellos, ondas expansivas y recursos del manga colocados en la línea de tiempo de cada imagen, como los sonidos. Se ven igual en el editor, al reproducir y en el vídeo.
+
+- **Añadir**: botón **✨ Efecto aquí** del editor (en el cabezal), el **+** de la fila *✨ Efectos*, o **✨ Efecto aquí** en el inspector de una clave (justo en ese instante).
+- **Situaciones listas**: varios efectos ya sincronizados y, si quieres, su sonido de serie en una pista de efectos. Con `Ctrl+Z` se deshace todo junto.
+
+  | Situación | Qué pone | Sonido |
+  |---|---|---|
+  | 💥 Explosión | Destello, onda expansiva, temblor fuerte y glitch | Explosión |
+  | 👊 Puñetazo | Golpe de zoom, temblor corto y fotograma en negativo | Puñetazo |
+  | 💢 Disparo | Destello corto y temblor mínimo | Disparo |
+  | 🌩 Rayo | Relámpago y negativo | Trueno |
+  | 🌍 Terremoto | Temblor largo y desenfoque | — |
+  | 📢 Grito | Onda, temblor y líneas de concentración | — |
+  | 💨 Velocidad | Líneas de velocidad y desenfoque radial | Silbido |
+  | ❗ Sorpresa | Líneas de concentración y golpe de zoom | Ding |
+  | 😱 Miedo | Viñeta que late y color frío | Latido |
+  | 🕰 Flashback | Sepia, bordes oscuros y ondulación al entrar | — |
+  | 💭 Sueño / mareo | Ondulación, desenfoque y gris | — |
+  | ✨ Poder | Aberración que pulsa, onda y destello | — |
+  | 💔 Daño | Destello rojo, temblor y glitch | Golpe |
+
+- **Efectos sueltos** (cada uno con ajustes predefinidos y sus mandos): 〰 temblor, 🔍 golpe de zoom, ⚡ destello, ◎ onda expansiva, 🌈 aberración / glitch, 💫 desenfoque radial, ✳ líneas de concentración, ≡ líneas de velocidad, ◐ fotograma de impacto, 🎨 color (sepia, gris, frío, cálido, tinte), ◯ viñeta y 🌊 ondulación.
+- **Editar**: en la fila *✨ Efectos* se arrastran y se estiran por los bordes, con ajuste magnético a claves, sonidos y otros efectos. El inspector tiene ajuste, intensidad, inicio, duración y mandos.
+- **Punto**: **⌖ Elegir** y un clic en la imagen marcan dónde ocurre (el centro de la explosión, el puño). Sigue a la imagen aunque la cámara se mueva.
+- **Seguridad**: destellos y negativos no parpadean más de 3 veces por segundo.
+- **Cómo funciona**: el núcleo en Rust (`crates/imgx-core/src/fx.rs`) calcula cada fotograma de forma determinista y el visor WebGL aplica el temblor a la matriz de cámara y el resto en una sola pasada de shader. Sin efectos activos, no cuesta nada.
+
 ### Exportar a vídeo
 
 Botón 🎞 o `Ctrl+E`. Se exporta tal cual se reproduce: la animación de cada imagen, la pausa entre
@@ -191,10 +220,11 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
 - **Permiso**: el control viene **apagado**; se enciende con *Permitir el control por IA* (o solo al conectar la primera IA). Apagado, ninguna IA puede tocar nada.
 - **Mientras trabaja**: en la cabecera aparece **🤖 IA** con lo que va haciendo y un botón **Detener la IA**. Ves cada cambio en directo y todo se deshace con `Ctrl+Z`. Si la app está cerrada, la IA la abre.
 - **Empezar**: abre una sesión nueva de tu IA y pídeselo con tus palabras, por ejemplo: «Usa imgxplorer para montar un vídeo de este cómic: ~/Cómics/capitulo1.cbz. Ritmo tranquilo, lluvia suave de fondo y efectos donde haya acción. Revisa y exporta en 1080p». En *Ajustes → IA* hay una frase de ejemplo para copiar.
-- **Qué puede hacer** (40 herramientas):
+- **Qué puede hacer** (44 herramientas):
   - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
   - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
   - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
+  - **Efectos especiales**: situaciones (explosión, puñetazo, sorpresa, flashback…) o efectos sueltos en el plano que toca y en el punto de la imagen donde ocurren.
   - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
   - **Terminar**: exportar, seguir el progreso y revisar el MP4 final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
 - **Límites**: la IA no oye ni ve el movimiento (revisa con fotogramas y medidas), así que te pedirá que lo reproduzcas y escuches tú. Las imágenes que mira se envían a su servicio (Anthropic, OpenAI o Google) con tu cuenta.
@@ -330,6 +360,11 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Sonido: biblioteca, importar desde una carpeta, pistas, voces, efectos, ambientes, efectos de audio y mezcla.
   - [x] Revisión: hojas de miniaturas, resumen con avisos e informe de la mezcla; exportar y revisar el MP4.
   - [x] Conectar con cada IA con un clic (Ajustes → IA), desde la terminal o al instalar; aviso «🤖 IA» con botón para detenerla.
+- [x] **Fase 7**: efectos especiales visuales.
+  - [x] Temblor, golpe de zoom, destello, onda expansiva, aberración / glitch, desenfoque radial, líneas de concentración y de velocidad, fotograma de impacto, color, viñeta y ondulación.
+  - [x] Situaciones listas con su sonido (explosión, puñetazo, rayo, sorpresa, flashback…).
+  - [x] Fila de efectos en el editor, inspector y punto de la imagen; iguales en directo, en el editor, para la IA y en el vídeo.
+  - [x] Herramientas MCP para que la IA los coloque y los revise.
 
 ### Propuestas de mejora
 
@@ -412,12 +447,12 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ### Estructura
 
 ```
-crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, planos de director, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
+crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, planos de director, efectos especiales, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
 src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), herramientas de la IA (ui/src/lib/mcp)
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), herramientas de la IA (ui/src/lib/mcp)
 docs                Especificación del formato .imgx y cómo crear los instaladores
 packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR y lanzador .desktop
 ```

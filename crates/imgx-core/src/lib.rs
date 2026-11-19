@@ -2,6 +2,7 @@
 
 pub mod camera;
 pub mod easing;
+pub mod fx;
 pub mod record;
 pub mod schema;
 pub mod shots;

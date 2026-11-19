@@ -3,6 +3,7 @@
 import { GlViewer, type TextureSet } from "../viewer/gl";
 import { PictureCache, type Picture, type PictureRef } from "../viewer/picture";
 import { viewMatrix, type Pose, type Size } from "../core";
+import type { FxTrack } from "../fx/fx";
 
 /** Múltiplo de 4 (lo pide la captura). */
 export const mult4 = (n: number) => Math.max(16, Math.round(n / 4) * 4);
@@ -41,13 +42,18 @@ export class FrameRenderer {
     return { set, pic };
   }
 
-  /** La imagen con la pose `pose` en un fotograma de `w`×`h` (múltiplos de 4). */
-  async render(ref: PictureRef, pose: Pose, w: number, h: number, background: string): Promise<ImageData> {
+  /**
+   * La imagen con la pose `pose` en un fotograma de `w`×`h` (múltiplos de 4). `fx`: efectos
+   * especiales de la imagen y el segundo en que se dibuja.
+   */
+  async render(ref: PictureRef, pose: Pose, w: number, h: number, background: string, fx?: { track: FxTrack | null; t: number }): Promise<ImageData> {
     const { set, pic } = await this.set(ref);
     const vp: Size = { w, h };
+    const size = { w: pic.w, h: pic.h };
     this.gl.setBackground(background);
     this.gl.capture(vp, false);
-    this.gl.draw([{ set, m: viewMatrix(pose, { w: pic.w, h: pic.h }, vp), alpha: 1 }], vp);
+    const frame = fx?.track?.frame(fx.t, size, pose, vp) ?? null;
+    this.gl.draw([{ set, m: viewMatrix(pose, size, vp), alpha: 1 }], vp, false, frame);
     return this.gl.readRgba();
   }
 

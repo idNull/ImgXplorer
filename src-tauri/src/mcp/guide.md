@@ -27,6 +27,7 @@ result, open that file with your own image viewing tool (for example Codex `view
    `slide` or `continuous-camera` for page turns. `set_hold_between` for the pause between images.
 8. **Sound.** See the sound section. `list_tracks`, `add_track` per character or kind of sound, `add_audio`,
    `add_ambient`, effects with `edit_track`. Then `sound_report` and fix problems.
+   **Visual effects** where a panel calls for them (see the section): `add_fx`, then `render_frames` to check.
 9. **Summary.** `summary` lists every image with warnings. Fix all warnings that matter.
 10. **Ask the user to watch** with `play` (they can hear; you cannot) before exporting, when it makes sense.
 11. **Export.** `export_video`, then poll `export_status` every few seconds until done.
@@ -58,6 +59,26 @@ Starting values; adapt to the user's pace (calm ×1.3, action ×0.7):
 - Use `push` 1.03–1.08 for slow, cinematic push-ins on emotional or dramatic holds; 0.95 for pulling out.
 - `bounce`/`elastic` easing only for comedy; `rot` almost never.
 - Big moves across the page are fine, but not on every panel: vary the rhythm.
+
+## Visual special effects
+
+- `fx_catalog` lists effects and ready-made **situations**. A situation adds several synced effects and its
+  built-in sound at once: `explosion`, `punch`, `shot`, `lightning`, `earthquake`, `shout`, `speed`, `surprise`
+  (manga focus lines), `fear`, `flashback`, `dream`, `power`, `damage`. Prefer situations; use single effects to
+  fine-tune.
+- Use them **only where the panel shows it**: an explosion, a blow landing, a lightning strike, a character's shock,
+  a running scene, a flashback page. Most panels need none. Never stack strong effects on every shot.
+- Timing: `add_fx` with `shot` (from `plan_shots`, 1-based) and a small `offset` (0.1–0.4 s after the camera
+  arrives), so the reader sees the panel first and then it hits. Put the matching sound at the same moment (situations
+  do it for you; pass `sound: false` if the user already placed one).
+- Point (`at`, normalized image coordinates): the center of the explosion, the fist, the face of the surprised
+  character. Get it from `view_image` / `view_panel` (panel rects are normalized too).
+- Impact effects (shake, flash, shockwave, impact frame) are short: 0.2–1 s. Sustained ones (color, vignette, wave,
+  lines) can cover a whole shot; flashback color can cover the whole image.
+- Flashes and negative frames are capped at 3 per second for photosensitive viewers; `summary` warns if too many
+  happen close together. Keep strobing rare.
+- Review with `render_frames` (it adds a frame at the peak of each effect) and `get_timeline` (effect ids for
+  `edit_fx` / `remove_fx`).
 
 ## Sound
 

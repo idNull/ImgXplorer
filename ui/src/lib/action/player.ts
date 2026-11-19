@@ -13,6 +13,8 @@ import { log } from "../log";
 import { audioEnd, type AudioTracks } from "../editor/model";
 import { sceneSpecs, type AmbientSpec } from "../audio/sync";
 import type { SoundSink } from "../audio/director";
+import { fxEnd, FxTrack, type Fx } from "../fx/fx";
+import type { FxFrame } from "../viewer/gl";
 
 /** Sin tocar durante este tiempo, la cámara vuelve a la animación. */
 const IDLE_MS = 1000;
@@ -43,15 +45,17 @@ export interface PlaySpec {
   holdBetween(): number;
   /** Voz y efectos de la imagen i (la imagen dura al menos hasta que acaban). */
   audio?(i: number): AudioTracks;
+  /** Efectos especiales de la imagen i (la imagen dura al menos hasta que acaban). */
+  fx?(i: number): Fx[];
   /** Ambientes que suenan en la imagen i. */
   ambient?(i: number): AmbientSpec[];
   /** La imagen actual ha cambiado (para el contador, las miniaturas…). */
   onIndex(i: number): void;
 }
 
-/** Duración de una imagen: su animación o su sonido, lo que dure más. */
-export function itemDuration(tl: wasm.WasmTimeline, audio: AudioTracks | undefined): number {
-  return Math.max(tl.duration(), audio ? audioEnd(audio) : 0);
+/** Duración de una imagen: su animación, su sonido o sus efectos, lo que dure más. */
+export function itemDuration(tl: wasm.WasmTimeline, audio: AudioTracks | undefined, fx?: readonly Fx[]): number {
+  return Math.max(tl.duration(), audio ? audioEnd(audio) : 0, fxEnd(fx));
 }
 
 const NO_AUDIO: AudioTracks = { voice: [], sfx: [] };
@@ -65,7 +69,7 @@ export interface PlayOptions extends PlaySpec {
 
 /** Qué pintar. `pose: null` = la pose la lleva el visor (control manual). */
 export type Scene =
-  | { kind: "single"; key: string; pose: Pose | null }
+  | { kind: "single"; key: string; pose: Pose | null; fx?: FxFrame | null }
   | { kind: "transition"; a: string; b: string; f: Float64Array }
   | null;
 
@@ -83,6 +87,7 @@ interface Prepared {
   size: Size;
   tl: wasm.WasmTimeline;
   audio: AudioTracks;
+  fx: FxTrack | null;
   dur: number;
   dead: boolean;
 }
@@ -91,6 +96,7 @@ function release(p: Prepared | null) {
   if (p && !p.dead) {
     p.dead = true;
     p.tl.free();
+    p.fx?.free();
   }
 }
 
@@ -141,7 +147,8 @@ export class Player {
     const { key, size } = await this.o.load(i);
     const tl = await this.o.timeline(i, size, this.aspect);
     const audio = this.o.audio?.(i) ?? NO_AUDIO;
-    return { i, key, size, tl, audio, dur: itemDuration(tl, audio), dead: false };
+    const list = this.o.fx?.(i);
+    return { i, key, size, tl, audio, fx: FxTrack.of(list), dur: itemDuration(tl, audio, list), dead: false };
   }
 
   /** Va a la imagen `i`, desde el principio, sin transición. */
@@ -208,7 +215,10 @@ export class Player {
           p.tl.free();
           p.tl = tl;
           p.audio = this.o.audio?.(p.i) ?? NO_AUDIO;
-          p.dur = itemDuration(tl, p.audio);
+          const list = this.o.fx?.(p.i);
+          p.fx?.free();
+          p.fx = FxTrack.of(list);
+          p.dur = itemDuration(tl, p.audio, list);
           if (p === this.cur) this.soundFor(p);
         },
         (e) => log.warn("reproductor: no se pudo regenerar la timeline:", e),
@@ -279,7 +289,7 @@ export class Player {
     if (Math.abs(aspect - this.aspect) / this.aspect > 0.005) this.reflow(aspect);
     const c = this.cur;
     if (!c) return null;
-    const single = (pose: Pose | null): Scene => ({ kind: "single", key: c.key, pose });
+    const single = (pose: Pose | null): Scene => ({ kind: "single", key: c.key, pose, fx: pose && c.fx?.frame(this.t, c.size, pose, vp) });
 
     switch (this.state) {
       case "loading":
@@ -309,7 +319,8 @@ export class Player {
         tr.u += dt / tr.duration;
         if (tr.u >= 1) {
           this.finishTransition();
-          return { kind: "single", key: n.key, pose: this.poseAt(n, 0) };
+          const pose = this.poseAt(n, 0);
+          return { kind: "single", key: n.key, pose, fx: n.fx?.frame(0, n.size, pose, vp) };
         }
         const f = wasm.transition_frame(tr.json, tr.tpl, tr.u, c.size.w, c.size.h, tr.from, n.size.w, n.size.h, this.poseAt(n, 0), vp.w, vp.h);
         return { kind: "transition", a: c.key, b: n.key, f };

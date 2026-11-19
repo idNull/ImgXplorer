@@ -393,7 +393,7 @@
   },
   {
     "name": "get_timeline",
-    "description": "Camera keyframes (absolute seconds), template, transition and sounds of one image, and its duration.",
+    "description": "Camera keyframes (absolute seconds), template, transition, sounds and visual special effects (fx, with their ids) of one image, and its duration.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1113,8 +1113,161 @@
     }
   },
   {
+    "name": "fx_catalog",
+    "description": "Visual special effects that can be placed on an image's timeline (shake, zoom punch, flash, shockwave, chromatic/glitch, radial blur, manga focus lines and speed lines, impact frame, color, vignette, wave): their parameters (range, default, unit), presets, and ready-made situations (explosion, punch, lightning, surprise, flashback…) that combine several effects and an optional built-in sound.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "add_fx",
+    "description": "Add a visual special effect, or a ready-made situation (several synced effects plus its sound), to an image. Place it at start seconds from the beginning of the image, or at a shot from plan_shots (shot: 1-based, offset: seconds after the shot arrives). Use them only where the panel calls for it (an explosion, a hit, a surprise…) and review with render_frames.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "situation": {
+          "type": "string",
+          "description": "Ready-made situation id from fx_catalog (e.g. explosion, punch, surprise, flashback). Use this or type."
+        },
+        "type": {
+          "type": "string",
+          "description": "Single effect type from fx_catalog (e.g. shake, flash, shockwave, focus-lines)."
+        },
+        "preset": {
+          "type": "string",
+          "description": "Preset of that type (fx_catalog)."
+        },
+        "start": {
+          "type": "number",
+          "description": "Seconds from the start of the image."
+        },
+        "shot": {
+          "type": "integer",
+          "description": "Shot number (1-based) as returned by plan_shots (the opening overview of the page is not counted); the effect starts when the camera arrives and holds there."
+        },
+        "offset": {
+          "type": "number",
+          "description": "Seconds after the shot arrives (default 0)."
+        },
+        "duration": {
+          "type": "number",
+          "description": "Seconds (single effect only; default from the preset)."
+        },
+        "intensity": {
+          "type": "number",
+          "description": "0..3 (default 1)."
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameter values for a single effect, e.g. {\"strength\": 3}."
+        },
+        "at": {
+          "type": "object",
+          "description": "Point of the image (normalized 0..1) where it happens: center of a shockwave, focus lines or blur. Omit for the center of the screen.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ]
+        },
+        "sound": {
+          "type": "boolean",
+          "description": "For a situation: also add its built-in sound on the sfx bus (default true)."
+        }
+      },
+      "required": [
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "edit_fx",
+    "description": "Change a visual effect of an image (id from get_timeline or add_fx): start, duration, intensity, preset, parameters (merged; null removes one), its point (at) or back to the center of the screen (resetPoint).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "start": {
+          "type": "number"
+        },
+        "duration": {
+          "type": "number"
+        },
+        "intensity": {
+          "type": "number"
+        },
+        "preset": {
+          "type": "string",
+          "description": "Apply a preset (replaces the parameters)."
+        },
+        "params": {
+          "type": "object"
+        },
+        "at": {
+          "type": "object",
+          "description": "Normalized image point {x, y} where it happens.",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ]
+        },
+        "resetPoint": {
+          "type": "boolean",
+          "description": "true: the effect happens at the center of the screen again."
+        }
+      },
+      "required": [
+        "image",
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "remove_fx",
+    "description": "Remove a visual effect from an image (id from get_timeline). Its sound clip, if a situation added one, stays: remove it with remove_audio.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "image",
+        "id"
+      ]
+    }
+  },
+  {
     "name": "summary",
-    "description": "Overview of the project: every image with its animation, duration, shots, sounds and warnings (too short to read, image without animation, missing sound…), ambiences, tracks and total video length.",
+    "description": "Overview of the project: every image with its animation, duration, shots, sounds, visual effects and warnings (too short to read, image without animation, missing sound, flashes too close together…), ambiences, tracks and total video length.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1130,7 +1283,7 @@
   },
   {
     "name": "render_frames",
-    "description": "Review an image's animation: a contact sheet of video frames exactly as they will be exported, each labeled with its time. By default one frame per shot (middle of each hold); or give times.",
+    "description": "Review an image's animation: a contact sheet of video frames exactly as they will be exported (visual effects included), each labeled with its time. By default one frame per shot (middle of each hold) plus the peak of each visual effect; or give times.",
     "inputSchema": {
       "type": "object",
       "properties": {

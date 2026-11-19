@@ -154,3 +154,63 @@ pub fn simplify_recording(flat: &[f64], tolerance: f64) -> Vec<f64> {
     let tol = if tolerance > 0.0 { tolerance } else { record::DEFAULT_TOLERANCE };
     record::simplify(&samples, tol).iter().flat_map(|s| [s.t, s.pose.cx, s.pose.cy, s.pose.zoom, s.pose.rot]).collect()
 }
+
+/// Catálogo de efectos especiales: `{effects: [...], situations: [...]}` (JSON).
+#[wasm_bindgen]
+pub fn fx_catalog() -> String {
+    imgx_core::fx::catalog_json()
+}
+
+/// Efecto nuevo de un tipo con su ajuste predefinido (`preset` vacío: valores de serie), en JSON.
+#[wasm_bindgen]
+pub fn fx_new(id: &str, kind: &str, preset: &str, start: f64) -> Result<String, JsError> {
+    let preset = (!preset.is_empty()).then_some(preset);
+    let fx = imgx_core::fx::new_fx(id, kind, preset, start).ok_or_else(|| JsError::new(&format!("efecto desconocido: {kind}")))?;
+    Ok(serde_json::to_string(&fx)?)
+}
+
+/// Efectos de una situación colocados en `start` (ids `<base>-<n>`); punto en `at_x, at_y`
+/// (normalizado) o ninguno si alguno no es un número. JSON con `{fx: [...], sound}`.
+#[wasm_bindgen]
+pub fn fx_situation(id: &str, base: &str, start: f64, at_x: f64, at_y: f64) -> Result<String, JsError> {
+    use imgx_core::fx;
+    let sit = fx::situation(id).ok_or_else(|| JsError::new(&format!("situación desconocida: {id}")))?;
+    let at = (at_x.is_finite() && at_y.is_finite()).then_some(fx::Point { x: at_x, y: at_y });
+    Ok(serde_json::json!({ "fx": fx::expand(sit, base, start, at), "sound": sit.sound }).to_string())
+}
+
+/// Avisos sobre una lista de efectos (JSON de textos).
+#[wasm_bindgen]
+pub fn fx_warnings(list: &str, image_end: f64) -> Result<String, JsError> {
+    let list: Vec<imgx_core::fx::Fx> = serde_json::from_str(list)?;
+    Ok(serde_json::to_string(&imgx_core::fx::warnings(&list, image_end))?)
+}
+
+/// Efectos de una imagen ya parseados, para calcular cada fotograma sin volver a leer JSON.
+#[wasm_bindgen]
+pub struct WasmFx(Vec<imgx_core::fx::Fx>);
+
+#[wasm_bindgen]
+impl WasmFx {
+    #[wasm_bindgen(constructor)]
+    pub fn new(json: &str) -> Result<WasmFx, JsError> {
+        Ok(WasmFx(serde_json::from_str(json)?))
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn end(&self) -> f64 {
+        imgx_core::fx::end(&self.0)
+    }
+    /// Fotograma en `t` (segundos de la imagen) con la pose de cámara de ese instante. Valores en
+    /// el orden de `FxFrame::to_vec`; vacío si no hay ningún efecto activo.
+    #[allow(clippy::too_many_arguments)]
+    pub fn frame(&self, t: f64, img_w: f64, img_h: f64, pose: &[f64], vp_w: f64, vp_h: f64) -> Vec<f64> {
+        use imgx_core::fx;
+        if !self.0.iter().any(|f| t >= f.start && t < f.end()) {
+            return Vec::new();
+        }
+        let view = fx::View { img: (img_w, img_h), pose: cam(pose), vp: (vp_w, vp_h) };
+        fx::frame(&self.0, t, &view).to_vec()
+    }
+}

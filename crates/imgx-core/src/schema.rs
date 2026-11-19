@@ -248,9 +248,12 @@ pub struct TemplateRef {
 pub struct Timeline {
     #[serde(default)]
     pub camera: Vec<ClipInstance>,
-    /// Reservado para la fase de sonido; se conserva al guardar pero aún no se usa.
+    /// Voces y efectos de sonido de la imagen.
     #[serde(default)]
     pub audio: AudioTracks,
+    /// Efectos especiales visuales (temblor, destello…).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fx: Vec<crate::fx::Fx>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -437,6 +440,7 @@ mod tests {
                     trim_out: 0.0,
                 }],
                 audio: AudioTracks::default(),
+                fx: crate::fx::expand(crate::fx::situation("explosion").unwrap(), "e", 1.0, Some(crate::fx::Point { x: 0.4, y: 0.6 })),
             },
             transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera { dir: None }, duration: 0.8 }),
             panels: Some(vec![Rect { x: 0.1, y: 0.1, w: 0.4, h: 0.3 }]),
@@ -444,6 +448,7 @@ mod tests {
         let back = Project::from_json(&p.to_json()).unwrap();
         assert_eq!(p, back);
         assert!(p.to_json().contains(r#""type": "continuous-camera""#));
+        assert!(p.to_json().contains(r#""type": "shockwave""#), "los efectos se guardan");
     }
 
     #[test]

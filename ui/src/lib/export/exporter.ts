@@ -9,6 +9,7 @@ import { viewMatrix, wasm, type Size } from "../core";
 import { itemDuration, type PlaySpec } from "../action/player";
 import type { AudioTracks } from "../editor/model";
 import { SoundSchedule } from "../audio/sync";
+import { FxTrack } from "../fx/fx";
 import type { MixLevels } from "../audio/director";
 
 export interface VideoOptions {
@@ -38,7 +39,7 @@ export interface ExportProgress {
   mixing?: boolean;
 }
 
-export type ExportSpec = Pick<PlaySpec, "timeline" | "transitionOut" | "holdBetween" | "audio" | "ambient"> & {
+export type ExportSpec = Pick<PlaySpec, "timeline" | "transitionOut" | "holdBetween" | "audio" | "ambient" | "fx"> & {
   /** Pistas del proyecto (volumen, panorama, silencio y efectos). */
   tracks?: () => TrackSpec[];
 };
@@ -49,6 +50,7 @@ interface Prepared {
   set: TextureSet;
   tl: wasm.WasmTimeline;
   audio: AudioTracks | undefined;
+  fx: FxTrack | null;
   dur: number;
 }
 
@@ -84,7 +86,8 @@ export async function exportVideo(
     try {
       const tl = await spec.timeline(i, size, aspect);
       const audio = spec.audio?.(i);
-      const p = { i, size, set, tl, audio, dur: itemDuration(tl, audio) };
+      const list = spec.fx?.(i);
+      const p = { i, size, set, tl, audio, fx: FxTrack.of(list), dur: itemDuration(tl, audio, list) };
       live.add(p);
       return p;
     } catch (e) {
@@ -96,6 +99,7 @@ export async function exportVideo(
     if (!live.delete(p)) return;
     gl.deleteSet(p.set);
     p.tl.free();
+    p.fx?.free();
   }
 
   // Dos búferes: mientras uno viaja a Rust se pinta en el otro.
@@ -142,7 +146,8 @@ export async function exportVideo(
       for (let k = 0; k < n; k++) {
         fraction = (i - o.from + k / n) / count;
         const pose = cur.tl.evaluate(Math.min(k / o.fps, cur.tl.duration()));
-        gl.draw([{ set: cur.set, m: viewMatrix(pose, cur.size, vp), alpha: 1 }], vp);
+        const fx = cur.fx?.frame(k / o.fps, cur.size, pose, vp) ?? null;
+        gl.draw([{ set: cur.set, m: viewMatrix(pose, cur.size, vp), alpha: 1 }], vp, false, fx);
         await emit();
       }
       schedule.imageEnd(frames / o.fps);

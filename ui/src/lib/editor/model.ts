@@ -3,6 +3,7 @@
 // imgx-core vía WASM; aquí solo se mueven, estiran y crean clips y claves.
 
 import type { Effect } from "../audio/effects";
+import type { Fx } from "../fx/fx";
 
 /** Copia profunda que acepta proxies de `$state` (structuredClone no puede con ellos). */
 const $snapshot = <T>(v: T): T => JSON.parse(JSON.stringify(v));
@@ -89,6 +90,8 @@ export interface ClipInstance {
 export interface Timeline {
   camera: ClipInstance[];
   audio?: { voice?: AudioClip[]; sfx?: AudioClip[]; ambient?: unknown[] };
+  /** Efectos especiales visuales. */
+  fx?: Fx[];
 }
 
 /** Pistas de sonido de una imagen. */

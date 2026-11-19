@@ -20,8 +20,10 @@
     onremove: () => void;
     onduplicate: () => void;
     onsave: () => void;
+    /** Abre el menú de efectos especiales en el segundo indicado (el de la clave). */
+    onfx?: (t: number) => void;
   }
-  let { tl, clip, key, fromTemplate, edit, currentPose, onseek, onremove, onduplicate, onsave }: Props = $props();
+  let { tl, clip, key, fromTemplate, edit, currentPose, onseek, onremove, onduplicate, onsave, onfx }: Props = $props();
 
   const inst = $derived<ClipInstance | undefined>(tl.camera[clip]);
   const c = $derived(inst ? inline(inst) : null);
@@ -132,6 +134,7 @@
     <div class="buttons">
       <button onclick={() => onKey((k) => (k.pose = poseObj(currentPose())))}>{t("useView")}</button>
       <button onclick={onremove}>{t("removeKeyframe")}</button>
+      {#if onfx}<button title={t("fxAddHelp")} onclick={() => onfx(keyAt)}>{t("fxAddHere")}</button>{/if}
     </div>
   {:else}
     <h5>{inst.name ?? TYPE[c.type]()}</h5>

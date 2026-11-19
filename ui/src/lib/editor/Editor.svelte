@@ -1,10 +1,16 @@
 <script module lang="ts">
   import type { Pose } from "../core";
+  import type { FxTrack } from "../fx/fx";
 
   /** Lo que el editor necesita del visor. */
   export interface ViewerApi {
     currentPose(final?: boolean): Pose;
     setPoseNow(p: Pose): void;
+    /** Efectos especiales a mostrar en el segundo `t` (fuera de la reproducción). */
+    setFxNow(track: FxTrack | null, t?: number): void;
+    /** El siguiente clic en el visor: punto de la imagen (0..1) o `null` si se cancela. */
+    pickPoint(): Promise<{ x: number; y: number } | null>;
+    cancelPick(): void;
   }
 </script>
 
@@ -36,6 +42,10 @@
   import { cloneEffects, hasEffects } from "../audio/effects";
   import { defaultDuration, library, type LibClip } from "./libstore.svelte";
   import Inspector from "./Inspector.svelte";
+  import FxClipView from "../fx/FxClipView.svelte";
+  import FxInspector from "../fx/FxInspector.svelte";
+  import FxPicker from "../fx/FxPicker.svelte";
+  import { FxTrack as FxEval, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
   import Library from "./Library.svelte";
   import { log } from "../log";
 
@@ -93,6 +103,14 @@
   let libDrag = $state<{ clip?: LibClip; sound?: SoundInfo; x: number; y: number; t: number | null; track: Track | null } | null>(null);
   /** Clip de sonido seleccionado (excluye `sel`). */
   let asel = $state<{ bus: AudioBus; idx: number } | null>(null);
+  /** Efecto especial seleccionado (posición en la lista de la imagen). */
+  let fsel = $state<number | null>(null);
+  /** Menú de efectos abierto: en qué segundo se añadirá. */
+  let picker = $state<{ at: number } | null>(null);
+  /** Las situaciones añaden también su sonido. */
+  let fxSound = $state(true);
+  /** Esperando el clic en la imagen para el punto del efecto seleccionado. */
+  let picking = $state(false);
 
   const item = $derived(store.item(entry));
   const own = $derived<Timeline | null>(item?.timeline?.camera?.length ? item.timeline : null);
@@ -100,6 +118,24 @@
   const view = $derived<Timeline>(own ?? generated ?? { camera: [] });
   const fromTemplate = $derived(!own && !!generated);
   const audio = $derived<AudioTracks>(store.audioFor(entry));
+  const fxList = $derived<Fx[]>(store.fxFor(entry));
+  /** Subfila de cada efecto (los que coinciden en el tiempo van uno debajo de otro) y cuántas hay. */
+  const fxRows = $derived.by(() => {
+    const ends: number[] = [];
+    const row = fxList
+      .map((f, i) => ({ f, i }))
+      .sort((a, b) => a.f.start - b.f.start || a.i - b.i)
+      .reduce((m, { f, i }) => {
+        let r = ends.findIndex((e) => e <= f.start + 1e-6);
+        if (r < 0) r = ends.push(0) - 1;
+        ends[r] = f.start + f.duration;
+        m[i] = r;
+        return m;
+      }, [] as number[]);
+    return { row, count: Math.max(1, ends.length) };
+  });
+  /** Alto de cada subfila de efectos. */
+  const FX_ROW = $derived(fxRows.count > 1 ? Math.max(9, Math.min(22, Math.floor(56 / fxRows.count))) : 22);
   const tracks = $derived(store.tracks);
   const trackOf = (c: { track?: string }, bus: SoundBus) => resolveTrack(tracks, c.track, bus).id;
   /** Voz y efectos de cada pista (con su posición en la lista de su grupo). */
@@ -129,8 +165,8 @@
       .filter((x): x is { a: typeof x.a; r: [number, number] } => !!x.r && index >= x.r[0] && index <= x.r[1]),
   );
   const ambLane = (id: string) => ambHere.filter((x) => trackOf(x.a, "ambient") === id);
-  // La imagen dura lo que su animación o su sonido, lo que sea más largo.
-  const duration = $derived(Math.max(timelineDuration(view), audioEnd(audio)));
+  // La imagen dura lo que su animación, su sonido o sus efectos, lo que sea más largo.
+  const duration = $derived(Math.max(timelineDuration(view), audioEnd(audio), fxEnd(fxList)));
   const width = $derived(Math.max(duration + 4, 12) * pps + PAD * 2);
 
   const ek = (a: EditorAction) => keysFor(prefs.settings.keys, "editor", a).slice(0, 1).map(display).join("");
@@ -177,6 +213,17 @@
     });
   });
 
+  // Efectos especiales de lo que se ve; se rehacen en cada cambio.
+  let fxTrack: FxEval | null = null;
+  $effect(() => {
+    const tr = FxEval.of($state.snapshot(fxList));
+    untrack(() => {
+      fxTrack?.free();
+      fxTrack = tr;
+      viewer.setFxNow(tr, playhead);
+    });
+  });
+
   // Otra imagen: se empieza de cero.
   $effect(() => {
     void entry;
@@ -189,6 +236,9 @@
       asel = null;
       ambsel = null;
       tsel = null;
+      fsel = null;
+      picker = null;
+      if (picking) viewer.cancelPick();
       free = true;
     });
   });
@@ -217,6 +267,10 @@
     pause();
     evalTl?.free();
     evalTl = null;
+    viewer.setFxNow(null);
+    if (picking) viewer.cancelPick();
+    fxTrack?.free();
+    fxTrack = null;
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragUp);
   });
@@ -226,9 +280,11 @@
   }
 
   function showAt(t: number) {
-    if (!evalTl) return;
-    viewer.setPoseNow(evalTl.evaluate(t));
-    free = false;
+    if (evalTl) {
+      viewer.setPoseNow(evalTl.evaluate(t));
+      free = false;
+    }
+    viewer.setFxNow(fxTrack, t);
   }
 
   function seek(t: number) {
@@ -495,6 +551,8 @@
       sel = null;
       ambsel = null;
       tsel = null;
+      fsel = null;
+      fsel = null;
       lastTrack = track;
     }
   }
@@ -517,6 +575,7 @@
       sel = null;
       asel = null;
       tsel = null;
+      fsel = null;
       lastTrack = track;
       say(t("ambientAddedHere"));
     }
@@ -573,6 +632,106 @@
     lastTrack = id;
   }
 
+  // --- efectos especiales ----------------------------------------------------------------
+  function editFx(fn: (list: Fx[]) => void): boolean {
+    if (!size || store.readOnly) {
+      if (store.readOnly) say(t("projectReadOnly", { error: store.readOnly }));
+      return false;
+    }
+    store.editFx(entry, size, fn);
+    return true;
+  }
+
+  function selectFx(i: number) {
+    fsel = i;
+    sel = null;
+    asel = null;
+    ambsel = null;
+    tsel = null;
+  }
+
+  /** Añade un efecto suelto o una situación (con su sonido, si se pide) en el segundo `at`. */
+  function addFx(p: { situation: string } | { type: string }, at: number) {
+    picker = null;
+    let added: Fx[] = [];
+    let sound: string | null = null;
+    try {
+      if ("situation" in p) {
+        const r = JSON.parse(wasm.fx_situation(p.situation, fxId(), at, NaN, NaN)) as { fx: Fx[]; sound?: string | null };
+        added = r.fx;
+        sound = r.sound ?? null;
+      } else {
+        added = [JSON.parse(wasm.fx_new(fxId(), p.type, "", at)) as Fx];
+      }
+    } catch (e) {
+      log.warn("editor: no se pudo crear el efecto:", e);
+      return;
+    }
+    if (!added.length) return;
+    const first = fxList.length;
+    store.batch(true);
+    try {
+      if (!editFx((list) => list.push(...added))) return;
+      const info = sound && fxSound ? sounds.get(sound) : null;
+      if (info) {
+        editAudio((a) => {
+          const c = newAudioClip(info, at);
+          const tr = trackField(targetTrack("sfx"), "sfx");
+          if (tr) c.track = tr;
+          a.sfx.push(c);
+        });
+      }
+    } finally {
+      store.batch(false);
+    }
+    selectFx(first);
+    seek(at);
+  }
+
+  function removeFx() {
+    const i = fsel;
+    if (i === null) return;
+    fsel = null;
+    if (picking) viewer.cancelPick();
+    editFx((list) => void list.splice(i, 1));
+  }
+
+  function duplicateFx() {
+    const i = fsel;
+    if (i === null || !fxList[i]) return;
+    const src = $state.snapshot(fxList[i]) as Fx;
+    const n = fxList.length;
+    editFx((list) => list.push({ ...src, id: fxId(), start: src.start + src.duration }));
+    selectFx(n);
+  }
+
+  /** «Elegir punto»: el siguiente clic en la imagen marca dónde ocurre el efecto seleccionado. */
+  async function pickFxPoint() {
+    if (picking) return viewer.cancelPick();
+    const i = fsel;
+    if (i === null) return;
+    const id = fxList[i]?.id;
+    pause();
+    picking = true;
+    say(t("fxPickNotice"));
+    const p = await viewer.pickPoint();
+    picking = false;
+    notice = null;
+    if (!p || !id) return;
+    editFx((list) => {
+      const f = list.find((x) => x.id === id);
+      if (f) f.at = { x: Number(p.x.toFixed(4)), y: Number(p.y.toFixed(4)) };
+    });
+  }
+
+  function onFxDown(e: PointerEvent, idx: number, part: "body" | "start" | "end") {
+    selectFx(idx);
+    const f = fxList[idx];
+    if (!f) return;
+    if (part === "body") beginDrag({ kind: "fmove", idx, offset: timeAt(e.clientX) - f.start }, e);
+    else beginDrag({ kind: "fedge", idx, edge: part }, e);
+  }
+
   /** Fila de pista que hay bajo el puntero. */
   function laneAt(e: PointerEvent): Track | null {
     return tracks.find((x) => inside(laneEls[x.id], e)) ?? null;
@@ -584,6 +743,7 @@
     sel = null;
     asel = null;
     ambsel = null;
+    fsel = null;
   }
 
   function addTrack(bus: SoundBus) {
@@ -613,6 +773,7 @@
     sel = null;
     ambsel = null;
     tsel = null;
+    fsel = null;
     const c = audio[bus][idx];
     if (!c) return;
     lastTrack = trackOf(c, bus);
@@ -649,6 +810,10 @@
         else void startVoice();
         return true;
       case "remove":
+        if (fsel !== null) {
+          removeFx();
+          return true;
+        }
         if (asel) {
           removeAudio();
           return true;
@@ -670,8 +835,10 @@
       case "cancel":
         if (voiceOn) void stopVoice(false);
         else if (recording) stopRecording(false);
+        else if (picking) viewer.cancelPick();
+        else if (picker) picker = null;
         else if (playing) pause();
-        else if (sel || asel || ambsel || tsel) (sel = null), (asel = null), (ambsel = null), (tsel = null);
+        else if (sel || asel || ambsel || tsel || fsel !== null) (sel = null), (asel = null), (ambsel = null), (tsel = null), (fsel = null);
         else return false;
         return true;
     }
@@ -684,7 +851,9 @@
     | { kind: "edge"; idx: number; edge: "start" | "end" }
     | { kind: "key"; idx: number; key: number }
     | { kind: "amove"; bus: AudioBus; idx: number; offset: number }
-    | { kind: "aedge"; bus: AudioBus; idx: number; edge: "start" | "end" };
+    | { kind: "aedge"; bus: AudioBus; idx: number; edge: "start" | "end" }
+    | { kind: "fmove"; idx: number; offset: number }
+    | { kind: "fedge"; idx: number; edge: "start" | "end" };
   let drag: Drag | null = null;
   let downAt = { x: 0, y: 0 };
   let moved = $state(false);
@@ -716,6 +885,29 @@
     const t = timeAt(e.clientX);
     const thr = SNAP_PX / pps;
     if (d.kind === "scrub") return seek(t);
+    if (d.kind === "fmove" || d.kind === "fedge") {
+      const pts = [...snapPoints(view, playhead, -1), ...audioPoints(null, -1), ...fxList.flatMap((f, i) => (i === d.idx ? [] : [f.start, f.start + f.duration]))];
+      editFx((list) => {
+        const f = list[d.idx];
+        if (!f) return;
+        if (d.kind === "fmove") {
+          const s0 = Math.max(0, t - d.offset);
+          const sa = snap(s0, pts, thr);
+          const sb = snap(s0 + f.duration, pts, thr) - f.duration;
+          const da = sa !== s0 ? Math.abs(sa - s0) : Infinity;
+          const db = sb !== s0 ? Math.abs(sb - s0) : Infinity;
+          f.start = Math.max(0, da === Infinity && db === Infinity ? s0 : da <= db ? sa : sb);
+        } else if (d.edge === "start") {
+          const endT = f.start + f.duration;
+          const s1 = Math.min(endT - MIN_FX_DURATION, Math.max(0, snap(t, pts, thr)));
+          f.start = s1;
+          f.duration = endT - s1;
+        } else {
+          f.duration = Math.max(MIN_FX_DURATION, snap(t, pts, thr) - f.start);
+        }
+      });
+      return;
+    }
     if (d.kind === "amove" || d.kind === "aedge") {
       const pts = [...snapPoints(view, playhead, -1), ...audioPoints(d.bus, d.idx)];
       editAudio((a) => {
@@ -781,6 +973,7 @@
     asel = null;
     ambsel = null;
     tsel = null;
+    fsel = null;
     const inst = view.camera[idx];
     if (part === "body") beginDrag({ kind: "move", idx, offset: timeAt(e.clientX) - inst.start }, e);
     else beginDrag({ kind: "edge", idx, edge: part }, e);
@@ -791,6 +984,7 @@
     asel = null;
     ambsel = null;
     tsel = null;
+    fsel = null;
     beginDrag({ kind: "key", idx, key }, e);
     seek(keyTimes(view.camera[idx])[key]);
   }
@@ -800,6 +994,7 @@
     asel = null;
     ambsel = null;
     tsel = null;
+    fsel = null;
     beginDrag({ kind: "scrub" }, e);
   }
 
@@ -952,6 +1147,7 @@
     <span class="time">{fmtTime(playhead)} / {fmtTime(duration)}</span>
     <span class="sep"></span>
     <button onclick={keyframe} disabled={recording || !size} title={tip(t("addKeyframe"), ek("keyframe"))}>◆ {t("keyframeShort")}</button>
+    <button onclick={() => (pause(), (picker = { at: playhead }))} disabled={recording || !size} title={t("fxAddHelp")}>{t("fxAddHere")}</button>
     <button class="rec" class:on={recording} onclick={() => (recording ? stopRecording(true) : startRecording())} disabled={!size}
       title={tip(recording ? t("stopRecording") : t("record"), ek("record"))}>● {recording ? t("stopRecording") : t("record")}</button>
     <button class="rec" class:on={voiceOn} onclick={() => (voiceOn ? stopVoice(true) : startVoice())} disabled={!size || recording}
@@ -995,6 +1191,10 @@
         <div class="labels">
           <div class="ruler-label"></div>
           <div class="lane-label">🎥 {t("trackCamera")}</div>
+          <div class="lane-label fxl" title={t("fxLaneHelp")} style:height="{fxRows.count * (FX_ROW + 1) + 5}px">
+            <span class="tname">✨ {t("trackFx")}</span>
+            <button class="ms add" title={t("fxAddHelp")} disabled={!size || !!store.readOnly} onclick={() => (pause(), (picker = { at: playhead }))}>+</button>
+          </div>
           {#each tracks as tr, k (tr.id)}
             {@const last = tracks[k + 1]?.bus !== tr.bus}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1084,6 +1284,12 @@
               <div class="drop" style:left="{PAD + libDrag.t * pps}px" style:width="{Math.max(8, defaultDuration(libDrag.clip.clip) * pps)}px"></div>
             {/if}
           </div>
+          <div class="lane fx" onpointerdown={onLaneDown} style:height="{fxRows.count * (FX_ROW + 1) + 5}px">
+            {#each fxList as f, i (f.id)}
+              <FxClipView fx={f} {pps} pad={PAD} selected={fsel === i} top={3 + (fxRows.row[i] ?? 0) * (FX_ROW + 1)} height={FX_ROW}
+                ondown={(e, part) => onFxDown(e, i, part)} />
+            {/each}
+          </div>
           {#each tracks as tr (tr.id)}
             {#if tr.bus === "ambient"}
               {@const here = ambLane(tr.id)}
@@ -1099,7 +1305,7 @@
                     style:height="{h - 1}px"
                     style:left="{PAD}px"
                     style:width="{Math.max(24, duration * pps)}px"
-                    onpointerdown={(e) => { e.stopPropagation(); ambsel = a.id; sel = null; asel = null; tsel = null; lastTrack = tr.id; }}
+                    onpointerdown={(e) => { e.stopPropagation(); ambsel = a.id; sel = null; asel = null; tsel = null; fsel = null; lastTrack = tr.id; }}
                   >
                     🔁 {a.name ?? sounds.name(a.sound)} · {r[0] === r[1] ? t("ambientOne", { a: r[0] + 1 }) : t("ambientRange", { a: r[0] + 1, b: r[1] + 1 })}
                   </button>
@@ -1125,7 +1331,18 @@
     <div class="splitter" title={t("resizeHelp")} onpointerdown={(e) => startResize("inspector", e)}
       ondblclick={() => ((prefs.settings.inspectorWidth = INSPECTOR_WIDTH.def), prefs.saveSettings())}></div>
     <aside class="inspector" style:width="{prefs.settings.inspectorWidth}px">
-      {#if tsel && tracks.find((x) => x.id === tsel)}
+      {#if fsel !== null && fxList[fsel]}
+        {@const fi = fsel}
+        <FxInspector
+          fx={fxList[fi]}
+          edit={(fn) => editFx((list) => { const f = list[fi]; if (f) fn(f); })}
+          {picking}
+          onpick={pickFxPoint}
+          onseek={seek}
+          onremove={removeFx}
+          onduplicate={duplicateFx}
+        />
+      {:else if tsel && tracks.find((x) => x.id === tsel)}
         <TrackInspector {store} track={tracks.find((x) => x.id === tsel)!} onremoved={() => (tsel = null)} />
       {:else if ambsel && store.ambients.find((x) => x.id === ambsel)}
         {@const am = store.ambients.find((x) => x.id === ambsel)!}
@@ -1156,6 +1373,7 @@
           onremove={removeSelection}
           onduplicate={duplicate}
           onsave={saveToLibrary}
+          onfx={(at) => (pause(), seek(at), (picker = { at }))}
         />
       {:else}
         <p class="note">{fromTemplate ? t("editorTemplate", { name: tpl ? label(`tpl.${tpl.id}`) : "" }) : t("editorHelp")}</p>
@@ -1164,6 +1382,10 @@
     </aside>
   </div>
 </section>
+
+{#if picker}
+  <FxPicker at={picker.at} withSound={fxSound} onsound={(on) => (fxSound = on)} onpick={(p) => addFx(p, picker!.at)} onclose={() => (picker = null)} />
+{/if}
 
 {#if libDrag && moved}
   <div class="ghost" style:left="{libDrag.x + 10}px" style:top="{libDrag.y + 10}px">
@@ -1222,6 +1444,9 @@
   .tick.major { height: 14px; }
   .lane { position: relative; height: 44px; border-bottom: 1px solid rgb(42 47 56 / 0.6); }
   .lane.audio { height: 34px; }
+  .lane.fx { height: 28px; }
+  .lane-label.fxl { height: 28px; gap: 4px; padding: 0 4px 0 8px; }
+  .lane-label.fxl .tname { flex: 1; }
   .lane.amb { height: 26px; }
   .lane.muted { opacity: 0.45; }
   .ambbar {

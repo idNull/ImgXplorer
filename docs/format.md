@@ -73,6 +73,41 @@ Easing: `linear`, `ease-in`, `ease-out`, `ease-in-out`, `bounce`, `elastic`, `st
 - Una espera sin `pose` mantiene la pose con la que se llega a ella.
 - `audio.voice` y `audio.sfx`: sonidos de la imagen (ver *Sonido*). Una timeline puede tener
   sonido y ninguna cámara; entonces la imagen sigue usando su plantilla para la cámara.
+- `fx`: efectos especiales visuales de la imagen (ver *Efectos especiales*). Igual que el sonido,
+  pueden ir sin cámara.
+
+### Efectos especiales
+```json
+"fx": [
+  { "id": "fxa1-0", "type": "flash", "start": 7.7, "duration": 0.5, "preset": "white", "at": { "x": 0.3, "y": 0.6 } },
+  { "id": "fxa1-2", "type": "shake", "start": 7.7, "duration": 1.2, "intensity": 1,
+    "params": { "strength": 3.5, "freq": 20, "decay": 0.85, "rot": 1.2 } }
+]
+```
+- `id`: único en la imagen. `type`: el tipo (abajo); uno desconocido se conserva pero no se dibuja.
+- `start` y `duration`: en segundos de la imagen. La imagen dura al menos hasta el final de su último efecto.
+- `intensity`: 0–3 (1). `preset`: solo informativo (el ajuste del que salió).
+- `params`: los mandos que falten toman su valor de serie y los que se salgan del rango se limitan. Los porcentajes son de la altura del vídeo.
+- `at`: punto de la imagen (0–1) donde ocurre (centro de la onda, de las líneas o del desenfoque); sigue a la imagen aunque se mueva la cámara. Sin él, el centro de la pantalla.
+- El catálogo completo, con rangos y ajustes predefinidos, sale de `imgx-core` (`fx::CATALOG`):
+
+  | `type` | Qué hace | `params` (valor de serie) |
+  |---|---|---|
+  | `shake` | Temblor de la pantalla | `strength` % (2), `freq` Hz (18), `decay` 0–1 (0.8), `rot` ° (0.6), `axis` both/x/y |
+  | `zoom-punch` | Golpe de zoom que vuelve | `amount` % (15), `way` in/out, `attack` s (0.06), `settle` smooth/bounce |
+  | `flash` | Destello de un color | `color` #rrggbb (#ffffff), `amount` 0–1 (0.9), `attack` s (0.02), `blink` Hz 0–3 (0) |
+  | `shockwave` | Anillo que deforma la imagen | `strength` % (3), `width` % (8), `size` (1.2, por la diagonal) |
+  | `chroma` | Aberración cromática y glitch | `amount` % (0.7), `glitch` 0–1 (0), `pulse` Hz (0), `fadeIn`, `fadeOut` |
+  | `radial-blur` | Desenfoque hacia el punto | `amount` 0–1 (0.35), `fadeIn`, `fadeOut` |
+  | `focus-lines` | Líneas de concentración (manga) | `density` (110), `thickness` 0.1–1 (0.5), `inner` % (38), `color` black/white, `flicker` Hz (12), `fadeIn`, `fadeOut` |
+  | `speed-lines` | Líneas de velocidad (manga) | `angle` ° (0), `density` (60), `thickness` (0.4), `color`, `speed` (3), `fadeIn`, `fadeOut` |
+  | `impact` | Fotograma de impacto | `mode` negative/bw/both, `blink` Hz 0–3 (0) |
+  | `color` | Sepia, gris o tinte | `mode` sepia/gray/cold/warm/tint, `amount` 0–1 (0.8), `tint` #rrggbb, `contrast` % (0), `fadeIn`, `fadeOut` |
+  | `vignette` | Bordes oscuros (o claros) | `amount` 0–1 (0.6), `size` 0.2–1 (0.6), `pulse` Hz (0), `color` black/red/white, `fadeIn`, `fadeOut` |
+  | `wave` | Ondulación | `amp` % (0.6), `freq` (6), `speed` Hz (1), `fadeIn`, `fadeOut` |
+
+- Destellos y negativos no parpadean más de 3 veces por segundo (fotosensibilidad).
+- El cálculo es determinista (el ruido sale del `id` y del tiempo): la vista previa y el vídeo dan lo mismo.
 
 ### Sonido
 - **Clip de voz o efecto** (`timeline.audio.voice[]`, `timeline.audio.sfx[]`):
