@@ -1,6 +1,9 @@
 //! Exportar a vídeo. La interfaz pinta cada fotograma con el mismo motor que la vista previa,
 //! lo convierte a YUV 4:2:0 en la GPU y lo envía aquí; se pasa a ffmpeg por su entrada estándar.
 //! ffmpeg escribe en un archivo temporal junto al destino y, al terminar bien, se renombra.
+//!
+//! Formatos: MP4 (H.264 + AAC), WebM (VP9 + Opus) y GIF (en dos pasadas: el vídeo y luego la
+//! paleta de colores; sin sonido).
 
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -35,7 +38,21 @@ struct Job {
     finished: bool,
     /// El ffmpeg usado (para la segunda pasada con el sonido).
     ffmpeg: String,
+    format: Format,
+    fps: u32,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    #[default]
+    Mp4,
+    Webm,
+    Gif,
+}
+
+/// Fotogramas por segundo máximos de un GIF (más pesa mucho y no se nota).
+const GIF_FPS: u32 = 15;
 
 impl Job {
     fn stderr_tail(&self) -> String {
@@ -76,6 +93,8 @@ pub struct ExportOptions {
     crf: u8,
     /// Ruta de ffmpeg elegida por el usuario (vacía: buscarlo).
     ffmpeg: Option<String>,
+    #[serde(default)]
+    format: Format,
 }
 
 #[derive(Serialize)]
@@ -84,6 +103,8 @@ pub struct FfmpegInfo {
     version: String,
     /// Codificador H.264 que se usará (vacío si no hay ninguno).
     encoder: String,
+    /// Tiene VP9 y Opus (para WebM).
+    webm: bool,
 }
 
 /// Dónde buscar ffmpeg. En macOS las apps gráficas no heredan el PATH de la terminal, así que
@@ -107,7 +128,8 @@ fn probe(user: Option<&str>) -> Result<FfmpegInfo, String> {
         let list = run(&bin, &["-hide_banner", "-encoders"]).unwrap_or_default();
         let has = |name: &str| list.lines().any(|l| l.split_whitespace().nth(1) == Some(name));
         let encoder = ENCODERS.iter().find(|e| has(e)).map(|e| e.to_string()).unwrap_or_default();
-        return Ok(FfmpegInfo { path: bin, version, encoder });
+        let webm = has("libvpx-vp9") && has("libopus");
+        return Ok(FfmpegInfo { path: bin, version, encoder, webm });
     }
     Err(match user.filter(|s| !s.trim().is_empty()) {
         Some(p) => format!("no se pudo ejecutar «{p}»"),
@@ -134,8 +156,19 @@ fn ffmpeg_args(o: &ExportOptions, encoder: &str, tmp: &Path) -> Vec<String> {
     .map(String::from)
     .to_vec();
     a.extend(["-s".into(), format!("{}x{}", o.width, o.height), "-r".into(), o.fps.to_string(), "-i".into(), "pipe:0".into()]);
-    a.extend(["-c:v".into(), encoder.into()]);
     let crf = o.crf.min(51);
+    if o.format == Format::Webm {
+        // VP9: su escala de calidad va de 0 a 63 (18 → 24, 23 → 31, 28 → 38).
+        let q = (f64::from(crf) * 1.4 - 1.2).round().clamp(0.0, 63.0) as u32;
+        a.extend(["-c:v", "libvpx-vp9", "-b:v", "0", "-row-mt", "1", "-deadline", "good", "-cpu-used", "4"].map(String::from));
+        a.extend(["-crf".into(), q.to_string()]);
+        a.extend(["-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-f", "webm"].map(String::from));
+        a.push(tmp.to_string_lossy().into_owned());
+        return a;
+    }
+    // GIF: primero un vídeo de mucha calidad, que luego se convierte con su paleta.
+    let crf = if o.format == Format::Gif { 12 } else { crf };
+    a.extend(["-c:v".into(), encoder.into()]);
     if encoder == "libx264" {
         a.extend(["-preset".into(), "medium".into(), "-crf".into(), crf.to_string()]);
     } else {
@@ -177,7 +210,10 @@ fn start(o: &ExportOptions) -> Result<Job, String> {
         return Err(format!("fotogramas por segundo no válidos: {}", o.fps));
     }
     let info = probe(o.ffmpeg.as_deref())?;
-    if info.encoder.is_empty() {
+    if o.format == Format::Webm && !info.webm {
+        return Err(format!("{} no tiene los codificadores de WebM (libvpx-vp9 y libopus)", info.path));
+    }
+    if o.format != Format::Webm && info.encoder.is_empty() {
         return Err(format!("{} no tiene ningún codificador H.264 ({})", info.path, ENCODERS.join(", ")));
     }
     let out = PathBuf::from(&o.path);
@@ -212,7 +248,19 @@ fn start(o: &ExportOptions) -> Result<Job, String> {
     let (tx, rx) = sync_channel::<Vec<u8>>(QUEUE);
     let frame_bytes = (o.width * o.height * 3 / 2) as usize;
     log::info!("exportando {}×{} a {} fps con {} → {}", o.width, o.height, o.fps, info.encoder, out.display());
-    Ok(Job { child, tx: Some(tx), writer: Some(writer_thread(stdin, rx)), stderr, tmp, out, frame_bytes, finished: false, ffmpeg: info.path })
+    Ok(Job {
+        child,
+        tx: Some(tx),
+        writer: Some(writer_thread(stdin, rx)),
+        stderr,
+        tmp,
+        out,
+        frame_bytes,
+        finished: false,
+        ffmpeg: info.path,
+        format: o.format,
+        fps: o.fps,
+    })
 }
 
 /// Empieza una exportación (cancela la anterior si quedaba alguna).
@@ -260,28 +308,55 @@ pub struct ExportAudio {
 /// Frecuencia del sonido en el vídeo.
 const AUDIO_RATE: u32 = 48_000;
 
-/// Argumentos de la segunda pasada: copia el vídeo tal cual y añade el sonido en AAC.
-fn mux_args(video: &Path, wav: &Path, out: &Path) -> Vec<String> {
+/// Argumentos de la segunda pasada: copia el vídeo tal cual y añade el sonido (AAC en MP4, Opus
+/// en WebM).
+fn mux_args(video: &Path, wav: &Path, out: &Path, format: Format) -> Vec<String> {
     let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"].map(String::from).to_vec();
     a.push(video.to_string_lossy().into_owned());
     a.push("-i".into());
     a.push(wav.to_string_lossy().into_owned());
-    a.extend(
-        ["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "-f", "mp4"]
-            .map(String::from),
-    );
+    a.extend(["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy"].map(String::from));
+    if format == Format::Webm {
+        a.extend(["-c:a", "libopus", "-b:a", "160k", "-shortest", "-f", "webm"].map(String::from));
+    } else {
+        a.extend(["-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", "-f", "mp4"].map(String::from));
+    }
     a.push(out.to_string_lossy().into_owned());
     a
 }
 
+/// Argumentos para pasar el vídeo temporal a GIF: una paleta propia de 256 colores (calculada
+/// sobre lo que cambia entre fotogramas) y un tramado suave. Bucle infinito.
+fn gif_args(video: &Path, out: &Path, fps: u32) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"].map(String::from).to_vec();
+    a.push(video.to_string_lossy().into_owned());
+    a.push("-vf".into());
+    a.push(format!("fps={},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle", fps.min(GIF_FPS)));
+    a.extend(["-loop", "0", "-f", "gif"].map(String::from));
+    a.push(out.to_string_lossy().into_owned());
+    a
+}
+
+fn to_gif(ffmpeg: &str, video: &Path, out: &Path, fps: u32) -> Result<(), String> {
+    let part = out.with_extension("gif.part");
+    let o = Command::new(ffmpeg).args(gif_args(video, &part, fps)).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+    if !o.status.success() {
+        std::fs::remove_file(&part).ok();
+        let msg = String::from_utf8_lossy(&o.stderr).trim().to_owned();
+        return Err(if msg.is_empty() { "ffmpeg no pudo hacer el GIF".into() } else { msg });
+    }
+    std::fs::rename(&part, out).map_err(|e| format!("{}: {e}", out.display()))
+}
+
 /// Mezcla el sonido y lo une al vídeo `video`, dejando el resultado en `out`.
-fn add_sound(ffmpeg: &str, video: &Path, out: &Path, clips: &[imgx_audio::Clip], tracks: &[imgx_audio::TrackSpec], levels: imgx_audio::Levels, seconds: f64) -> Result<(), String> {
+#[allow(clippy::too_many_arguments)]
+fn add_sound(ffmpeg: &str, video: &Path, out: &Path, format: Format, clips: &[imgx_audio::Clip], tracks: &[imgx_audio::TrackSpec], levels: imgx_audio::Levels, seconds: f64) -> Result<(), String> {
     let mix = imgx_audio::mixer::render(clips, tracks, levels, AUDIO_RATE, seconds);
     let wav = video.with_extension("wav");
     let muxed = video.with_extension("mux");
     let res = (|| {
         imgx_audio::wav::write_samples(&wav, AUDIO_RATE, &mix).map_err(|e| e.to_string())?;
-        let o = Command::new(ffmpeg).args(mux_args(video, &wav, &muxed)).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
+        let o = Command::new(ffmpeg).args(mux_args(video, &wav, &muxed, format)).stdin(Stdio::null()).output().map_err(|e| e.to_string())?;
         if !o.status.success() {
             let msg = String::from_utf8_lossy(&o.stderr).trim().to_owned();
             return Err(if msg.is_empty() { "ffmpeg no pudo añadir el sonido".into() } else { msg });
@@ -304,6 +379,13 @@ pub async fn export_finish(app: AppHandle, audio: Option<ExportAudio>, state: St
             let msg = job.stderr_tail();
             return Err(if msg.is_empty() { "ffmpeg terminó con error".into() } else { msg });
         }
+        if job.format == Format::Gif {
+            // Un GIF no lleva sonido.
+            to_gif(&job.ffmpeg, &job.tmp, &job.out, job.fps)?;
+            std::fs::remove_file(&job.tmp).ok();
+            job.finished = true;
+            return Ok(job.out.to_string_lossy().into_owned());
+        }
         match audio.filter(|a| !a.clips.is_empty()) {
             Some(a) => {
                 let state = app.state::<crate::audio::Audio>();
@@ -313,7 +395,7 @@ pub async fn export_finish(app: AppHandle, audio: Option<ExportAudio>, state: St
                     .filter_map(|c| c.resolve(&app, &state).inspect_err(|e| log::warn!("exportar sonido: {e}")).ok())
                     .collect();
                 log::info!("exportar: mezclando {} sonidos ({:.1} s)", clips.len(), a.seconds);
-                add_sound(&job.ffmpeg, &job.tmp, &job.out, &clips, &a.tracks, a.levels, a.seconds)?;
+                add_sound(&job.ffmpeg, &job.tmp, &job.out, job.format, &clips, &a.tracks, a.levels, a.seconds)?;
                 std::fs::remove_file(&job.tmp).ok();
             }
             None => std::fs::rename(&job.tmp, &job.out).map_err(|e| format!("{}: {e}", job.out.display()))?,
@@ -337,7 +419,7 @@ mod tests {
     use super::*;
 
     fn opts(path: &Path, crf: u8) -> ExportOptions {
-        ExportOptions { path: path.to_string_lossy().into_owned(), width: 64, height: 48, fps: 10, crf, ffmpeg: None }
+        ExportOptions { path: path.to_string_lossy().into_owned(), width: 64, height: 48, fps: 10, crf, ffmpeg: None, format: Format::Mp4 }
     }
 
     #[test]
@@ -350,6 +432,69 @@ mod tests {
         assert!(a.contains("-crf 23") && a.ends_with("-f mp4 /x/.v.mp4.part"), "{a}");
         let b = ffmpeg_args(&o, "h264_videotoolbox", &tmp).join(" ");
         assert!(b.contains("-b:v") && !b.contains("-crf"), "{b}");
+        let w = ffmpeg_args(&ExportOptions { format: Format::Webm, ..opts(Path::new("/x/v.webm"), 23) }, "libx264", &tmp).join(" ");
+        assert!(w.contains("libvpx-vp9") && w.contains("-crf 31") && w.contains("-f webm"), "{w}");
+        let g = gif_args(Path::new("/x/t.mp4"), Path::new("/x/v.gif"), 30).join(" ");
+        assert!(g.contains("fps=15,") && g.contains("palettegen") && g.ends_with("-f gif /x/v.gif"), "{g}");
+    }
+
+    /// Un GIF de verdad si hay ffmpeg con H.264.
+    #[test]
+    fn hace_gif_si_hay_ffmpeg() {
+        let Ok(info) = probe(None) else { return };
+        if info.encoder.is_empty() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("imgx-export-gif-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("prueba.gif");
+        let mut job = start(&ExportOptions { format: Format::Gif, ..opts(&out, 23) }).unwrap();
+        let tx = job.tx.clone().unwrap();
+        for i in 0..10u8 {
+            let mut f = vec![128u8; job.frame_bytes];
+            f[..64 * 48].fill(16 + i * 20);
+            tx.send(f).unwrap();
+        }
+        drop(tx);
+        assert!(job.close().unwrap(), "{}", job.stderr_tail());
+        to_gif(&job.ffmpeg, &job.tmp, &job.out, job.fps).unwrap();
+        std::fs::remove_file(&job.tmp).ok();
+        job.finished = true;
+        let head = std::fs::read(&out).unwrap();
+        assert_eq!(&head[..6], b"GIF89a");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Un WebM con sonido Opus si hay ffmpeg con VP9.
+    #[test]
+    fn hace_webm_con_sonido_si_hay_ffmpeg() {
+        let Ok(info) = probe(None) else { return };
+        if !info.webm || Command::new("ffprobe").arg("-version").output().is_err() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("imgx-export-webm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("prueba.webm");
+        let mut job = start(&ExportOptions { format: Format::Webm, ..opts(&out, 30) }).unwrap();
+        let tx = job.tx.clone().unwrap();
+        for _ in 0..10 {
+            tx.send(vec![128u8; job.frame_bytes]).unwrap();
+        }
+        drop(tx);
+        assert!(job.close().unwrap(), "{}", job.stderr_tail());
+        let tone = std::sync::Arc::new(imgx_audio::synth::sine(440.0, 2.0, 44100));
+        let clip = imgx_audio::Clip::new(tone, imgx_audio::Bus::Voice, 0.0, 2.0);
+        add_sound(&job.ffmpeg, &job.tmp, &job.out, Format::Webm, &[clip], &[], imgx_audio::Levels::default(), 1.0).unwrap();
+        std::fs::remove_file(&job.tmp).ok();
+        job.finished = true;
+        let probe = Command::new("ffprobe")
+            .args(["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])
+            .arg(&out)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&probe.stdout);
+        assert!(text.contains("vp9") && text.contains("opus"), "{text}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Codifica unos fotogramas de verdad si hay ffmpeg con H.264 en el sistema.
@@ -398,7 +543,7 @@ mod tests {
         let tone = std::sync::Arc::new(imgx_audio::synth::sine(440.0, 2.0, 44100));
         let clip = imgx_audio::Clip::new(tone, imgx_audio::Bus::Voice, 0.2, 2.0);
         let reverb = imgx_audio::TrackSpec { effects: vec![imgx_audio::fx::FxSpec::new(imgx_audio::fx::FxKind::Reverb, &[])], ..imgx_audio::TrackSpec::default_for(imgx_audio::Bus::Voice) };
-        add_sound(&job.ffmpeg, &job.tmp, &job.out, &[clip], &[reverb], imgx_audio::Levels::default(), 1.0).unwrap();
+        add_sound(&job.ffmpeg, &job.tmp, &job.out, Format::Mp4, &[clip], &[reverb], imgx_audio::Levels::default(), 1.0).unwrap();
         std::fs::remove_file(&job.tmp).ok();
         job.finished = true;
         let probe = Command::new("ffprobe")

@@ -87,6 +87,19 @@ Starting values; adapt to the user's pace (calm ×1.3, action ×0.7):
 - Review with `render_frames` (it adds a frame at the peak of each effect) and `get_timeline` (effect ids for
   `edit_fx` / `remove_fx`).
 
+## Onomatopoeia and subtitles
+
+- **Onomatopoeia** (`type: "text"`): animated comic lettering over the image (presets `boom`, `pow`, `bang`, `zas`,
+  `surprise`, `rumble`; params `text`, `color`, `outline`, `height` in % of the screen, `rot`, `anim`: `pop`, `shake`,
+  `grow`, `bounce`, `slide`). Put `at` where the sound comes from. A situation adds its own with `text: true`.
+  - If the page already has a drawn sound effect (KABOOM in the art), do **not** add another one on top: the art
+    already says it. Use them for sounds the page implies but does not letter, or to emphasise a big moment. Keep it
+    rare: at most one or two per page. Write them in the comic's language.
+- **Subtitles** (`type: "caption"`): text fixed on screen that does not shake. `style`: `subtitle` (bottom, for
+  dialogue or translations), `title` (big in the middle: chapter titles, "Meanwhile…"), `narration` (yellow box top
+  left, like a comic caption). Give each line its reading time (about 15 characters per second, never under 1.5 s)
+  and do not overlap two subtitles. When exporting, the user can save them as an `.srt` file too.
+
 ## Sound
 
 - Library: `list_sounds` (built-in: rain, wind, waves, heartbeat, thunder, hit, punch, whoosh, explosion, knock,

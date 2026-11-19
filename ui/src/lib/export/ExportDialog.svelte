@@ -5,7 +5,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { exportVideo, ExportCancelled, type ExportProgress, type ExportSpec } from "./exporter";
   import { saveFile, openFile, dirOf, joinPath } from "../files/dialog.svelte";
-  import { prefs, videoPixels, QUALITY_CRF, VIDEO_SIZES, type VideoSize } from "../prefs.svelte";
+  import { prefs, videoPixels, QUALITY_CRF, VIDEO_EXT, VIDEO_SIZES, type VideoFormat, type VideoSize } from "../prefs.svelte";
+  import { captionText } from "./exporter";
   import type { PictureRef } from "../viewer/picture";
   import { t } from "../i18n.svelte";
   import type { MixLevels } from "../audio/director";
@@ -31,6 +32,8 @@
     path: string;
     version: string;
     encoder: string;
+    /** Tiene VP9 y Opus. */
+    webm: boolean;
   }
 
   let ff = $state<Ffmpeg | null>(null);
@@ -57,7 +60,29 @@
     const b = Math.min(Math.max(a + 1, Math.round(to)), count) - 1;
     return { a, b };
   });
-  const ready = $derived(phase === "setup" && !!ff?.encoder && !!path.trim());
+  const format = $derived(prefs.settings.video.format);
+  const ready = $derived(phase === "setup" && !!ff && (format === "webm" ? ff.webm : !!ff.encoder) && !!path.trim());
+  /** Algún subtítulo en el tramo (para ofrecer el `.srt`). */
+  const hasCaptions = $derived.by(() => {
+    for (let i = span.a; i <= span.b; i++) if (spec.fx?.(i)?.some((f) => f.type === "caption" && captionText(f))) return true;
+    return false;
+  });
+
+  function setFormat(f: VideoFormat) {
+    prefs.settings.video.format = f;
+    save();
+    path = path.replace(/\.(mp4|webm|gif)$/i, "") + `.${VIDEO_EXT[f]}`;
+  }
+
+  /** Ajuste rápido para redes: vertical 9:16 a 1080p. */
+  function forSocial() {
+    prefs.settings.video.size = "1080p";
+    prefs.settings.video.shape = "portrait";
+    if (prefs.settings.video.format === "gif") prefs.settings.video.format = "mp4";
+    save();
+    path = path.replace(/\.(mp4|webm|gif)$/i, "") + `.${VIDEO_EXT[prefs.settings.video.format]}`;
+  }
+  const social = $derived(prefs.settings.video.size === "1080p" && prefs.settings.video.shape === "portrait");
   /** Alguna imagen del tramo tiene sonido. */
   const hasSound = $derived.by(() => {
     for (let i = span.a; i <= span.b; i++) {
@@ -76,7 +101,7 @@
   // Archivo propuesto: junto a la fuente, con su nombre (y la página si es solo una).
   $effect(() => {
     const suffix = range === "current" && count > 1 ? `-${String(index + 1).padStart(String(count).length, "0")}` : "";
-    if (!pathTouched) path = joinPath(dir, `${stem(title)}${suffix}.mp4`);
+    if (!pathTouched) path = joinPath(dir, `${stem(title)}${suffix}.${VIDEO_EXT[untrack(() => prefs.settings.video.format)]}`);
   });
 
   $effect(() => {
@@ -109,7 +134,8 @@
   }
 
   async function pickPath() {
-    const p = await saveFile({ title: t("exportVideo"), dir: dirOf(path), defaultName: path.slice(path.lastIndexOf("/") + 1), filters: [{ name: "MP4", extensions: ["mp4"] }] });
+    const ext = VIDEO_EXT[format];
+    const p = await saveFile({ title: t("exportVideo"), dir: dirOf(path), defaultName: path.slice(path.lastIndexOf("/") + 1), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     if (!p) return;
     path = p;
     pathTouched = true;
@@ -135,7 +161,9 @@
           background: prefs.settings.background,
           from: span.a,
           to: span.b,
-          sound: hasSound && withSound ? $state.snapshot(mix) : null,
+          sound: hasSound && withSound && format !== "gif" ? $state.snapshot(mix) : null,
+          format,
+          srt: hasCaptions && prefs.settings.video.srt,
         },
         withAdjust ? spec : { ...spec, adjust: undefined },
         refAt,
@@ -236,6 +264,21 @@
         </div>
 
         <div class="row">
+          <span>{t("videoFormat")}</span>
+          <div class="inline">
+            <div class="seg">
+              {#each [["mp4", "MP4"], ["webm", "WebM"], ["gif", "GIF"]] as const as [f, name] (f)}
+                <button class:on={format === f} onclick={() => setFormat(f)} title={t(`videoFormatHelp_${f}`)}
+                  disabled={f === "webm" && !!ff && !ff.webm}>{name}</button>
+              {/each}
+            </div>
+            <button class:on={social} onclick={forSocial} title={t("videoSocialHelp")}>📱 {t("videoSocial")}</button>
+          </div>
+        </div>
+        {#if format === "gif"}<p class="warn">{t("videoGifNote")}</p>{/if}
+        {#if format === "webm" && ff && !ff.webm}<p class="warn">{t("videoNoWebm")}</p>{/if}
+
+        <div class="row">
           <span>{t("videoSize")}</span>
           <div class="inline">
             <select value={prefs.settings.video.size} onchange={(e) => { prefs.settings.video.size = e.currentTarget.value as VideoSize; save(); }}>
@@ -283,8 +326,11 @@
             <button onclick={pickPath}>{t("browse")}</button>
           </div>
         </div>
-        {#if hasSound}
+        {#if hasSound && format !== "gif"}
           <label class="sound"><input type="checkbox" bind:checked={withSound} /> {t("exportSound")}</label>
+        {/if}
+        {#if hasCaptions}
+          <label class="sound"><input type="checkbox" checked={prefs.settings.video.srt} onchange={(e) => { prefs.settings.video.srt = e.currentTarget.checked; save(); }} /> 💬 {t("exportSrt")}</label>
         {/if}
         {#if hasAdjust}
           <label class="sound"><input type="checkbox" bind:checked={withAdjust} /> {t("exportAdjust")}</label>

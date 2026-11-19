@@ -69,6 +69,8 @@ pub enum ParamKind {
     Number { min: f64, max: f64, step: f64, default: f64, unit: &'static str },
     Choice { options: &'static [&'static str], default: &'static str },
     Color { default: &'static str },
+    /// Texto libre (onomatopeyas y subtítulos), de hasta `max` caracteres.
+    Text { default: &'static str, max: usize },
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +116,9 @@ const fn choice(key: &'static str, options: &'static [&'static str], default: &'
 }
 const fn color(key: &'static str, default: &'static str) -> ParamSpec {
     ParamSpec { key, kind: ParamKind::Color { default } }
+}
+const fn text(key: &'static str, default: &'static str, max: usize) -> ParamSpec {
+    ParamSpec { key, kind: ParamKind::Text { default, max } }
 }
 const FADE_IN: ParamSpec = num("fadeIn", 0.0, 3.0, 0.05, 0.15, "s");
 const FADE_OUT: ParamSpec = num("fadeOut", 0.0, 3.0, 0.05, 0.2, "s");
@@ -307,6 +312,50 @@ pub const CATALOG: &[FxInfo] = &[
             Preset { id: "dizzy", duration: 2.0, params: &[("amp", N(1.2)), ("freq", N(3.0)), ("speed", N(0.6))] },
         ],
     },
+    // Onomatopeya («¡BOOM!», «¡ZAS!»): letras de cómic sobre la imagen, pegadas a su punto (se
+    // mueven con la cámara y con el temblor).
+    FxInfo {
+        kind: "text",
+        sustained: false,
+        duration: 1.5,
+        params: &[
+            text("text", "¡BOOM!", 40),
+            color("color", "#ffd400"),
+            color("outline", "#000000"),
+            num("height", 3.0, 60.0, 1.0, 18.0, "%"),
+            num("rot", -45.0, 45.0, 1.0, -8.0, "°"),
+            choice("anim", &["pop", "shake", "grow", "bounce", "slide"], "pop"),
+            num("fadeOut", 0.0, 3.0, 0.05, 0.25, "s"),
+        ],
+        presets: &[
+            Preset { id: "boom", duration: 1.4, params: &[("text", S("¡BOOM!")), ("color", S("#ff4a1c")), ("anim", S("shake")), ("height", N(24.0)), ("rot", N(-6.0))] },
+            Preset { id: "pow", duration: 0.9, params: &[("text", S("¡POW!")), ("color", S("#ffd400")), ("anim", S("pop")), ("rot", N(-12.0))] },
+            Preset { id: "bang", duration: 0.8, params: &[("text", S("¡BANG!")), ("color", S("#ffffff")), ("outline", S("#c40000")), ("anim", S("pop")), ("height", N(16.0))] },
+            Preset { id: "zas", duration: 0.8, params: &[("text", S("¡ZAS!")), ("color", S("#7dd3fc")), ("anim", S("slide")), ("rot", N(-4.0))] },
+            Preset { id: "surprise", duration: 1.0, params: &[("text", S("!?")), ("color", S("#ffffff")), ("anim", S("bounce")), ("height", N(22.0)), ("rot", N(0.0))] },
+            Preset { id: "rumble", duration: 2.0, params: &[("text", S("BRRRR")), ("color", S("#a3a3a3")), ("anim", S("grow")), ("height", N(14.0)), ("rot", N(0.0))] },
+        ],
+    },
+    // Subtítulo, cartel o cartela de narración: texto fijo en la pantalla (no tiembla) que se
+    // puede exportar también como `.srt`.
+    FxInfo {
+        kind: "caption",
+        sustained: true,
+        duration: 3.0,
+        params: &[
+            text("text", "…", 300),
+            choice("style", &["subtitle", "title", "narration"], "subtitle"),
+            num("height", 2.0, 15.0, 0.5, 4.5, "%"),
+            color("color", "#ffffff"),
+            FADE_IN,
+            FADE_OUT,
+        ],
+        presets: &[
+            Preset { id: "subtitle", duration: 3.0, params: &[] },
+            Preset { id: "title", duration: 3.0, params: &[("style", S("title")), ("height", N(9.0))] },
+            Preset { id: "narration", duration: 4.0, params: &[("style", S("narration")), ("color", S("#111111")), ("height", N(4.0))] },
+        ],
+    },
 ];
 
 /// Destellos y negativos parpadean como mucho 3 veces por segundo (pautas WCAG sobre
@@ -339,6 +388,11 @@ impl P<'_> {
             Some(v) if options.contains(&v) => v,
             _ => default,
         }
+    }
+
+    fn text(&self, key: &str) -> &str {
+        let Some(ParamSpec { kind: ParamKind::Text { default, .. }, .. }) = self.spec(key) else { return "" };
+        self.fx.params.get(key).and_then(Value::as_str).unwrap_or(default)
     }
 
     fn color(&self, key: &str) -> [f64; 3] {
@@ -406,6 +460,9 @@ pub struct Situation {
     pub id: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sound: Option<&'static str>,
+    /// Onomatopeya opcional: ajuste predefinido del tipo `text` («¡BOOM!»…).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<&'static str>,
     pub parts: &'static [Part],
 }
 
@@ -417,6 +474,7 @@ pub const SITUATIONS: &[Situation] = &[
     Situation {
         id: "explosion",
         sound: Some("builtin:explosion"),
+        text: Some("boom"),
         parts: &[
             part("flash", "white", 0.0, 0.5, 1.0),
             part("shockwave", "blast", 0.0, 0.0, 1.0),
@@ -427,61 +485,73 @@ pub const SITUATIONS: &[Situation] = &[
     Situation {
         id: "punch",
         sound: Some("builtin:punch"),
+        text: Some("pow"),
         parts: &[part("zoom-punch", "punch", 0.0, 0.0, 1.0), part("shake", "hit", 0.0, 0.0, 1.0), part("impact", "negative", 0.0, 0.12, 1.0)],
     },
     Situation {
         id: "shot",
         sound: Some("builtin:shot"),
+        text: Some("bang"),
         parts: &[part("flash", "white", 0.0, 0.18, 0.7), part("shake", "hit", 0.0, 0.25, 0.5)],
     },
     Situation {
         id: "lightning",
         sound: Some("builtin:thunder"),
+        text: None,
         parts: &[part("flash", "lightning", 0.0, 0.0, 1.0), part("impact", "negative", 0.1, 0.12, 1.0)],
     },
     Situation {
         id: "earthquake",
         sound: None,
+        text: Some("rumble"),
         parts: &[part("shake", "earthquake", 0.0, 0.0, 1.0), part("radial-blur", "dizzy", 0.0, 3.0, 0.5)],
     },
     Situation {
         id: "shout",
         sound: None,
+        text: None,
         parts: &[part("shockwave", "shout", 0.0, 0.0, 1.0), part("shake", "hit", 0.0, 0.6, 0.7), part("focus-lines", "shock", 0.0, 1.0, 1.0)],
     },
     Situation {
         id: "speed",
         sound: Some("builtin:whoosh"),
+        text: Some("zas"),
         parts: &[part("speed-lines", "horizontal", 0.0, 0.0, 1.0), part("radial-blur", "speed", 0.0, 1.5, 0.6)],
     },
     Situation {
         id: "surprise",
         sound: Some("builtin:ding"),
+        text: Some("surprise"),
         parts: &[part("focus-lines", "shock", 0.0, 0.0, 1.0), part("zoom-punch", "surprise", 0.0, 0.0, 1.0)],
     },
     Situation {
         id: "fear",
         sound: Some("builtin:heartbeat"),
+        text: None,
         parts: &[part("vignette", "heartbeat", 0.0, 0.0, 1.0), part("color", "fear", 0.0, 3.0, 1.0)],
     },
     Situation {
         id: "flashback",
         sound: None,
+        text: None,
         parts: &[part("color", "flashback", 0.0, 0.0, 1.0), part("vignette", "tension", 0.0, 4.0, 0.7), part("wave", "dream", 0.0, 0.8, 0.6)],
     },
     Situation {
         id: "dream",
         sound: None,
+        text: None,
         parts: &[part("wave", "dizzy", 0.0, 3.0, 1.0), part("radial-blur", "dizzy", 0.0, 3.0, 1.0), part("color", "memory", 0.0, 3.0, 0.5)],
     },
     Situation {
         id: "power",
         sound: None,
+        text: None,
         parts: &[part("chroma", "power", 0.0, 0.0, 1.0), part("shockwave", "magic", 0.0, 0.0, 1.0), part("flash", "white", 0.0, 0.4, 0.4)],
     },
     Situation {
         id: "damage",
         sound: Some("builtin:hit"),
+        text: None,
         parts: &[part("flash", "damage", 0.0, 0.0, 1.0), part("shake", "hit", 0.0, 0.0, 1.0), part("chroma", "glitch", 0.0, 0.35, 0.8)],
     },
 ];
@@ -492,7 +562,13 @@ pub fn situation(id: &str) -> Option<&'static Situation> {
 
 /// Los efectos de una situación colocados en `start`, con ids `<base>-<n>` y su punto.
 pub fn expand(sit: &Situation, base: &str, start: f64, at: Option<Point>) -> Vec<Fx> {
-    sit.parts
+    expand_with(sit, base, start, at, false)
+}
+
+/// Como [`expand`], y con `with_text` también su onomatopeya (si la tiene).
+pub fn expand_with(sit: &Situation, base: &str, start: f64, at: Option<Point>, with_text: bool) -> Vec<Fx> {
+    let mut out: Vec<Fx> = sit
+        .parts
         .iter()
         .enumerate()
         .filter_map(|(n, p)| {
@@ -504,7 +580,15 @@ pub fn expand(sit: &Situation, base: &str, start: f64, at: Option<Point>) -> Vec
             fx.at = at;
             Some(fx)
         })
-        .collect()
+        .collect();
+    if with_text
+        && let Some(t) = sit.text
+        && let Some(mut fx) = new_fx(&format!("{base}-t"), "text", Some(t), start)
+    {
+        fx.at = at;
+        out.push(fx);
+    }
+    out
 }
 
 #[derive(Serialize)]
@@ -545,6 +629,75 @@ pub struct FxFrame {
     pub vignette: [f64; 5],
     /// amplitud, ondas por pantalla, fase.
     pub wave: [f64; 3],
+    /// Textos de ese instante (onomatopeyas y subtítulos), en el orden de la lista.
+    pub texts: Vec<TextSprite>,
+}
+
+/// Un texto en pantalla. La interfaz dibuja las letras (con el texto y colores del efecto
+/// `index`) y las coloca así.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextSprite {
+    /// Posición del efecto en la lista.
+    pub index: usize,
+    /// Encima de todo (subtítulos): sin temblor ni efectos de imagen.
+    pub overlay: bool,
+    /// Punto de anclaje en la pantalla (px) y qué punto del texto va ahí (0..1: 0.5, 0.5 es el
+    /// centro; 0.5, 1 el centro de abajo).
+    pub x: f64,
+    pub y: f64,
+    pub ax: f64,
+    pub ay: f64,
+    /// Alto de una línea de letras (px) y ancho máximo antes de partir líneas (0: sin partir).
+    pub line: f64,
+    pub wrap: f64,
+    pub scale: f64,
+    /// Giro (grados).
+    pub rot: f64,
+    pub alpha: f64,
+}
+
+impl TextSprite {
+    pub const LEN: usize = 11;
+
+    pub fn to_vec(&self) -> [f64; Self::LEN] {
+        [
+            self.index as f64,
+            if self.overlay { 1.0 } else { 0.0 },
+            self.x,
+            self.y,
+            self.ax,
+            self.ay,
+            self.line,
+            self.wrap,
+            self.scale,
+            self.rot,
+            self.alpha,
+        ]
+    }
+}
+
+/// Curva que se pasa un poco y vuelve (el «pop» de las letras).
+fn ease_out_back(u: f64) -> f64 {
+    let u = u.clamp(0.0, 1.0) - 1.0;
+    1.0 + u * u * (2.7 * u + 1.7)
+}
+
+/// Caída con rebotes (0 → 1).
+fn bounce_out(u: f64) -> f64 {
+    let u = u.clamp(0.0, 1.0);
+    let (n, d) = (7.5625, 2.75);
+    if u < 1.0 / d {
+        n * u * u
+    } else if u < 2.0 / d {
+        let v = u - 1.5 / d;
+        n * v * v + 0.75
+    } else if u < 2.5 / d {
+        let v = u - 2.25 / d;
+        n * v * v + 0.9375
+    } else {
+        let v = u - 2.625 / d;
+        n * v * v + 0.984375
+    }
 }
 
 const IDENTITY: Affine = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
@@ -562,6 +715,7 @@ impl Default for FxFrame {
             color: [0.0; 7],
             vignette: [0.0; 5],
             wave: [0.0; 3],
+            texts: Vec::new(),
         }
     }
 }
@@ -698,7 +852,7 @@ pub fn frame(list: &[Fx], t: f64, view: &View) -> FxFrame {
     let mut flash_w = 0.0;
     let mut flash_rgb = [0.0; 3];
 
-    for fx in list {
+    for (index, fx) in list.iter().enumerate() {
         let local = t - fx.start;
         if !(0.0..fx.duration).contains(&local) || fx.duration <= 0.0 {
             continue;
@@ -860,6 +1014,57 @@ pub fn frame(list: &[Fx], t: f64, view: &View) -> FxFrame {
                     out.wave = [a, p.num("freq"), local * p.num("speed") * std::f64::consts::TAU];
                 }
             }
+            "text" => {
+                if p.text("text").trim().is_empty() {
+                    continue;
+                }
+                let line = p.num("height") * unit;
+                let fade = p.num("fadeOut");
+                let mut alpha = if fade > 0.0 { ((fx.duration - local) / fade).clamp(0.0, 1.0) } else { 1.0 };
+                let (mut x, mut y) = at;
+                let mut scale = 1.0;
+                let mut rot = p.num("rot");
+                match p.choice("anim") {
+                    "shake" => {
+                        scale = ease_out_back(local / 0.14);
+                        let a = 1.2 * unit * k;
+                        x += noise(seed, local * 22.0) * a;
+                        y += noise(seed ^ 0x77, local * 22.0 + 9.1) * a;
+                        rot += noise(seed ^ 0x33, local * 15.0) * 3.0;
+                    }
+                    "grow" => {
+                        let u = (local / fx.duration).clamp(0.0, 1.0);
+                        scale = 0.5 + 0.8 * (1.0 - (1.0 - u) * (1.0 - u));
+                        alpha *= (local / 0.12).min(1.0);
+                    }
+                    "bounce" => y -= (1.0 - bounce_out(local / 0.6)) * line * 2.5,
+                    "slide" => {
+                        let u = ease_out_back(local / 0.25);
+                        x -= (1.0 - u) * w * 0.35;
+                        alpha *= (local / 0.08).min(1.0);
+                    }
+                    _ => scale = ease_out_back(local / 0.2),
+                }
+                alpha *= k.min(1.0);
+                if alpha > 1e-3 {
+                    out.texts.push(TextSprite { index, overlay: false, x, y, ax: 0.5, ay: 0.5, line, wrap: 0.0, scale: scale.max(0.0), rot, alpha });
+                }
+            }
+            "caption" => {
+                if p.text("text").trim().is_empty() {
+                    continue;
+                }
+                let line = p.num("height") * unit;
+                let alpha = sustained * k.min(1.0);
+                let (x, y, ax, ay, wrap) = match p.choice("style") {
+                    "title" => (w / 2.0, h / 2.0, 0.5, 0.5, w * 0.86),
+                    "narration" => (w * 0.04, h * 0.05, 0.0, 0.0, w * 0.46),
+                    _ => (w / 2.0, h * 0.93, 0.5, 1.0, w * 0.86),
+                };
+                if alpha > 1e-3 {
+                    out.texts.push(TextSprite { index, overlay: true, x, y, ax, ay, line, wrap, scale: 1.0, rot: 0.0, alpha });
+                }
+            }
             _ => {}
         }
     }
@@ -884,6 +1089,14 @@ pub fn frame(list: &[Fx], t: f64, view: &View) -> FxFrame {
         move_pt(bx, by);
         let [_, lx, ly, ..] = &mut out.lines;
         move_pt(lx, ly);
+        // Las onomatopeyas, pegadas a la imagen, tiemblan con ella (y giran con el golpe).
+        let turn = cam[1].atan2(cam[0]).to_degrees();
+        let grow = (cam[0] * cam[0] + cam[1] * cam[1]).sqrt();
+        for s in out.texts.iter_mut().filter(|s| !s.overlay) {
+            move_pt(&mut s.x, &mut s.y);
+            s.rot += turn;
+            s.scale *= grow;
+        }
     }
     out.cam = cam;
     out
@@ -971,6 +1184,60 @@ mod tests {
         assert!(off(0.05) > off(0.85));
         // Nunca más de la fuerza pedida (2 % de 720 px, más el giro).
         assert!(off(0.05) < 720.0 * 0.02 * 1.2);
+    }
+
+    #[test]
+    fn la_onomatopeya_aparece_en_su_punto_y_se_desvanece() {
+        let mut f = new_fx("t1", "text", Some("pow"), 1.0).unwrap();
+        f.at = Some(Point { x: 0.25, y: 0.5 });
+        let list = [f];
+        let v = view();
+        assert!(frame(&list, 0.9, &v).texts.is_empty());
+        let a = frame(&list, 1.05, &v).texts;
+        let b = frame(&list, 1.3, &v).texts;
+        assert_eq!(a.len(), 1);
+        assert!(a[0].scale < b[0].scale, "crece al aparecer");
+        assert!(!a[0].overlay);
+        let p = apply(v.pose.to_viewport(v.img, v.vp), (250.0, 750.0));
+        assert!((b[0].x - p.0).abs() < 1e-6 && (b[0].y - p.1).abs() < 1e-6, "pegada a su punto");
+        assert!((b[0].line - 720.0 * 0.18).abs() < 1e-6, "tamaño de serie: 18 % del alto");
+        let end = frame(&list, 1.0 + 0.89, &v).texts;
+        assert!(end[0].alpha < 0.2, "se desvanece al final");
+        // Con el temblor, se mueve con la imagen.
+        let mut shake = fx("shake", 1.0, 1.0);
+        shake.id = "s".into();
+        let both = [list[0].clone(), shake];
+        let c = frame(&both, 1.3, &v).texts;
+        assert!((c[0].x - b[0].x).abs() + (c[0].y - b[0].y).abs() > 1e-3);
+    }
+
+    #[test]
+    fn el_subtitulo_va_encima_y_sin_texto_no_hay_nada() {
+        let mut c = new_fx("c1", "caption", None, 0.0).unwrap();
+        c.params.insert("text".into(), Value::from("Hola"));
+        let v = view();
+        let s = frame(&[c.clone()], 1.0, &v).texts;
+        assert_eq!(s.len(), 1);
+        assert!(s[0].overlay);
+        assert_eq!((s[0].ax, s[0].ay), (0.5, 1.0));
+        assert!(s[0].wrap > 0.0);
+        c.params.insert("text".into(), Value::from("   "));
+        assert!(frame(&[c], 1.0, &v).texts.is_empty());
+    }
+
+    #[test]
+    fn las_situaciones_con_onomatopeya() {
+        let sit = situation("explosion").unwrap();
+        let without = expand(sit, "e", 0.0, None);
+        let with = expand_with(sit, "e", 0.0, None, true);
+        assert_eq!(with.len(), without.len() + 1);
+        assert_eq!(with.last().unwrap().kind, "text");
+        assert_eq!(with.last().unwrap().params.get("text").and_then(Value::as_str), Some("¡BOOM!"));
+        for s in SITUATIONS {
+            if let Some(t) = s.text {
+                assert!(info("text").unwrap().presets.iter().any(|p| p.id == t), "{} → {t}", s.id);
+            }
+        }
     }
 
     #[test]

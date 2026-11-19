@@ -16,6 +16,7 @@
     "dist:mac": "bash packaging/dist.sh mac"
   },
   "dependencies": {
+    "@fontsource/bangers": "^5.3.0",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-log": "^2.10.1"

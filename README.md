@@ -153,7 +153,7 @@ biblioteca a los nombres largos).
 Temblores, destellos, ondas expansivas y recursos del manga colocados en la línea de tiempo de cada imagen, como los sonidos. Se ven igual en el editor, al reproducir y en el vídeo.
 
 - **Añadir**: botón **✨ Efecto aquí** del editor (en el cabezal), el **+** de la fila *✨ Efectos*, o **✨ Efecto aquí** en el inspector de una clave (justo en ese instante).
-- **Situaciones listas**: varios efectos ya sincronizados y, si quieres, su sonido de serie en una pista de efectos. Con `Ctrl+Z` se deshace todo junto.
+- **Situaciones listas**: varios efectos ya sincronizados y, si quieres, su sonido de serie en una pista de efectos y su **onomatopeya** (casilla «Con su onomatopeya»: Explosión → «¡BOOM!», Puñetazo → «¡POW!», Disparo → «¡BANG!», Sorpresa → «!?», Terremoto → «BRRRR», Velocidad → «¡ZAS!»). Con `Ctrl+Z` se deshace todo junto.
 
   | Situación | Qué pone | Sonido |
   |---|---|---|
@@ -172,6 +172,13 @@ Temblores, destellos, ondas expansivas y recursos del manga colocados en la lín
   | 💔 Daño | Destello rojo, temblor y glitch | Golpe |
 
 - **Efectos sueltos** (cada uno con ajustes predefinidos y sus mandos): 〰 temblor, 🔍 golpe de zoom, ⚡ destello, ◎ onda expansiva, 🌈 aberración / glitch, 💫 desenfoque radial, ✳ líneas de concentración, ≡ líneas de velocidad, ◐ fotograma de impacto, 🎨 color (sepia, gris, frío, cálido, tinte), ◯ viñeta y 🌊 ondulación.
+- **💥 Onomatopeyas animadas**: letras de cómic («¡KABOOM!», «¡ZAS!») sobre la imagen, con la fuente Bangers (incluida, licencia SIL OFL).
+  - Texto, color, contorno, tamaño, giro y animación: **aparecer de golpe**, **temblar**, **crecer**, **con rebote** o **entrar de lado**. Se desvanecen al final.
+  - Van pegadas a su punto (**⌖ Elegir**): se mueven con la cámara, tiemblan con el temblor y les afectan el destello, el color o el negativo, como al dibujo.
+  - Ajustes listos: ¡BOOM!, ¡POW!, ¡BANG!, ¡ZAS!, !? y BRRRR.
+- **💬 Subtítulos y textos**: texto fijo en la pantalla que no tiembla, en tres estilos: **subtítulo** (abajo, con contorno, parte las líneas largas), **cartel** (grande en el centro: «Mientras tanto…») y **narración** (cartela amarilla arriba a la izquierda, como en los cómics). Entran y salen con un fundido.
+  - Al exportar se pueden guardar también como **`.srt`**, junto al vídeo, para subirlos a YouTube.
+  - Están en la misma fila *✨ Efectos*, así que se mueven, se estiran y se deshacen como los demás.
 - **Editar**: en la fila *✨ Efectos* se arrastran y se estiran por los bordes, con ajuste magnético a claves, sonidos y otros efectos. El inspector tiene ajuste, intensidad, inicio, duración y mandos.
 - **Punto**: **⌖ Elegir** y un clic en la imagen marcan dónde ocurre (el centro de la explosión, el puño). Sigue a la imagen aunque la cámara se mueva.
 - **Seguridad**: destellos y negativos no parpadean más de 3 veces por segundo.
@@ -183,12 +190,15 @@ Botón 🎞 o `Ctrl+E`. Se exporta tal cual se reproduce: la animación de cada 
 imágenes y las transiciones, con el color de fondo del visor.
 
 - **Qué**: la imagen actual, todas o un rango ("desde la 3 hasta la 8").
+- **Formato**: **MP4** (H.264 y AAC, el de siempre), **WebM** (VP9 y Opus, más ligero, para la web) o **GIF** animado (sin sonido, a 15 fotogramas por segundo como mucho; se hace en dos pasadas con su propia paleta de colores, y la ventana avisa de que pesa mucho).
+- **📱 Para redes (9:16)**: un clic pone el vídeo vertical a 1080 × 1920.
+- **Subtítulos**: si hay, casilla para guardar también el `.srt` al lado del vídeo.
 - **Tamaño**: 720p, 1080p, 1440p o 4K, en horizontal (16:9), vertical (9:16, para móvil) o cuadrado; o a medida.
 - **Fotogramas por segundo**: 24, 30 o 60. **Calidad**: alta, normal o ligera.
 - **Archivo**: se propone junto al cómic o la carpeta, con su nombre. Si ya existe se avisa.
 - Barra de progreso con el tiempo que queda; se puede cancelar y el archivo a medias se borra.
 - Las plantillas se recalculan para la forma del vídeo. Para encuadrar a mano con esa forma, usa el marco *vídeo* del editor.
-- **Cómo funciona**: cada fotograma se pinta con el mismo motor WebGL de la vista previa (así sale idéntico), se convierte a YUV 4:2:0 en la GPU y se pasa por tubería a **ffmpeg** (H.264 en MP4, BT.709). ffmpeg escribe en un archivo temporal que se renombra al terminar bien.
+- **Cómo funciona**: cada fotograma se pinta con el mismo motor WebGL de la vista previa (así sale idéntico), se convierte a YUV 4:2:0 en la GPU y se pasa por tubería a **ffmpeg** (H.264 en MP4 o VP9 en WebM, BT.709; el GIF sale del MP4 con `palettegen`). ffmpeg escribe en un archivo temporal que se renombra al terminar bien.
 - **ffmpeg** es necesario y no viene incluido: se busca en el sistema (en macOS también en Homebrew) o se indica su ruta en la propia ventana. Si falta, la ventana explica cómo instalarlo (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`, `brew install ffmpeg`). Usa `libx264` si está; si no, `h264_videotoolbox` (macOS) u `libopenh264`.
 
 ### Sonido
@@ -429,7 +439,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Lectura: ajustar al ancho, al alto o al contenido, doble página, sentido manga, tira vertical (webtoon), lupa, ir a página, marcadores y barra de progreso.
   - [x] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
   - [x] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
-  - [ ] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
+  - [x] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
   - [ ] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
   - [ ] Voces con IA (ElevenLabs): reparto, guion por viñeta, revisión antes de pedir y automatización por IA.
   - [ ] Pulido, pruebas en Linux, Ubuntu con Nvidia y Mac, versión 1.0.0 y documento «imgXplorer, la historia detrás».

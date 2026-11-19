@@ -127,6 +127,8 @@ El modo noche no está en el proyecto: es un ajuste de lectura de la app.
   | `color` | Sepia, gris o tinte | `mode` sepia/gray/cold/warm/tint, `amount` 0–1 (0.8), `tint` #rrggbb, `contrast` % (0), `fadeIn`, `fadeOut` |
   | `vignette` | Bordes oscuros (o claros) | `amount` 0–1 (0.6), `size` 0.2–1 (0.6), `pulse` Hz (0), `color` black/red/white, `fadeIn`, `fadeOut` |
   | `wave` | Ondulación | `amp` % (0.6), `freq` (6), `speed` Hz (1), `fadeIn`, `fadeOut` |
+  | `text` | Onomatopeya animada, pegada a su punto | `text` (¡BOOM!, hasta 40), `color` (#ffd400), `outline` (#000000), `height` % (18), `rot` ° (−8), `anim` pop/shake/grow/bounce/slide, `fadeOut` s (0.25) |
+  | `caption` | Subtítulo, cartel o narración, fijo en la pantalla | `text` (hasta 300, admite saltos de línea), `style` subtitle/title/narration, `height` % (4.5), `color` (#ffffff), `fadeIn`, `fadeOut` |
 
 - Destellos y negativos no parpadean más de 3 veces por segundo (fotosensibilidad).
 - El cálculo es determinista (el ruido sale del `id` y del tiempo): la vista previa y el vídeo dan lo mismo.

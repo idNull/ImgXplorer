@@ -109,6 +109,8 @@
   let picker = $state<{ at: number } | null>(null);
   /** Las situaciones añaden también su sonido. */
   let fxSound = $state(true);
+  /** Con la onomatopeya de la situación («¡BOOM!»…). */
+  let fxText = $state(true);
   /** Esperando el clic en la imagen para el punto del efecto seleccionado. */
   let picking = $state(false);
 
@@ -657,7 +659,7 @@
     let sound: string | null = null;
     try {
       if ("situation" in p) {
-        const r = JSON.parse(wasm.fx_situation(p.situation, fxId(), at, NaN, NaN)) as { fx: Fx[]; sound?: string | null };
+        const r = JSON.parse(wasm.fx_situation(p.situation, fxId(), at, NaN, NaN, fxText)) as { fx: Fx[]; sound?: string | null };
         added = r.fx;
         sound = r.sound ?? null;
       } else {
@@ -1384,7 +1386,7 @@
 </section>
 
 {#if picker}
-  <FxPicker at={picker.at} withSound={fxSound} onsound={(on) => (fxSound = on)} onpick={(p) => addFx(p, picker!.at)} onclose={() => (picker = null)} />
+  <FxPicker at={picker.at} withSound={fxSound} onsound={(on) => (fxSound = on)} withText={fxText} ontext={(on) => (fxText = on)} onpick={(p) => addFx(p, picker!.at)} onclose={() => (picker = null)} />
 {/if}
 
 {#if libDrag && moved}

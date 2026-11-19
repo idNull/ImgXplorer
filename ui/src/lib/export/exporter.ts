@@ -11,6 +11,9 @@ import type { AudioTracks } from "../editor/model";
 import { SoundSchedule } from "../audio/sync";
 import { FxTrack } from "../fx/fx";
 import type { MixLevels } from "../audio/director";
+import type { Fx } from "../fx/fx";
+import { fxInfo, fxParam } from "../fx/catalog";
+import type { VideoFormat } from "../prefs.svelte";
 
 export interface VideoOptions {
   path: string;
@@ -26,6 +29,38 @@ export interface VideoOptions {
   to: number;
   /** Incluir el sonido, con esta mezcla (null: vídeo mudo). */
   sound: MixLevels | null;
+  format: VideoFormat;
+  /** Guardar también los subtítulos como `.srt` (si hay). */
+  srt: boolean;
+}
+
+/** Un subtítulo en tiempo del vídeo. */
+export interface SrtCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Texto de un subtítulo (efecto `caption`); vacío si no tiene. */
+export function captionText(f: Fx): string {
+  const info = fxInfo("caption");
+  const spec = info?.params.find((p) => p.key === "text");
+  return spec ? String(fxParam(f, spec)).trim() : "";
+}
+
+function stamp(s: number): string {
+  const ms = Math.max(0, Math.round(s * 1000));
+  const p = (n: number, d = 2) => String(n).padStart(d, "0");
+  return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`;
+}
+
+/** Archivo SubRip (`.srt`) con los subtítulos en orden. */
+export function toSrt(cues: SrtCue[]): string {
+  return [...cues]
+    .filter((c) => c.text && c.end > c.start)
+    .sort((a, b) => a.start - b.start)
+    .map((c, i) => `${i + 1}\n${stamp(c.start)} --> ${stamp(c.end)}\n${c.text}\n`)
+    .join("\n");
 }
 
 export interface ExportProgress {
@@ -134,8 +169,9 @@ export async function exportVideo(
   }
 
   await invoke("export_start", {
-    options: { path: o.path, width: o.width, height: o.height, fps: o.fps, crf: o.crf, ffmpeg: o.ffmpeg || null },
+    options: { path: o.path, width: o.width, height: o.height, fps: o.fps, crf: o.crf, ffmpeg: o.ffmpeg || null, format: o.format },
   });
+  const cues: SrtCue[] = [];
   try {
     const count = o.to - o.from + 1;
     const hold = spec.holdBetween();
@@ -145,6 +181,13 @@ export async function exportVideo(
       index = i;
       const last = i === o.to;
       schedule.image(frames / o.fps, cur.audio, spec.ambient?.(i) ?? []);
+      if (o.srt) {
+        const base = frames / o.fps;
+        for (const f of spec.fx?.(i) ?? []) {
+          const text = f.type === "caption" ? captionText(f) : "";
+          if (text) cues.push({ start: base + f.start, end: base + Math.min(f.start + f.duration, cur.dur + hold), text });
+        }
+      }
       const next = last ? null : prepare(i + 1);
       next?.catch(() => {}); // el error se recoge al esperarla
       // La imagen: animación y pausa (en la última, hasta el final exacto).
@@ -185,7 +228,12 @@ export async function exportVideo(
     const clips = o.sound ? schedule.finish() : [];
     onprogress({ frames, index: o.to, fraction: 1, mixing: clips.length > 0 });
     const audio = clips.length ? { clips, tracks: spec.tracks?.() ?? [], levels: o.sound, seconds: frames / o.fps } : null;
-    return await invoke<string>("export_finish", { audio });
+    const out = await invoke<string>("export_finish", { audio: o.format === "gif" ? null : audio });
+    if (cues.length) {
+      const srt = out.replace(/\.[^./]+$/, "") + ".srt";
+      await invoke("save_image", new TextEncoder().encode(toSrt(cues)), { headers: { path: encodeURIComponent(srt) } });
+    }
+    return out;
   } catch (e) {
     await pending.catch(() => {});
     await invoke("export_cancel").catch(() => {});

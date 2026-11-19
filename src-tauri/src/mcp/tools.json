@@ -1201,7 +1201,7 @@
         },
         "type": {
           "type": "string",
-          "description": "Single effect type from fx_catalog (e.g. shake, flash, shockwave, focus-lines)."
+          "description": "Single effect type from fx_catalog (e.g. shake, flash, shockwave, focus-lines). Two are text: text (animated onomatopoeia like BOOM!, stuck to its point) and caption (subtitle, title or narration box fixed on screen; also exported as .srt)."
         },
         "preset": {
           "type": "string",
@@ -1229,7 +1229,7 @@
         },
         "params": {
           "type": "object",
-          "description": "Parameter values for a single effect, e.g. {\"strength\": 3}."
+          "description": "Parameter values for a single effect, e.g. {\"strength\": 3}. For text: {\"text\": \"¡ZAS!\", \"color\": \"#ffd400\", \"anim\": \"shake\"}; for caption: {\"text\": \"Line of dialogue\", \"style\": \"subtitle\"}."
         },
         "at": {
           "type": "object",
@@ -1250,6 +1250,10 @@
         "sound": {
           "type": "boolean",
           "description": "For a situation: also add its built-in sound on the sfx bus (default true)."
+        },
+        "text": {
+          "type": "boolean",
+          "description": "For a situation: also add its onomatopoeia (BOOM!, POW!…) if it has one (default false)."
         }
       },
       "required": [
@@ -1409,13 +1413,22 @@
   },
   {
     "name": "export_video",
-    "description": "Export the MP4 (runs in the background; poll export_status). Uses the format from set_output. Default path: next to the comic. Does not overwrite an existing file unless overwrite=true.",
+    "description": "Export the video (runs in the background; poll export_status): MP4 by default, or WebM / GIF. Uses the size and fps from set_output. Default path: next to the comic. Does not overwrite an existing file unless overwrite=true. If the images have captions, a .srt with them is saved next to the video.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
-          "description": "Output .mp4 path."
+          "description": "Output path (.mp4, .webm or .gif)."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["mp4", "webm", "gif"],
+          "description": "mp4 (H.264 + AAC, default), webm (VP9 + Opus) or gif (no sound, at most 15 fps: keep it short and small)."
+        },
+        "srt": {
+          "type": "boolean",
+          "description": "Also save the captions as .srt next to the video (default true; only if there are captions)."
         },
         "from": {
           "type": "integer",

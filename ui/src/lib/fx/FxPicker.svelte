@@ -9,10 +9,13 @@
     /** Con el sonido de la situación. */
     withSound: boolean;
     onsound: (on: boolean) => void;
+    /** Con la onomatopeya de la situación («¡BOOM!»). */
+    withText: boolean;
+    ontext: (on: boolean) => void;
     onpick: (p: { situation: string } | { type: string }) => void;
     onclose: () => void;
   }
-  let { at, withSound, onsound, onpick, onclose }: Props = $props();
+  let { at, withSound, onsound, withText, ontext, onpick, onclose }: Props = $props();
   const cat = fxCatalog();
 </script>
 
@@ -29,11 +32,14 @@
   <div class="grid">
     {#each cat.situations as s (s.id)}
       <button class="opt" title={label(`vfxsh.${s.id}`)} onclick={() => onpick({ situation: s.id })}>
-        <span class="icon">{SITUATION_ICON[s.id] ?? "✨"}</span>{label(`vfxs.${s.id}`)}{#if s.sound}<span class="snd">♪</span>{/if}
+        <span class="icon">{SITUATION_ICON[s.id] ?? "✨"}</span>{label(`vfxs.${s.id}`)}{#if s.text || s.sound}<span class="snd">{s.text ? "💬" : ""}{s.sound ? "♪" : ""}</span>{/if}
       </button>
     {/each}
   </div>
-  <label class="sound"><input type="checkbox" checked={withSound} onchange={(e) => onsound(e.currentTarget.checked)} /> {t("fxWithSound")}</label>
+  <div class="opts">
+    <label class="sound"><input type="checkbox" checked={withSound} onchange={(e) => onsound(e.currentTarget.checked)} /> ♪ {t("fxWithSound")}</label>
+    <label class="sound"><input type="checkbox" checked={withText} onchange={(e) => ontext(e.currentTarget.checked)} /> 💬 {t("fxWithText")}</label>
+  </div>
   <h6>{t("fxSingle")}</h6>
   <div class="grid">
     {#each cat.effects as e (e.type)}
@@ -59,4 +65,5 @@
   .icon { width: 18px; text-align: center; flex: none; }
   .snd { margin-left: auto; color: var(--muted); font-size: 11px; }
   .sound { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .opts { display: flex; gap: 16px; flex-wrap: wrap; }
 </style>

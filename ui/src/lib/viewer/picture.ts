@@ -10,7 +10,7 @@ export interface RgbaPixels {
 export interface Picture {
   w: number;
   h: number;
-  source: HTMLImageElement | RgbaPixels;
+  source: HTMLImageElement | HTMLCanvasElement | RgbaPixels;
 }
 
 /** Qué cargar: la URL normal y la de respaldo forzando decodificación en Rust. */

@@ -89,7 +89,8 @@ La IA decide **qué** encuadrar y **cuánto tiempo**; las poses las calcula `img
 
 ### Efectos especiales
 
-- `add_fx` con `situation` añade varios efectos sincronizados y su sonido de serie (salvo `sound: false`). Con `type` (y `preset`, `params`) añade uno suelto.
+- `add_fx` con `situation` añade varios efectos sincronizados y su sonido de serie (salvo `sound: false`) y, con `text: true`, su onomatopeya. Con `type` (y `preset`, `params`) añade uno suelto.
+- Textos: `type: "text"` es una onomatopeya animada (`params.text`, `anim`…) y `type: "caption"` un subtítulo, cartel o narración (`params.text`, `style`). `export_video` guarda los subtítulos también como `.srt` (salvo `srt: false`) y admite `format`: `mp4`, `webm` o `gif`.
 - `shot` cuenta como `plan_shots`: la vista de la página entera del principio no es un plano. El efecto empieza cuando la cámara llega a ese plano, más `offset`.
 - `render_frames` añade por su cuenta un fotograma en el momento fuerte de cada efecto, y `summary` avisa de destellos demasiado seguidos o de efectos que alargan la imagen.
 

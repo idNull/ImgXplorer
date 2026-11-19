@@ -2,6 +2,7 @@
 // matriz de cámara. Se tesela cuando la imagen supera MAX_TEXTURE_SIZE de la GPU.
 import type { Affine, Size } from "../core";
 import type { Picture } from "./picture";
+import { fontEpoch, paintText, textMatrix, type TextDraw } from "../fx/text";
 
 /** Lado de tesela cuando hace falta teselar (más pequeña que el máximo: menos memoria desperdiciada). */
 const TILE = 4096;
@@ -41,7 +42,7 @@ const NO_ADJ = new Float32Array(ADJ_LEN);
  * `[post, cam(6), flash(4), shock(5), chroma(3), blur(3), lines(11), impact(2), color(7),
  * vignette(5), wave(3)]`, o vacío si no hay ninguno activo.
  */
-export type FxFrame = ArrayLike<number>;
+export type FxFrame = ArrayLike<number> & { texts?: TextDraw[] };
 
 /** Lupa (🔍): círculo de radio `r` (px CSS) en (x, y) que enseña la escena ampliada `zoom` veces. */
 export interface Lens {
@@ -388,7 +389,10 @@ export class GlViewer {
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     const src = pic.source;
-    if (src instanceof HTMLImageElement) {
+    if (src instanceof HTMLCanvasElement) {
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    } else if (src instanceof HTMLImageElement) {
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       if (w === pic.w && h === pic.h) {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
@@ -489,9 +493,53 @@ export class GlViewer {
     }
     const post = on && fx![0] > 0;
     const final = this.out?.fb ?? null;
+    const texts = (on && fx!.texts) || [];
     this.drawLayers(layers, vp, mix, post ? this.sceneTarget().fb : final);
+    // Las onomatopeyas, dentro de la escena (les afectan el destello, el color…); los
+    // subtítulos, encima de todo.
+    if (texts.length) this.drawTexts(texts.filter((x) => !x.overlay), vp, post ? this.scene!.fb : final);
     if (post) this.applyFx(fx!, vp, final);
     else if (lens && !mix) this.drawLens(layers, vp, lens);
+    if (texts.length) this.drawTexts(texts.filter((x) => x.overlay), vp, final);
+  }
+
+  /** Texturas de letras recientes (pintarlas cuesta). */
+  private textSets = new Map<string, { set: TextureSet; w: number; h: number }>();
+
+  private drawTexts(list: TextDraw[], vp: Size, dest: WebGLFramebuffer | null): void {
+    if (!list.length) return;
+    const gl = this.gl;
+    const size = this.size();
+    // Píxeles del destino por píxel de la vista (las letras se pintan a la resolución de salida).
+    const k = size.w / Math.max(1, vp.w);
+    gl.useProgram(this.prog);
+    gl.uniform1i(this.loc.u_tex, 0);
+    gl.uniform3f(this.loc.u_clip, 0, 0, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.activeTexture(gl.TEXTURE0);
+    for (const d of list) {
+      // Tamaño de pintado redondeado: así un texto que crece no repinta en cada fotograma.
+      const px = Math.max(8, Math.min(600, Math.round((d.line * k) / 4) * 4));
+      const wrap = d.wrap > 0 ? Math.round((d.wrap * k) / 16) * 16 : 0;
+      const key = JSON.stringify([d.kind, d.text, d.color, d.outline, d.style, px, wrap, fontEpoch]);
+      let t = this.textSets.get(key);
+      if (t) {
+        this.textSets.delete(key);
+      } else {
+        const c = paintText(d, px, wrap);
+        t = { set: this.createSet({ w: c.width, h: c.height, source: c }), w: c.width, h: c.height };
+        while (this.textSets.size >= 24) {
+          const [old, v] = this.textSets.entries().next().value!;
+          this.deleteSet(v.set);
+          this.textSets.delete(old);
+        }
+      }
+      this.textSets.set(key, t);
+      // La textura está pintada a `px` por línea; en la vista mide `line`.
+      const m = textMatrix(d, t.w, t.h, px / Math.max(1e-6, d.line));
+      this.drawSet(t.set, m, Math.min(1, Math.max(0, d.alpha)), vp, null);
+    }
   }
 
   /** La lupa: el fondo y las capas otra vez, ampliadas alrededor del punto y recortadas al círculo. */
@@ -689,6 +737,8 @@ export class GlViewer {
     this.scene = null;
     if (this.bgTex) this.gl.deleteTexture(this.bgTex);
     this.bgTex = null;
+    for (const t of this.textSets.values()) this.deleteSet(t.set);
+    this.textSets.clear();
     if (this.fxProg) this.gl.deleteProgram(this.fxProg.prog);
     this.fxProg = null;
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();

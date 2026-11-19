@@ -156,7 +156,9 @@ Al hacerlo: las utilidades se abren con un **clic corto del botón derecho** (ma
   - con confirmación;
   - usa el crate `trash`, que manda a la papelera del sistema; no es un borrado definitivo, y se dice así en el aviso.
 
-## Fase 5 — Modo Acción y vídeo 💥
+## Fase 5 — Modo Acción y vídeo 💥 ✅
+Al hacerlo: los subtítulos son un tipo de efecto más (`caption`) en la fila *✨ Efectos*, en vez de una pista aparte, así que se mueven, se estiran, se deshacen y la IA los pone con `add_fx` como los demás (sin `add_text` aparte). La fuente incluida es Bangers (SIL OFL).
+
 - **Onomatopeyas animadas («¡KABOOM!», «¡ZAS!»).** Es la gran sorpresa.
   - **Qué es:** un tipo de efecto nuevo, `text`, en `crates/imgx-core/src/fx.rs`, con texto, color, contorno, tamaño, giro y animación (aparecer de golpe, temblar, crecer o rebotar). Se coloca con «⌖ Elegir punto», como los demás.
   - **Cómo se dibuja:** el texto se pinta una vez en un canvas 2D a textura, y el núcleo calcula su movimiento por fotograma. Así sale igual en el visor, el editor, la IA y el MP4.

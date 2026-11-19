@@ -7,7 +7,8 @@ import type { Fx } from "./fx";
 export type FxParam =
   | { key: string; kind: "number"; min: number; max: number; step: number; default: number; unit: string }
   | { key: string; kind: "choice"; options: string[]; default: string }
-  | { key: string; kind: "color"; default: string };
+  | { key: string; kind: "color"; default: string }
+  | { key: string; kind: "text"; default: string; max: number };
 
 export interface FxPreset {
   id: string;
@@ -26,6 +27,8 @@ export interface FxInfo {
 export interface FxSituation {
   id: string;
   sound?: string;
+  /** Onomatopeya opcional (ajuste del tipo `text`). */
+  text?: string;
   parts: { type: string; preset: string; offset: number; duration: number; intensity: number }[];
 }
 
@@ -50,6 +53,8 @@ export const FX_ICON: Record<string, string> = {
   color: "🎨",
   vignette: "◯",
   wave: "🌊",
+  text: "💥",
+  caption: "💬",
 };
 
 export const SITUATION_ICON: Record<string, string> = {
@@ -79,6 +84,7 @@ export function fxParam(f: Fx, p: FxParam): number | string {
   const v = f.params?.[p.key];
   if (p.kind === "number") return typeof v === "number" && Number.isFinite(v) ? Math.min(p.max, Math.max(p.min, v)) : p.default;
   if (p.kind === "choice") return typeof v === "string" && p.options.includes(v) ? v : p.default;
+  if (p.kind === "text") return typeof v === "string" ? v.slice(0, p.max) : p.default;
   return typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : p.default;
 }
 

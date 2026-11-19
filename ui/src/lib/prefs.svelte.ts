@@ -63,11 +63,18 @@ export interface VideoPrefs {
   quality: VideoQuality;
   /** Ruta de ffmpeg (vacía: buscarlo). */
   ffmpeg: string;
+  /** MP4 (H.264), WebM (VP9) o GIF. */
+  format: VideoFormat;
+  /** Guardar también los subtítulos en un `.srt` al lado. */
+  srt: boolean;
 }
+
+export type VideoFormat = "mp4" | "webm" | "gif";
+export const VIDEO_EXT: Record<VideoFormat, string> = { mp4: "mp4", webm: "webm", gif: "gif" };
 
 export const VIDEO_SIZES: Record<Exclude<VideoSize, "custom">, number> = { "720p": 720, "1080p": 1080, "1440p": 1440, "4k": 2160 };
 export const QUALITY_CRF: Record<VideoQuality, number> = { high: 18, normal: 23, light: 28 };
-export const DEFAULT_VIDEO: VideoPrefs = { size: "1080p", shape: "landscape", width: 1920, height: 1080, fps: 30, quality: "normal", ffmpeg: "" };
+export const DEFAULT_VIDEO: VideoPrefs = { size: "1080p", shape: "landscape", width: 1920, height: 1080, fps: 30, quality: "normal", ffmpeg: "", format: "mp4", srt: true };
 
 const mult4 = (v: number) => Math.max(16, Math.min(8192, Math.round(v / 4) * 4));
 
@@ -91,6 +98,8 @@ function cleanVideo(raw: unknown): VideoPrefs {
   if (r.fps === 24 || r.fps === 30 || r.fps === 60) v.fps = r.fps;
   if (r.quality === "high" || r.quality === "normal" || r.quality === "light") v.quality = r.quality;
   if (typeof r.ffmpeg === "string") v.ffmpeg = r.ffmpeg;
+  if (r.format === "mp4" || r.format === "webm" || r.format === "gif") v.format = r.format;
+  if (typeof r.srt === "boolean") v.srt = r.srt;
   return v;
 }
 

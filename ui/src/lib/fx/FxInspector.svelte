@@ -78,6 +78,17 @@
   </div>
   {#each info.params as p (p.key)}
     {@const v = fxParam(fx, p)}
+    {#if p.kind === "text"}
+      <label class="text">
+        <span>{label(`vfxk.${p.key}`)}</span>
+        {#if fx.type === "caption"}
+          <textarea rows="3" maxlength={p.max} value={v} placeholder={t("fxTextHint")} onchange={(e) => setParam(p, e.currentTarget.value)}></textarea>
+        {:else}
+          <input type="text" maxlength={p.max} value={v} onchange={(e) => setParam(p, e.currentTarget.value)}
+            onkeydown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
+        {/if}
+      </label>
+    {:else}
     <label class="param">
       <span>{label(`vfxk.${p.key}`)}</span>
       {#if p.kind === "number"}
@@ -92,13 +103,16 @@
         <input class="wide color" type="color" value={v} onchange={(e) => setParam(p, e.currentTarget.value)} />
       {/if}
     </label>
+    {/if}
   {/each}
+  {#if fx.type !== "caption"}
   <div class="point">
     <span>{t("fxPoint")}</span>
     <span class="where">{fx.at ? `${Math.round(fx.at.x * 100)} %, ${Math.round(fx.at.y * 100)} %` : t("fxPointCenter")}</span>
     <button class:on={picking} onclick={onpick} title={t("fxPickHelp")}>⌖ {picking ? t("fxPicking") : t("fxPick")}</button>
     {#if fx.at}<button title={t("fxPointClear")} onclick={() => edit((f) => delete f.at)}>✕</button>{/if}
   </div>
+  {/if}
 {/if}
 <div class="buttons">
   <button onclick={onduplicate}>{t("duplicate")}</button>
@@ -127,4 +141,9 @@
   .point button { padding: 2px 8px; }
   .point button.on { border-color: #fbbf24; color: #fbbf24; }
   .buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+  .text { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+  .text input, .text textarea {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; resize: vertical;
+  }
 </style>

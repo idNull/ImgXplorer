@@ -172,11 +172,11 @@ pub fn fx_new(id: &str, kind: &str, preset: &str, start: f64) -> Result<String, 
 /// Efectos de una situación colocados en `start` (ids `<base>-<n>`); punto en `at_x, at_y`
 /// (normalizado) o ninguno si alguno no es un número. JSON con `{fx: [...], sound}`.
 #[wasm_bindgen]
-pub fn fx_situation(id: &str, base: &str, start: f64, at_x: f64, at_y: f64) -> Result<String, JsError> {
+pub fn fx_situation(id: &str, base: &str, start: f64, at_x: f64, at_y: f64, with_text: bool) -> Result<String, JsError> {
     use imgx_core::fx;
     let sit = fx::situation(id).ok_or_else(|| JsError::new(&format!("situación desconocida: {id}")))?;
     let at = (at_x.is_finite() && at_y.is_finite()).then_some(fx::Point { x: at_x, y: at_y });
-    Ok(serde_json::json!({ "fx": fx::expand(sit, base, start, at), "sound": sit.sound }).to_string())
+    Ok(serde_json::json!({ "fx": fx::expand_with(sit, base, start, at, with_text), "sound": sit.sound }).to_string())
 }
 
 /// Avisos sobre una lista de efectos (JSON de textos).
@@ -203,7 +203,8 @@ impl WasmFx {
         imgx_core::fx::end(&self.0)
     }
     /// Fotograma en `t` (segundos de la imagen) con la pose de cámara de ese instante. Valores en
-    /// el orden de `FxFrame::to_vec`; vacío si no hay ningún efecto activo.
+    /// el orden de `FxFrame::to_vec` y luego los textos (`TextSprite::to_vec`); vacío si no hay
+    /// ningún efecto activo.
     #[allow(clippy::too_many_arguments)]
     pub fn frame(&self, t: f64, img_w: f64, img_h: f64, pose: &[f64], vp_w: f64, vp_h: f64) -> Vec<f64> {
         use imgx_core::fx;
@@ -211,6 +212,12 @@ impl WasmFx {
             return Vec::new();
         }
         let view = fx::View { img: (img_w, img_h), pose: cam(pose), vp: (vp_w, vp_h) };
-        fx::frame(&self.0, t, &view).to_vec()
+        let f = fx::frame(&self.0, t, &view);
+        // Detrás de los valores del shader, los textos: `TextSprite::LEN` valores cada uno.
+        let mut v = f.to_vec();
+        for s in &f.texts {
+            v.extend_from_slice(&s.to_vec());
+        }
+        v
     }
 }

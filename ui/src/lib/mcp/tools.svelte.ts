@@ -908,6 +908,9 @@ export class McpTools {
       } else if (p!.kind === "choice") {
         if (typeof x !== "string" || !p!.options.includes(x)) fail(`${k} must be one of: ${p!.options.join(", ")}`);
         out[k] = x as string;
+      } else if (p!.kind === "text") {
+        if (typeof x !== "string") fail(`${k} must be a string`);
+        out[k] = (x as string).slice(0, p!.max);
       } else {
         if (typeof x !== "string" || !/^#[0-9a-f]{6}$/i.test(x)) fail(`${k} must be a color like #ff2020`);
         out[k] = (x as string).toLowerCase();
@@ -952,7 +955,7 @@ export class McpTools {
     if (situation) {
       const sit = fxCatalog().situations.find((x) => x.id === situation);
       if (!sit) fail(`unknown situation "${situation}": ${fxCatalog().situations.map((x) => x.id).join(", ")}`);
-      const r = JSON.parse(wasm.fx_situation(situation, fxId(), start, at?.x ?? NaN, at?.y ?? NaN)) as { fx: Fx[]; sound?: string | null };
+      const r = JSON.parse(wasm.fx_situation(situation, fxId(), start, at?.x ?? NaN, at?.y ?? NaN, a.text === true)) as { fx: Fx[]; sound?: string | null };
       added = r.fx;
       if (a.intensity !== undefined) for (const f of added) f.intensity = r2((f.intensity ?? 1) * num(a, "intensity", 1, 0, 3));
       if (a.sound !== false) sound = r.sound ?? null;
@@ -1255,12 +1258,13 @@ export class McpTools {
     const to = Math.max(from, Math.min(last, int(a, "to", last)));
     const dir = s.kind === "folder" ? s.path : dirOf(s.path);
     const stem = s.title.replace(/\.[^./]+$/, "") || "video";
-    let path = str(a, "path") ?? joinPath(dir, `${stem}.mp4`);
-    if (!/\.mp4$/i.test(path)) path += ".mp4";
+    const format = (oneOf(a, "format", ["mp4", "webm", "gif"]) ?? "mp4") as "mp4" | "webm" | "gif";
+    let path = str(a, "path") ?? joinPath(dir, `${stem}.${format}`);
+    if (!path.toLowerCase().endsWith(`.${format}`)) path += `.${format}`;
     const [exists] = await invoke<boolean[]>("paths_exist", { paths: [path] });
     if (exists && a.overwrite !== true) fail(`${path} already exists: pass overwrite: true or another path`);
-    const ff = await invoke<{ encoder: string; path: string }>("ffmpeg_info", { path: prefs.settings.video.ffmpeg || null }).catch((e) => fail(`ffmpeg: ${e}`));
-    if (!ff.encoder) fail(`${ff.path} has no H.264 encoder`);
+    const ff = await invoke<{ encoder: string; path: string; webm: boolean }>("ffmpeg_info", { path: prefs.settings.video.ffmpeg || null }).catch((e) => fail(`ffmpeg: ${e}`));
+    if (format === "webm" ? !ff.webm : !ff.encoder) fail(format === "webm" ? `${ff.path} has no VP9/Opus encoders` : `${ff.path} has no H.264 encoder`);
     const v = this.video();
     if (this.ctx.playing()) this.ctx.stop();
     const abort = new AbortController();
@@ -1269,7 +1273,7 @@ export class McpTools {
     const crf = { high: 18, normal: 23, light: 28 }[v.quality];
     this.ctx.say("🤖 Exportando vídeo…");
     exportVideo(
-      { path, width: v.width, height: v.height, fps: v.fps, crf, ffmpeg: prefs.settings.video.ffmpeg, background: prefs.settings.background, from, to, sound: a.sound === false ? null : JSON.parse(JSON.stringify(this.store.mix)) },
+      { path, width: v.width, height: v.height, fps: v.fps, crf, ffmpeg: prefs.settings.video.ffmpeg, background: prefs.settings.background, from, to, sound: a.sound === false || format === "gif" ? null : JSON.parse(JSON.stringify(this.store.mix)), format, srt: a.srt !== false },
       this.ctx.sequence,
       this.ctx.refAt,
       (p) => {
@@ -1290,7 +1294,7 @@ export class McpTools {
         job.error = String(e);
       },
     );
-    return json({ started: true, path, from, to, output: v, note: "Poll export_status every few seconds." });
+    return json({ started: true, path, format, from, to, output: v, note: "Poll export_status every few seconds." });
   }
 
   async t_export_status(): Promise<ToolResult> {
