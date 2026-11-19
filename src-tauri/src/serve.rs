@@ -3,6 +3,7 @@
 //! - `/<gen>_<i>`   imagen `i`: bytes originales si el webview la sabe mostrar; si no, RGBA.
 //! - `/d/<gen>_<i>` fuerza la decodificación en Rust (respaldo si el webview falla).
 //! - `/t/<gen>_<i>` miniatura JPEG.
+//! - `/c/<huella>`   portada de un reciente (estantería), de la caché.
 //!
 //! RGBA se sirve como `application/x-imgx-rgba`: `"RGBA"`, ancho, alto (u32 LE) y píxeles.
 
@@ -98,6 +99,18 @@ enum Route {
 
 pub fn handle(app: &tauri::AppHandle, path: &str) -> Response<Vec<u8>> {
     let path = path.trim_start_matches('/');
+    if let Some(key) = path.strip_prefix("c/") {
+        return match crate::covers::read(app, key) {
+            // Sin caché larga: la portada se puede rehacer (la interfaz añade su versión a la URL).
+            Some(jpg) => Response::builder()
+                .header("Content-Type", "image/jpeg")
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Cache-Control", "no-cache")
+                .body(jpg)
+                .unwrap(),
+            None => not_found("sin portada".into()),
+        };
+    }
     let (route, rest) = match path.split_once('/') {
         Some(("d", r)) => (Route::Decoded, r),
         Some(("t", r)) => (Route::Thumb, r),

@@ -124,7 +124,7 @@ Se recuerda **por cómic**. Al hacerlo, se guardó en un archivo propio, `readin
 
 **Pruebas:** detección de contenido y webtoon en Rust; navegación manga y doble página con portada sola.
 
-## Fase 3 — Estantería (pantalla de inicio) 📚
+## Fase 3 — Estantería (pantalla de inicio) 📚 ✅
 **Objetivo:** la mejora más vistosa. Es la **misma lista de recientes, ampliada con portadas**.
 - Conserva todo lo de ahora: abrir, retomar la página, tachar lo que ya no existe y el menú 🕘 de la cabecera.
 - Un interruptor «▦ Portadas · ☰ Lista» deja volver a la vista de lista de siempre, y se recuerda.

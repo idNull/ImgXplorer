@@ -6,6 +6,7 @@ mod export;
 mod gestures;
 pub mod mcp;
 mod browse;
+mod covers;
 mod pack;
 mod prefs;
 mod project;
@@ -113,6 +114,7 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
         fingerprint: fingerprint.clone(),
         project: loaded,
     };
+    covers::ensure_on_open(&app, &info.path, src.clone());
     *guard = Some(Current { generation, source: src, path: opened.path, kind: opened.kind, fingerprint });
     state.thumbs.clear();
     state.panels.lock().unwrap().clear();
@@ -290,6 +292,9 @@ pub fn run() {
             detect_panels,
             image_levels,
             content_box,
+            covers::cover,
+            covers::forget_cover,
+            covers::show_in_folder,
             project::save_project,
             prefs::load_prefs,
             prefs::save_prefs,

@@ -13,6 +13,7 @@
   import Thumbs from "./lib/Thumbs.svelte";
   import Settings from "./lib/Settings.svelte";
   import Recents from "./lib/Recents.svelte";
+  import Shelf from "./lib/Shelf.svelte";
   import Confirm, { type ConfirmSpec } from "./lib/Confirm.svelte";
   import { sounds, isAudioPath } from "./lib/audio/sounds.svelte";
   import { director } from "./lib/audio/director";
@@ -986,11 +987,25 @@
     {:else if openError}
       <div class="hint">{openError}</div>
     {:else if !source}
-      <div class="start">
+      <div class="start" class:shelf-on={prefs.recents.length && prefs.settings.startView === "covers"}>
         <p>{t("openHint")}</p>
+        <div class="start-open">
+          <button onclick={pickFile}>{t("openFile")}</button>
+          <button onclick={pickFolder}>{t("open")}</button>
+        </div>
         {#if prefs.recents.length}
-          <h4>{t("recents")}</h4>
-          <div class="start-list"><Recents onopen={openRecent} /></div>
+          <div class="start-head">
+            <h4>{t("recents")}</h4>
+            <div class="seg" role="radiogroup" aria-label={t("shelfView")}>
+              <button class:on={prefs.settings.startView === "covers"} onclick={() => { prefs.settings.startView = "covers"; prefs.saveSettings(); }}>▦ {t("shelfCovers")}</button>
+              <button class:on={prefs.settings.startView === "list"} onclick={() => { prefs.settings.startView = "list"; prefs.saveSettings(); }}>☰ {t("shelfList")}</button>
+            </div>
+          </div>
+          {#if prefs.settings.startView === "covers"}
+            <div class="start-shelf"><Shelf onopen={openRecent} /></div>
+          {:else}
+            <div class="start-list"><Recents onopen={openRecent} /></div>
+          {/if}
         {/if}
       </div>
     {:else if !source.entries.length}
@@ -1154,6 +1169,17 @@
   .start p { margin: 0 0 12px; }
   .start h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
   .start-list { width: min(560px, 100%); max-height: 50vh; overflow-y: auto; font-size: 14px; color: var(--text); }
+  .start.shelf-on { justify-content: flex-start; overflow-y: auto; padding-top: 28px; }
+  .start-open { display: flex; gap: 8px; margin: -4px 0 8px; }
+  .start-open button { font-size: 13px; }
+  .start-head { width: min(560px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .shelf-on .start-head, .start-shelf { width: min(900px, 100%); }
+  .start-shelf { color: var(--text); font-size: 14px; padding-bottom: 20px; }
+  .start-head .seg { display: flex; }
+  .start-head .seg button { border-radius: 0; font-size: 12px; padding: 3px 9px; }
+  .start-head .seg button:first-child { border-radius: 6px 0 0 6px; }
+  .start-head .seg button:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+  .start-head .seg button.on { background: var(--accent); color: #04121b; border-color: var(--accent); }
   .panel-hint {
     position: absolute; left: 50%; top: 10px; transform: translateX(-50%); padding: 4px 12px; border-radius: 6px; pointer-events: none;
     background: rgb(0 0 0 / 0.7); border: 1px solid #fbbf24; color: #fde68a; font-size: 12px; white-space: nowrap;

@@ -16,6 +16,14 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
 - Se abren desde el botón, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
 - **Selector de archivos propio** para abrir y guardar: accesos a tus carpetas y unidades montadas, ruta editable, archivos ocultos y aviso antes de reemplazar. Se maneja con el teclado (flechas, `Intro` para entrar o aceptar, `Retroceso` para subir, letras para saltar, `Esc` para cancelar). Existe porque en algunos escritorios Linux (Hyprland/Omarchy…) el diálogo del sistema sale sin botón de Aceptar.
 - **Recientes**: lo último que has abierto aparece en la pantalla de inicio y en el menú 🕘 (`Ctrl+R`). Al volver a abrir un cómic o una carpeta, se va a la imagen en la que lo dejaste (salvo que abras una imagen concreta). Los que ya no existen salen tachados.
+- **Estantería** (pantalla de inicio): los mismos recientes con su **portada** y su progreso. El interruptor «▦ Portadas · ☰ Lista» vuelve a la lista de siempre y se recuerda.
+  - Una tarjeta grande **«Continuar leyendo»** con el último cómic: página, porcentaje y un botón para seguir.
+  - Rejilla de portadas con título, barra de progreso y «hace 2 días».
+  - La portada es la primera página. Se hace sola la primera vez que abres algo (y, para lo que ya estaba en la lista, la primera vez que se ve la estantería), en segundo plano, y se guarda en la caché de la app (`~/.cache/com.imgxplorer.app/covers/` en Linux). No toca el cómic.
+  - Lo que ya no existe sale en gris con «No encontrado».
+  - Clic derecho: abrir, **abrir su carpeta** o **quitar de la lista** (también con la ✕ al pasar el ratón).
+  - Con más de 12, un **buscador** y orden por recientes, nombre o progreso.
+  - Siguen los botones para abrir y se puede arrastrar algo a la ventana, como siempre.
 - **Cerrar** (botón ✕ junto al título o `Ctrl+W`): cierra lo que estás viendo y vuelve a la pantalla de inicio con los recientes.
   - Las animaciones se guardan solas medio segundo después de cada cambio, así que normalmente cierra sin preguntar.
   - Si una grabación está en curso, la termina y la guarda.
@@ -406,7 +414,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
 - [ ] **Fase 8**: lanzamiento 1.0 ([plan completo](docs/plan-lanzamiento.md)).
   - [x] Ajustes rápidos de imagen: limpiar escaneo, blanco y negro, sepia, modo noche, brillo, contraste, nitidez…
   - [x] Lectura: ajustar al ancho, al alto o al contenido, doble página, sentido manga, tira vertical (webtoon), lupa, ir a página, marcadores y barra de progreso.
-  - [ ] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
+  - [x] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
   - [ ] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
   - [ ] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
   - [ ] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.

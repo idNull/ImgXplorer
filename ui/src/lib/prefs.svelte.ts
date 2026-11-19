@@ -43,6 +43,8 @@ export interface Settings {
   night: boolean;
   /** Barra fina de progreso de lectura abajo del visor (📖). */
   progressBar: boolean;
+  /** Pantalla de inicio: estantería con portadas o la lista de siempre. */
+  startView: "covers" | "list";
   keys: KeyOverrides;
 }
 
@@ -130,6 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   aiControl: false,
   night: false,
   progressBar: true,
+  startView: "covers",
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -163,6 +166,7 @@ function clean(raw: unknown): Settings {
   if (typeof r.aiControl === "boolean") s.aiControl = r.aiControl;
   if (typeof r.night === "boolean") s.night = r.night;
   if (typeof r.progressBar === "boolean") s.progressBar = r.progressBar;
+  if (r.startView === "covers" || r.startView === "list") s.startView = r.startView;
   s.keys = cleanOverrides(r.keys);
   return s;
 }

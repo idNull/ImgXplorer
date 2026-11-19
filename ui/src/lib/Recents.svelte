@@ -50,7 +50,7 @@
           <span>{missing[r.path] ? t("missing") : ago(r.at)}</span>
         </span>
       </button>
-      <button class="forget" onclick={() => prefs.forget(r.path)} title={t("forget")} aria-label={t("forget")}>✕</button>
+      <button class="forget" onclick={() => { prefs.forget(r.path); invoke("forget_cover", { path: r.path }).catch(() => {}); }} title={t("forget")} aria-label={t("forget")}>✕</button>
     </li>
   {:else}
     <li class="empty">{t("noRecents")}</li>
