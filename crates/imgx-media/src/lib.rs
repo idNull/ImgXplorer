@@ -4,6 +4,7 @@
 pub mod archive;
 pub mod decode;
 pub mod folder;
+pub mod levels;
 pub mod natural;
 pub mod panels;
 mod raw;
@@ -11,7 +12,9 @@ mod raw;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub use archive::{RarSource, SevenZSource, ZipSource};
+#[cfg(feature = "rar")]
+pub use archive::RarSource;
+pub use archive::{SevenZSource, ZipSource};
 pub use decode::{Rgba, decode, heif_support, thumbnail_jpeg};
 pub use folder::FolderSource;
 
@@ -142,6 +145,17 @@ pub struct Opened {
     pub picked: bool,
 }
 
+#[cfg(feature = "rar")]
+fn open_rar(path: &Path) -> Result<Arc<dyn Source>, MediaError> {
+    Ok(Arc::new(RarSource::open(path)?))
+}
+
+/// Compilado sin la función «rar» (para paquetes 100 % libres): UnRAR no está incluido.
+#[cfg(not(feature = "rar"))]
+fn open_rar(_: &Path) -> Result<Arc<dyn Source>, MediaError> {
+    Err(MediaError::Unsupported("RAR (esta versión se ha compilado sin soporte RAR)".into()))
+}
+
 /// Abre una carpeta, un comprimido o una imagen suelta (abre su carpeta y se sitúa en ella).
 pub fn open_path(path: &Path) -> Result<Opened, MediaError> {
     if path.is_dir() {
@@ -153,7 +167,7 @@ pub fn open_path(path: &Path) -> Result<Opened, MediaError> {
         let source: Arc<dyn Source> = match extension(&name).as_deref() {
             Some("zip" | "cbz") => Arc::new(ZipSource::open(path)?),
             Some("7z" | "cb7") => Arc::new(SevenZSource::open(path)?),
-            _ => Arc::new(RarSource::open(path)?),
+            _ => open_rar(path)?,
         };
         return Ok(Opened { source, kind: SourceKind::Archive, path: path.into(), start: 0, picked: false });
     }
@@ -182,5 +196,16 @@ mod tests {
         assert_eq!(fingerprint(&[e("a.jpg", 1)]), fingerprint(&[e("a.jpg", 1)]));
         assert_ne!(fingerprint(&[e("a.jpg", 1)]), fingerprint(&[e("a.jpg", 2)]));
         assert_eq!(fingerprint(&[]), "cbf29ce484222325");
+    }
+
+    /// Compilado sin la función «rar»: un .cbr da un aviso claro en vez de fallar raro.
+    #[cfg(not(feature = "rar"))]
+    #[test]
+    fn sin_rar_avisa() {
+        let path = std::env::temp_dir().join(format!("imgx-sin-rar-{}.cbr", std::process::id()));
+        std::fs::write(&path, b"Rar!").unwrap();
+        let err = open_path(&path).err().expect("debería fallar");
+        std::fs::remove_file(&path).ok();
+        assert!(matches!(err, MediaError::Unsupported(ref m) if m.contains("RAR")), "{err}");
     }
 }

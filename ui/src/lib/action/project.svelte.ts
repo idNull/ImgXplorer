@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TemplateRef } from "./catalog";
 import { audioOf, hasAudio, type AudioTracks, type Timeline } from "../editor/model";
 import type { Fx } from "../fx/fx";
+import { normalize, type Adjust } from "../adjust/adjust";
 import { log } from "../log";
 import { DEFAULT_LEVELS, type MixLevels } from "../audio/director";
 import type { Effect } from "../audio/effects";
@@ -35,13 +36,15 @@ export interface Item {
   transitionOut?: Transition;
   /** Viñetas dibujadas a mano (sustituyen a la detección). */
   panels?: Rect[];
+  /** Ajustes de imagen propios (🎨). */
+  adjust?: Adjust;
 }
 
 export interface ProjectData {
   format: "imgx";
   version: number;
   source: { kind: "folder" | "archive" | "image"; name: string; fingerprint?: string };
-  defaults: { transition: Transition; holdBetween: number; template?: TemplateRef; mix?: MixLevels };
+  defaults: { transition: Transition; holdBetween: number; template?: TemplateRef; mix?: MixLevels; adjust?: Adjust };
   clips: unknown[];
   items: Item[];
   /** Ambientes o música que abarcan varias imágenes. */
@@ -488,6 +491,33 @@ export class ProjectStore {
     this.changed();
   }
 
+  /** Ajustes de imagen que se le aplican: los suyos o, si no tiene, los de todas. */
+  adjustFor(entry: string): Adjust | null {
+    return normalize(this.item(entry)?.adjust) ?? normalize(this.data?.defaults.adjust);
+  }
+
+  /** La imagen tiene ajustes propios (distintos de los de todas). */
+  hasOwnAdjust(entry: string): boolean {
+    return !!normalize(this.item(entry)?.adjust);
+  }
+
+  /** Ajustes de una imagen o, con `entry = null`, de todas. `null` o neutro los quita. */
+  setAdjust(entry: string | null, adj: Adjust | null, size?: [number, number]) {
+    if (!this.data || this.readOnly) return;
+    const n = normalize(adj);
+    if (entry === null) {
+      if (n) this.data.defaults.adjust = n;
+      else delete this.data.defaults.adjust;
+    } else if (n && size) {
+      this.ensure(entry, size).adjust = n;
+    } else {
+      const it = this.item(entry);
+      if (it) delete it.adjust;
+      this.prune();
+    }
+    this.changed();
+  }
+
   /** Viñetas dibujadas a mano; `null` vuelve a la detección automática. */
   setPanels(entry: string, size: [number, number], panels: Rect[] | null) {
     if (!this.data) return;
@@ -503,7 +533,7 @@ export class ProjectStore {
   /** Quita las entradas que ya no aportan nada. */
   private prune() {
     if (!this.data) return;
-    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.timeline?.fx?.length || i.panels);
+    this.data.items = this.data.items.filter((i) => i.template || i.transitionOut || i.timeline?.camera?.length || hasAudio(i.timeline) || i.timeline?.fx?.length || i.panels || i.adjust);
   }
 
   changed() {

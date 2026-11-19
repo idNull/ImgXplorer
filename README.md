@@ -29,6 +29,28 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Imágenes más grandes que el máximo de la GPU: se dividen en teselas (p. ej. panorámicas de 20000 px).
 - **Precarga** de las imágenes vecinas y caché limitada por memoria.
 - **Tira de miniaturas** con carga perezosa, siempre centrada en la imagen actual, en tres tamaños.
+- **Ajustes de imagen (🎨, `J`)**: un panel flotante pequeño que no toca tus archivos.
+  - Un clic: **Original**, **✨ Limpiar escaneo** (blanquea el papel amarillento y oscurece la tinta; la app analiza cada página), **Blanco y negro** y **Sepia**.
+  - **🌙 Noche** (`N`): colores invertidos suaves para leer de noche sin deslumbrar. Es solo para leer: no sale en el vídeo.
+  - **Más ajustes**: brillo, contraste, saturación, tonos medios, temperatura y nitidez (doble clic en un deslizador lo devuelve a 0).
+  - Para **esta página** o para **todo el cómic**; una página con ajustes propios usa los suyos.
+  - Mantén `\` pulsada para ver el original. Un punto en 🎨 avisa de que la imagen se ve retocada.
+  - Se guardan en el proyecto `.imgx`, se deshacen con `Ctrl+Z` y salen igual en la reproducción, en las capturas de la IA y en el vídeo (se puede desactivar al exportar).
+- **Lectura (📖, `Ctrl+B`)**: un menú para leer cómics, manga y webtoons. Se recuerda **por cómic** (en `reading.json`, junto a los ajustes; no toca el cómic ni su `.imgx`). Un punto en 📖 avisa de que no es el modo de siempre.
+  - **Ajustar a**: la **ventana** (como siempre), el **ancho** (`W`) o el **alto** (`H`). Pulsar otra vez `W` o `H` vuelve a la ventana. «Ajustar» (`0`/`F`) encuadra según el modo elegido.
+    - Al ancho, avanzar (`Espacio`, `AvPág`, `↓`) recorre la página de arriba abajo y solo al llegar al final pasa a la siguiente. Al volver atrás, la página anterior aparece por su final.
+    - Al alto, igual pero de lado a lado (en manga, de derecha a izquierda).
+  - **✂ Ajustar al contenido**: el encuadre ignora los márgenes en blanco de la página (los detecta Rust una vez por página, sin contar el número de página). No recorta el archivo.
+  - **Páginas**: **una**, **doble** (`2`) o **tira** vertical (`V`).
+    - Doble página: dos páginas juntas, como un libro abierto, con la casilla «Portada sola». Las páginas apaisadas (que ya son dobles) se ven solas y luego se vuelve a emparejar. El zoom, el desplazamiento y la lupa funcionan sobre las dos.
+    - Tira vertical (webtoon, manhwa): las páginas una debajo de otra con desplazamiento continuo. La rueda desplaza y `Ctrl` + rueda (o el pellizco) hace zoom; doble clic acerca o vuelve. El contador sigue a la página del centro. Al ancho, la tira ocupa toda la ventana.
+    - Si al abrir algo las páginas son muy altas (más de 2,5 veces su ancho), se ofrece leerlo como webtoon. Se pregunta una sola vez por cómic.
+  - **Sentido**: occidental o **manga** (de derecha a izquierda). En manga, `←` avanza y `→` retrocede, la doble página se ordena de derecha a izquierda y la barra de progreso se llena desde la derecha.
+  - Los modos de lectura son para leer: con el editor, el panel del Modo Acción o durante la reproducción se ve una página como siempre.
+- **🔍 Lupa**: mantén pulsada `Z` o el botón derecho y aparece un círculo ampliado ×2,5 que sigue al ratón (con los ajustes de imagen aplicados).
+- **Ir a página** (`Ctrl+G`): escribe el número e `Intro`.
+- **Marcadores** (`B`): marca o desmarca la página. Salen con 🔖 en las miniaturas, como muescas en la barra de progreso y en el menú 📖, donde un clic salta a cada uno.
+- **Barra de progreso**: una línea fina abajo del visor que muestra cuánto llevas. Al pasar el ratón dice «12 / 48» y un clic salta a ese punto. Se oculta desde el menú 📖.
 - **Entrada**
   - Ratón: rueda para zoom y arrastrar para desplazar.
   - Touchpad: dos dedos para desplazar y pellizco para zoom (GTK en Linux, gestos nativos en macOS).
@@ -45,10 +67,15 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
 - **Retomar**: volver a la imagen en la que lo dejaste (se puede desactivar).
 - **Selector de archivos**: el de imgxplorer, el del sistema o automático (el propio en Linux y el del sistema en macOS).
 - **Diagnóstico**: mostrar u ocultar el panel.
-- **Acerca de**: versión, autor, con qué se ha hecho (tecnologías y Claude Code) y una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
+- **Acerca de**:
+  - Versión, autor y con qué se ha hecho (tecnologías y Claude Code).
+  - La licencia (MIT), con su texto.
+  - **Agradecimientos especiales** a los amigos y colaboradores que han ayudado (probando la app, dando ideas…). Se añaden en `ui/src/lib/about/thanks.ts`, con su nombre y, si se quiere, qué hicieron.
+  - **Licencias de terceros**: todas las bibliotecas que usa la app, agrupadas por licencia, con sus autores, un buscador, el texto de cada licencia y un enlace a la página de cada proyecto. Arriba van los avisos especiales: UnRAR, libheif y sus decodificadores, FFmpeg y WebKit.
+  - Una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
 - **Atajos**: cada acción admite hasta 3 teclas. Pulsa `+` y luego la tecla. Si ya la usaba otra acción del mismo grupo, se le quita y se avisa. Se pueden restablecer una a una o todas.
 
-Los ajustes y los recientes se guardan en `~/.config/com.imgxplorer.app/` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
+Los ajustes, los recientes y el modo de lectura y los marcadores de cada cómic (`reading.json`) se guardan en `~/.config/com.imgxplorer.app/` (Linux) o `~/Library/Application Support/com.imgxplorer.app/` (macOS).
 
 ### Modo Acción
 
@@ -220,11 +247,12 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
 - **Permiso**: el control viene **apagado**; se enciende con *Permitir el control por IA* (o solo al conectar la primera IA). Apagado, ninguna IA puede tocar nada.
 - **Mientras trabaja**: en la cabecera aparece **🤖 IA** con lo que va haciendo y un botón **Detener la IA**. Ves cada cambio en directo y todo se deshace con `Ctrl+Z`. Si la app está cerrada, la IA la abre.
 - **Empezar**: abre una sesión nueva de tu IA y pídeselo con tus palabras, por ejemplo: «Usa imgxplorer para montar un vídeo de este cómic: ~/Cómics/capitulo1.cbz. Ritmo tranquilo, lluvia suave de fondo y efectos donde haya acción. Revisa y exporta en 1080p». En *Ajustes → IA* hay una frase de ejemplo para copiar.
-- **Qué puede hacer** (44 herramientas):
+- **Qué puede hacer** (46 herramientas):
   - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
   - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
   - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
   - **Efectos especiales**: situaciones (explosión, puñetazo, sorpresa, flashback…) o efectos sueltos en el plano que toca y en el punto de la imagen donde ocurren.
+  - **Ajustes de imagen**: limpiar escaneos, blanco y negro, sepia, brillo, contraste… para una página o para todo el cómic.
   - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
   - **Terminar**: exportar, seguir el progreso y revisar el MP4 final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
 - **Límites**: la IA no oye ni ve el movimiento (revisa con fotogramas y medidas), así que te pedirá que lo reproduzcas y escuches tú. Las imágenes que mira se envían a su servicio (Anthropic, OpenAI o Google) con tu cuenta.
@@ -249,11 +277,11 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 
 | Tecla | Acción |
 |---|---|
-| `→` `↓` · `AvPág` · `Espacio` | Siguiente imagen. Con zoom, las flechas desplazan (más con `Mayús`) |
+| `→` `↓` · `AvPág` · `Espacio` | Siguiente imagen. Con zoom, las flechas desplazan (más con `Mayús`). Al ancho, al alto o en la tira, primero recorren la página. En manga, `←` y `→` se cambian |
 | `←` `↑` · `RePág` · `Retroceso` | Imagen anterior |
 | `Inicio` / `Fin` | Primera / última imagen |
 | `+` / `-` | Acercar / alejar |
-| `0` · `F` | Ajustar a la ventana |
+| `0` · `F` | Ajustar (a la ventana, o según el modo de lectura) |
 | `1` | Tamaño real (1:1 en píxeles de pantalla) |
 | `R` / `Mayús+R` | Rotar 90° a la derecha / izquierda |
 | `T` | Mostrar u ocultar miniaturas |
@@ -268,6 +296,16 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `Ctrl+R` | Recientes |
 | `Ctrl+W` | Cerrar y volver al inicio |
 | `M` | Silenciar o activar el sonido |
+| `J` | Ajustes de imagen (🎨) |
+| `N` | Modo noche |
+| `\` (mantener) | Ver el original, sin ajustes |
+| `Ctrl+B` | Menú de lectura (📖) |
+| `W` / `H` | Ajustar al ancho / al alto (otra vez: a la ventana) |
+| `2` | Doble página |
+| `V` | Tira vertical (webtoon) |
+| `Z` (mantener) · botón derecho | Lupa |
+| `Ctrl+G` | Ir a página |
+| `B` | Marcar o desmarcar la página |
 | `Ctrl+,` | Ajustes |
 
 Doble clic: alterna entre ajustar y tamaño real en el punto pulsado.
@@ -365,8 +403,20 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Situaciones listas con su sonido (explosión, puñetazo, rayo, sorpresa, flashback…).
   - [x] Fila de efectos en el editor, inspector y punto de la imagen; iguales en directo, en el editor, para la IA y en el vídeo.
   - [x] Herramientas MCP para que la IA los coloque y los revise.
+- [ ] **Fase 8**: lanzamiento 1.0 ([plan completo](docs/plan-lanzamiento.md)).
+  - [x] Ajustes rápidos de imagen: limpiar escaneo, blanco y negro, sepia, modo noche, brillo, contraste, nitidez…
+  - [x] Lectura: ajustar al ancho, al alto o al contenido, doble página, sentido manga, tira vertical (webtoon), lupa, ir a página, marcadores y barra de progreso.
+  - [ ] Estantería: portadas y progreso en la pantalla de inicio (la lista de siempre sigue disponible).
+  - [ ] Utilidades: información y EXIF, copiar y guardar la imagen, recortar, abrir su carpeta y mover a la papelera.
+  - [ ] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
+  - [ ] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
+  - [ ] Voces con IA (ElevenLabs): reparto, guion por viñeta, revisión antes de pedir y automatización por IA.
+  - [ ] Pulido, pruebas en Linux, Ubuntu con Nvidia y Mac, versión 1.0.0 y documento «imgXplorer, la historia detrás».
+- [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
 
 ### Propuestas de mejora
+
+El plan del primer lanzamiento, con todas las mejoras por fases, está en [docs/plan-lanzamiento.md](docs/plan-lanzamiento.md). Además:
 
 - **Instrucciones de estilo para la IA** (Ajustes → IA):
   - Un cuadro de texto con tus preferencias, una por línea. Por ejemplo: ritmo tranquilo, sin giros de cámara, la carpeta de música o leer como manga.
@@ -438,6 +488,23 @@ cargo test --workspace
 pnpm check
 ```
 
+**Licencias de terceros.** Cuando cambian las dependencias (`Cargo.lock` o `pnpm-lock.yaml`), hay que regenerar la lista del «Acerca de» y `THIRD-PARTY.md`:
+
+```bash
+cargo install cargo-about --locked --features cli   # una sola vez
+pnpm third-party
+```
+
+- Una prueba (`cargo test`) y `pnpm dist` avisan si se te olvida.
+- Solo se admiten las licencias de [about.toml](about.toml), compatibles con la MIT. Si una dependencia nueva trae otra (GPL, por ejemplo), la generación falla.
+- Los avisos que las herramientas no conocen (UnRAR, libheif, FFmpeg…) están en `packaging/licenses-extra.json`.
+
+**Sin RAR.** UnRAR es *freeware*, no código abierto. Para un paquete 100 % libre se compila sin él (los `.rar`/`.cbr` darán un aviso):
+
+```bash
+pnpm tauri build -- --no-default-features
+```
+
 Para probar la decodificación y la detección de viñetas con tus propios archivos (RAW, HEIC, cómics…) sin abrir la app (la ruta debe ser absoluta):
 
 ```bash
@@ -452,11 +519,26 @@ crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, minia
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
 src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
-ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), herramientas de la IA (ui/src/lib/mcp)
+ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), ajustes de imagen (ui/src/lib/adjust), lectura (ui/src/lib/reading), herramientas de la IA (ui/src/lib/mcp)
 docs                Especificación del formato .imgx y cómo crear los instaladores
-packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR y lanzador .desktop
+packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR, lanzador .desktop y generador de la lista de licencias (licenses.mjs)
 ```
 
 ## Créditos
 
 Creado por **Pedro López del Castillo**, programado con **Claude Code** (Anthropic).
+
+**Agradecimientos especiales** (también en Ajustes → Acerca de):
+- **Alex**: mi mejor amigo y el primero en probarla en Linux. Me ayudó a corregir los fallos en Ubuntu y con tarjetas Nvidia. ¡Muchas gracias, Alex!
+- **Gerard**: mi primo, que la probará en cuanto la publique. ¡Gracias, Gerard!
+
+imgxplorer existe gracias al trabajo de muchas personas y proyectos de código abierto: la lista completa, con sus licencias, está en [THIRD-PARTY.md](THIRD-PARTY.md) y en Ajustes → Acerca de → Licencias de terceros.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Pedro López del Castillo.
+
+- Las bibliotecas de terceros conservan sus licencias ([THIRD-PARTY.md](THIRD-PARTY.md)). Casi todas son permisivas (MIT, Apache-2.0, BSD…); Symphonia es MPL-2.0.
+- **UnRAR** (para abrir `.rar`/`.cbr`) es *freeware*, no código abierto: se puede repartir, pero no usar para crear un compresor RAR. Va incluido por defecto y se puede compilar sin él.
+- **libheif** y sus decodificadores (LGPL-3.0) se usan como bibliotecas del sistema, o como archivos aparte dentro de la AppImage.
+- **FFmpeg** no va dentro de la app: se usa el que tengas instalado.

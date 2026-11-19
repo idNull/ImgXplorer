@@ -11,7 +11,7 @@ pkgrel=1
 pkgdesc="Visor de imágenes y cómics con animaciones de cámara y exportación a vídeo"
 arch=('x86_64' 'aarch64')
 url="https://github.com/CAMBIAR/imgxplorer"
-license=('LicenseRef-imgxplorer')
+license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'libheif' 'alsa-lib' 'hicolor-icon-theme')
 makedepends=('git' 'rust' 'rust-wasm' 'wasm-pack' 'nodejs' 'pnpm' 'clang')
 optdepends=('ffmpeg: exportar a vídeo MP4')
@@ -61,4 +61,6 @@ package() {
   done
   install -Dm644 "src-tauri/icons/128x128@2x.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/imgxplorer.png"
   install -Dm644 README.md "$pkgdir/usr/share/doc/imgxplorer/README.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 THIRD-PARTY.md "$pkgdir/usr/share/licenses/$pkgname/THIRD-PARTY.md"
 }

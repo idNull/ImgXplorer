@@ -24,7 +24,17 @@ export interface Layer {
   set: TextureSet;
   m: Affine;
   alpha: number;
+  /** Ajustes de imagen (🎨) ya convertidos para el shader (`adjustUniforms`); sin ellos, la imagen tal cual. */
+  adj?: ArrayLike<number> | null;
 }
+
+/**
+ * Ajustes de imagen para el shader de capas, 16 valores: `[activo, negro(3), blanco(3), limpiar,
+ * brillo, contraste, saturación, exposición, temperatura, nitidez, tono (0 nada, 1 gris, 2 sepia),
+ * noche]`.
+ */
+export const ADJ_LEN = 16;
+const NO_ADJ = new Float32Array(ADJ_LEN);
 
 /**
  * Efectos especiales de un instante, tal como los calcula el núcleo (`WasmFx.frame`): 50 valores
@@ -32,10 +42,18 @@ export interface Layer {
  * vignette(5), wave(3)]`, o vacío si no hay ninguno activo.
  */
 export type FxFrame = ArrayLike<number>;
+
+/** Lupa (🔍): círculo de radio `r` (px CSS) en (x, y) que enseña la escena ampliada `zoom` veces. */
+export interface Lens {
+  x: number;
+  y: number;
+  r: number;
+  zoom: number;
+}
 export const FX_LEN = 50;
 
 /** Compone dos afines: primero `m`, luego `s` (mismo orden que el núcleo). */
-function then(m: Affine, s: ArrayLike<number>): Affine {
+export function then(m: Affine, s: ArrayLike<number>): Affine {
   return new Float64Array([
     s[0] * m[0] + s[2] * m[1],
     s[1] * m[0] + s[3] * m[1],
@@ -69,8 +87,49 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
 uniform float u_alpha;
+uniform vec2 u_texel;        // 1 / tamaño de la tesela
+uniform float u_adj[16];     // ajustes de imagen (ADJ_LEN)
+uniform vec3 u_clip;         // lupa: solo dentro del círculo (x, y, radio en px del destino)
 out vec4 color;
-void main() { color = texture(u_tex, v_uv) * u_alpha; }`;
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+void main() {
+  if (u_clip.z > 0.0 && distance(gl_FragCoord.xy, u_clip.xy) > u_clip.z) discard;
+  vec4 t = texture(u_tex, v_uv);
+  if (u_adj[0] > 0.5 && t.a > 0.0) {
+    vec3 c = t.rgb / t.a;
+    // Nitidez: realce respecto a los vecinos a la escala en que se ve (no a la del archivo).
+    if (u_adj[13] > 0.0) {
+      vec2 d = max(fwidth(v_uv), u_texel);
+      vec3 b = (texture(u_tex, v_uv + vec2(d.x, 0.0)).rgb + texture(u_tex, v_uv - vec2(d.x, 0.0)).rgb
+              + texture(u_tex, v_uv + vec2(0.0, d.y)).rgb + texture(u_tex, v_uv - vec2(0.0, d.y)).rgb) * 0.25;
+      c += (c - b / max(t.a, 1e-3)) * u_adj[13] * 1.5;
+    }
+    // Limpiar escaneo: papel → blanco y tinta → negro, canal a canal.
+    if (u_adj[7] > 0.0) {
+      vec3 bl = vec3(u_adj[1], u_adj[2], u_adj[3]);
+      vec3 wh = vec3(u_adj[4], u_adj[5], u_adj[6]);
+      c = mix(c, clamp((c - bl) / max(wh - bl, vec3(0.05)), 0.0, 1.0), u_adj[7]);
+    }
+    if (u_adj[11] != 0.0) c = pow(max(c, 0.0), vec3(exp2(-u_adj[11] * 1.2)));
+    c += u_adj[8] * 0.35;
+    c = (c - 0.5) * (1.0 + u_adj[9]) + 0.5;
+    c = mix(vec3(luma(c)), c, 1.0 + u_adj[10]);
+    c *= vec3(1.0 + 0.12 * u_adj[12], 1.0 + 0.02 * u_adj[12], 1.0 - 0.12 * u_adj[12]);
+    c = clamp(c, 0.0, 1.0);
+    if (u_adj[14] > 1.5) {
+      c = min(vec3(dot(c, vec3(0.393, 0.769, 0.189)), dot(c, vec3(0.349, 0.686, 0.168)), dot(c, vec3(0.272, 0.534, 0.131))), 1.0);
+    } else if (u_adj[14] > 0.5) {
+      c = vec3(luma(c));
+    }
+    // Noche: luminosidad invertida conservando el color, sin negro ni blanco puros.
+    if (u_adj[15] > 0.5) {
+      float l = luma(c);
+      c = 0.09 + clamp(c + (1.0 - 2.0 * l), 0.0, 1.0) * 0.8;
+    }
+    t = vec4(clamp(c, 0.0, 1.0) * t.a, t.a);
+  }
+  color = t * u_alpha;
+}`;
 
 // Conversión a YUV 4:2:0 (I420, BT.709, rango limitado) para exportar vídeo. La salida es una
 // textura RGBA de (W/4)×(1.5·H) cuyos bytes, leídos fila a fila, son exactamente los planos Y, U
@@ -258,10 +317,15 @@ export class GlViewer {
   /** Color de fondo (RGB 0..1). */
   private bg: [number, number, number] = [0.043, 0.051, 0.063];
 
+  /** Textura de 1×1 del color de fondo (el fondo de la lupa). */
+  private bgTex: WebGLTexture | null = null;
+
   /** Fondo como `#rrggbb`. */
   setBackground(hex: string) {
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
     if (m) this.bg = [1, 2, 3].map((i) => parseInt(m[i], 16) / 255) as [number, number, number];
+    if (this.bgTex) this.gl.deleteTexture(this.bgTex);
+    this.bgTex = null;
   }
 
   /** Captura para exportar: se pinta en `out` y se convierte a YUV en `yuv`. */
@@ -278,7 +342,7 @@ export class GlViewer {
 
     const prog = program(gl, VS, FS);
     this.prog = prog;
-    for (const n of ["u_off", "u_size", "u_vp", "u_m", "u_tex", "u_alpha"]) this.loc[n] = gl.getUniformLocation(prog, n);
+    for (const n of ["u_off", "u_size", "u_vp", "u_m", "u_tex", "u_alpha", "u_texel", "u_adj", "u_clip"]) this.loc[n] = gl.getUniformLocation(prog, n);
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -370,16 +434,18 @@ export class GlViewer {
     return { w, h };
   }
 
-  private drawSet(set: TextureSet, m: Affine, alpha: number, vp: Size): void {
+  private drawSet(set: TextureSet, m: Affine, alpha: number, vp: Size, adj: ArrayLike<number> | null = null): void {
     const gl = this.gl;
     gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
     // mat3 por columnas: [a b 0 | c d 0 | e f 1]
     gl.uniformMatrix3fv(this.loc.u_m, false, [m[0], m[1], 0, m[2], m[3], 0, m[4], m[5], 1]);
     gl.uniform1f(this.loc.u_alpha, alpha);
+    gl.uniform1fv(this.loc.u_adj, adj && adj.length >= ADJ_LEN && adj[0] > 0 ? Float32Array.from(adj as ArrayLike<number>).subarray(0, ADJ_LEN) : NO_ADJ);
     for (const t of set.tiles) {
       gl.bindTexture(gl.TEXTURE_2D, t.tex);
       gl.uniform2f(this.loc.u_off, t.x, t.y);
       gl.uniform2f(this.loc.u_size, t.w, t.h);
+      gl.uniform2f(this.loc.u_texel, 1 / Math.abs(t.w), 1 / Math.abs(t.h));
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
   }
@@ -413,7 +479,7 @@ export class GlViewer {
    * como peso (fundido real: se pinta aparte con su fondo y se compone encima). `fx`: efectos
    * especiales de ese instante (temblor, destello…); sin ellos el camino es el de siempre.
    */
-  draw(layers: Layer[], vp: Size, mix = false, fx: FxFrame | null = null): void {
+  draw(layers: Layer[], vp: Size, mix = false, fx: FxFrame | null = null, lens: Lens | null = null): void {
     const on = !!fx && fx.length >= FX_LEN;
     if (on) {
       // Temblor y golpe de zoom: un movimiento de pantalla después de la cámara.
@@ -425,6 +491,36 @@ export class GlViewer {
     const final = this.out?.fb ?? null;
     this.drawLayers(layers, vp, mix, post ? this.sceneTarget().fb : final);
     if (post) this.applyFx(fx!, vp, final);
+    else if (lens && !mix) this.drawLens(layers, vp, lens);
+  }
+
+  /** La lupa: el fondo y las capas otra vez, ampliadas alrededor del punto y recortadas al círculo. */
+  private drawLens(layers: Layer[], vp: Size, lens: Lens): void {
+    const gl = this.gl;
+    const size = this.size();
+    const k = size.w / Math.max(1, vp.w);
+    gl.uniform3f(this.loc.u_clip, lens.x * k, size.h - lens.y * k, lens.r * k);
+    if (!this.bgTex) {
+      this.bgTex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, this.bgTex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([...this.bg.map((c) => Math.round(c * 255)), 255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
+    const r = lens.r;
+    gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
+    gl.uniformMatrix3fv(this.loc.u_m, false, [2 * r, 0, 0, 0, 2 * r, 0, lens.x - r, lens.y - r, 1]);
+    gl.uniform1f(this.loc.u_alpha, 1);
+    gl.uniform1fv(this.loc.u_adj, NO_ADJ);
+    gl.bindTexture(gl.TEXTURE_2D, this.bgTex);
+    gl.uniform2f(this.loc.u_off, 0, 0);
+    gl.uniform2f(this.loc.u_size, 1, 1);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    const z = lens.zoom;
+    const around = [z, 0, 0, z, lens.x * (1 - z), lens.y * (1 - z)];
+    for (const l of layers) if (l.alpha > 0 && l.set.tiles.length) this.drawSet(l.set, then(l.m, around), l.alpha, vp, l.adj);
+    gl.uniform3f(this.loc.u_clip, 0, 0, 0);
   }
 
   private drawLayers(layers: Layer[], vp: Size, mix: boolean, dest: WebGLFramebuffer | null): void {
@@ -432,6 +528,7 @@ export class GlViewer {
     const size = this.size();
     gl.useProgram(this.prog);
     gl.uniform1i(this.loc.u_tex, 0);
+    gl.uniform3f(this.loc.u_clip, 0, 0, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
     gl.viewport(0, 0, size.w, size.h);
     const visible = layers.filter((l) => l.alpha > 0 && l.set.tiles.length);
@@ -440,15 +537,16 @@ export class GlViewer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.target());
       gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      this.drawSet(b.set, b.m, 1, vp);
+      this.drawSet(b.set, b.m, 1, vp, b.adj);
       gl.bindFramebuffer(gl.FRAMEBUFFER, dest);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      this.drawSet(a.set, a.m, 1, vp);
+      this.drawSet(a.set, a.m, 1, vp, a.adj);
       // El destino intermedio como un rectángulo de pantalla completa (invertido en Y: GL
       // guarda las texturas de abajo arriba).
       gl.uniform2f(this.loc.u_vp, vp.w, vp.h);
       gl.uniformMatrix3fv(this.loc.u_m, false, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
       gl.uniform1f(this.loc.u_alpha, b.alpha);
+      gl.uniform1fv(this.loc.u_adj, NO_ADJ);
       gl.bindTexture(gl.TEXTURE_2D, this.fbo!.tex);
       gl.uniform2f(this.loc.u_off, 0, vp.h);
       gl.uniform2f(this.loc.u_size, vp.w, -vp.h);
@@ -457,7 +555,7 @@ export class GlViewer {
     }
     gl.clearColor(this.bg[0], this.bg[1], this.bg[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    for (const l of visible) this.drawSet(l.set, l.m, l.alpha, vp);
+    for (const l of visible) this.drawSet(l.set, l.m, l.alpha, vp, l.adj);
   }
 
   /** Tamaño en píxeles del destino de dibujo (la captura, si la hay, o el canvas). */
@@ -589,6 +687,8 @@ export class GlViewer {
     this.fbo = null;
     this.dropTarget(this.scene);
     this.scene = null;
+    if (this.bgTex) this.gl.deleteTexture(this.bgTex);
+    this.bgTex = null;
     if (this.fxProg) this.gl.deleteProgram(this.fxProg.prog);
     this.fxProg = null;
     this.gl.getExtension("WEBGL_lose_context")?.loseContext();

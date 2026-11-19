@@ -2,8 +2,12 @@
   // Pestaña «Acerca de» de los ajustes: autor, herramientas con las que se hizo y datos del sistema.
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
-  import { t } from "./i18n.svelte";
+  import { currentLang, t } from "./i18n.svelte";
   import icon from "../../../src-tauri/icons/128x128@2x.png";
+  import licenseText from "../../../LICENSE?raw";
+  import ThirdParty from "./about/ThirdParty.svelte";
+  import { loadLicenses, type Licenses } from "./about/licenses";
+  import { THANKS, type Thanks } from "./about/thanks";
 
   const AUTHOR = "Pedro López del Castillo";
 
@@ -17,6 +21,11 @@
   let version = $state("");
   let info = $state<Info | null>(null);
   let copied = $state(false);
+  let showLicense = $state(false);
+  let thirdParty = $state(false);
+  // La lista de terceros pesa: se carga al abrir esta pestaña, no al arrancar la app.
+  let licenses = $state.raw<Licenses | null>(null);
+  loadLicenses().then((l) => (licenses = l), () => {});
   getVersion().then((v) => (version = v), () => {});
   invoke<Info>("diagnostics_info").then((i) => (info = i), () => {});
 
@@ -38,6 +47,8 @@
       : "",
   );
 
+  const roleOf = (p: Thanks) => (typeof p.role === "string" ? p.role : p.role?.[currentLang()]);
+
   async function copyInfo() {
     try {
       await navigator.clipboard.writeText(system);
@@ -49,6 +60,9 @@
   }
 </script>
 
+{#if thirdParty && licenses}
+  <ThirdParty data={licenses} onback={() => (thirdParty = false)} />
+{:else}
 <div class="about">
   <div class="head">
     <img src={icon} alt="" width="72" height="72" />
@@ -63,7 +77,27 @@
     <dd><b>{AUTHOR}</b></dd>
     <dt>{t("aboutBuiltWith")}</dt>
     <dd><b>Claude Code</b> <span class="muted">· Anthropic</span> <span class="tag">{t("aboutAiTag")}</span></dd>
+    <dt>{t("aboutLicense")}</dt>
+    <dd>
+      <b>MIT</b>
+      <button class="small link" onclick={() => (showLicense = !showLicense)}>
+        {showLicense ? t("aboutLicenseHide") : t("aboutLicenseView")}
+      </button>
+    </dd>
   </dl>
+  {#if showLicense}<pre class="license">{licenseText}</pre>{/if}
+
+  {#if THANKS.length}
+    <section class="thanks">
+      <h4>💛 {t("aboutThanksTitle")}</h4>
+      <p class="muted small-text">{t("aboutThanksHelp")}</p>
+      <div class="people">
+        {#each THANKS as p (p.name)}
+          <span class="person"><b>{p.name}</b>{#if roleOf(p)}<span class="role">{roleOf(p)}</span>{/if}</span>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   <h4>{t("aboutStack")}</h4>
   <div class="stack">
@@ -72,6 +106,11 @@
       <span class="chips">{#each s.items as it (it)}<span class="chip">{it}</span>{/each}</span>
     {/each}
   </div>
+  {#if licenses}
+    <button class="third" onclick={() => (thirdParty = true)}>
+      📜 {t("aboutThirdParty", { n: licenses.packages.length + licenses.special.length })}
+    </button>
+  {/if}
 
   {#if system}
     <div class="system">
@@ -80,6 +119,7 @@
     </div>
   {/if}
 </div>
+{/if}
 
 <style>
   .about { display: flex; flex-direction: column; gap: 12px; }
@@ -100,4 +140,22 @@
   .chip { padding: 1px 7px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; background: var(--bg); }
   .system { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
   .small { padding: 1px 8px; font-size: 12px; }
+  .link { margin-left: 8px; }
+  .license {
+    margin: -4px 0 0; padding: 8px 10px; max-height: 200px; overflow: auto; white-space: pre-wrap; font-size: 11px;
+    line-height: 1.4; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .thanks {
+    display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px;
+    background: rgb(251 191 36 / 0.06); border: 1px solid rgb(251 191 36 / 0.25);
+  }
+  .thanks h4 { margin: 0; color: #fbbf24; }
+  .small-text { margin: 0; font-size: 12px; }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .person {
+    display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; padding: 6px 10px; border-radius: 8px; font-size: 13px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+  .role { color: var(--muted); font-size: 11px; line-height: 1.4; }
+  .third { align-self: flex-start; padding: 3px 10px; font-size: 12px; }
 </style>

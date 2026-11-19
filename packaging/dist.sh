@@ -18,7 +18,13 @@ mkdir -p "$DIST"
 sources() { git ls-files -co --exclude-standard -z; }
 pack_sources() { sources | tar --null --ignore-failed-read -T - -cf - "$@"; }
 
+# La lista de licencias de terceros (Acerca de y THIRD-PARTY.md) tiene que estar al día.
+check_licenses() {
+  node packaging/licenses.mjs --check || exit 1
+}
+
 linux() {
+  check_licenses
   command -v docker >/dev/null || { echo "Hace falta Docker para compilar el binario compatible."; exit 1; }
   echo "== Interfaz y núcleo WASM"
   pnpm wasm >/dev/null && pnpm build >/dev/null
@@ -41,6 +47,8 @@ linux() {
   install -Dm755 packaging/linux/install.sh "$stage/install.sh"
   install -Dm644 packaging/linux/LEEME.txt "$stage/LEEME.txt"
   install -Dm755 packaging/linux/diagnostico.sh "$stage/diagnostico.sh"
+  install -Dm644 LICENSE "$stage/LICENSE"
+  install -Dm644 THIRD-PARTY.md "$stage/THIRD-PARTY.md"
   install -Dm644 packaging/linux/imgxplorer.desktop "$stage/share/applications/imgxplorer.desktop"
   for s in 32x32 64x64 128x128; do
     install -Dm644 "src-tauri/icons/$s.png" "$stage/share/icons/hicolor/$s/apps/imgxplorer.png"
@@ -65,6 +73,7 @@ EOF
 mac() {
   local name="imgxplorer-$VERSION-mac" stage="$DIST/imgxplorer-$VERSION-mac"
   echo "== Paquete para macOS (código + instalador)"
+  check_licenses
   # El disco del Mac no distingue mayúsculas: «Settings.svelte» y «settings.svelte.ts» se
   # confunden al importar «./settings.svelte». Linux sí las distingue, así que aquí no se nota.
   local clash
@@ -79,6 +88,8 @@ mac() {
   pack_sources | tar -xf - -C "$stage/codigo"
   install -m755 packaging/macos/install.sh "$stage/Instalar imgxplorer.command"
   install -m644 packaging/macos/LEEME.txt "$stage/LEEME.txt"
+  install -m644 LICENSE "$stage/LICENSE"
+  install -m644 THIRD-PARTY.md "$stage/THIRD-PARTY.md"
   tar -C "$DIST" -czf "$DIST/$name.tar.gz" "$name"
   echo "   $DIST/$name.tar.gz ($(du -h "$DIST/$name.tar.gz" | cut -f1))"
 }

@@ -44,16 +44,24 @@ export class FrameRenderer {
 
   /**
    * La imagen con la pose `pose` en un fotograma de `w`×`h` (múltiplos de 4). `fx`: efectos
-   * especiales de la imagen y el segundo en que se dibuja.
+   * especiales de la imagen y el segundo en que se dibuja. `adj`: sus ajustes de imagen (🎨).
    */
-  async render(ref: PictureRef, pose: Pose, w: number, h: number, background: string, fx?: { track: FxTrack | null; t: number }): Promise<ImageData> {
+  async render(
+    ref: PictureRef,
+    pose: Pose,
+    w: number,
+    h: number,
+    background: string,
+    fx?: { track: FxTrack | null; t: number },
+    adj: ArrayLike<number> | null = null,
+  ): Promise<ImageData> {
     const { set, pic } = await this.set(ref);
     const vp: Size = { w, h };
     const size = { w: pic.w, h: pic.h };
     this.gl.setBackground(background);
     this.gl.capture(vp, false);
     const frame = fx?.track?.frame(fx.t, size, pose, vp) ?? null;
-    this.gl.draw([{ set, m: viewMatrix(pose, size, vp), alpha: 1 }], vp, false, frame);
+    this.gl.draw([{ set, m: viewMatrix(pose, size, vp), alpha: 1, adj }], vp, false, frame);
     return this.gl.readRgba();
   }
 

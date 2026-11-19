@@ -1,0 +1,77 @@
+[
+  {
+    "name": "UnRAR",
+    "authors": ["Alexander Roshal"],
+    "license": "UnRAR (freeware)",
+    "url": "https://www.rarlab.com/rar_add.htm",
+    "text": "unrar",
+    "note": {
+      "es": "Abre los .rar y .cbr. Es freeware, no código abierto: se puede repartir, pero no usar para crear un compresor RAR. Viene dentro de la app; se puede compilar sin él (función «rar»).",
+      "en": "Opens .rar and .cbr files. Freeware, not open source: it may be redistributed but not used to create a RAR compressor. Built into the app; it can be compiled without it (\"rar\" feature)."
+    }
+  },
+  {
+    "name": "libheif",
+    "authors": ["struktur AG"],
+    "license": "LGPL-3.0-or-later",
+    "url": "https://github.com/strukturag/libheif",
+    "text": "packaging/licenses/LGPL-3.0.txt",
+    "note": {
+      "es": "Abre las fotos HEIC. Es la del sistema (Linux, Homebrew en Mac); la AppImage la lleva como archivo aparte que se puede sustituir.",
+      "en": "Opens HEIC photos. The system copy is used (Linux, Homebrew on Mac); the AppImage ships it as a separate, replaceable file."
+    }
+  },
+  {
+    "name": "libde265",
+    "authors": ["struktur AG"],
+    "license": "LGPL-3.0-or-later",
+    "url": "https://github.com/strukturag/libde265",
+    "text": "packaging/licenses/LGPL-3.0.txt",
+    "note": {
+      "es": "Decodificador HEVC que usa libheif. Del sistema, o como archivo aparte en la AppImage.",
+      "en": "HEVC decoder used by libheif. From the system, or as a separate file in the AppImage."
+    }
+  },
+  {
+    "name": "dav1d",
+    "authors": ["VideoLAN and dav1d authors"],
+    "license": "BSD-2-Clause",
+    "url": "https://code.videolan.org/videolan/dav1d",
+    "text": "packaging/licenses/dav1d.txt",
+    "note": {
+      "es": "Decodificador AV1 que usa libheif (fotos AVIF dentro de HEIF). Del sistema, o dentro de la AppImage.",
+      "en": "AV1 decoder used by libheif. From the system, or inside the AppImage."
+    }
+  },
+  {
+    "name": "libaom",
+    "authors": ["Alliance for Open Media"],
+    "license": "BSD-2-Clause",
+    "url": "https://aomedia.googlesource.com/aom",
+    "text": "packaging/licenses/aom.txt",
+    "note": {
+      "es": "Biblioteca AV1 que usa libheif. Del sistema, o dentro de la AppImage.",
+      "en": "AV1 library used by libheif. From the system, or inside the AppImage."
+    }
+  },
+  {
+    "name": "FFmpeg",
+    "authors": ["FFmpeg developers"],
+    "license": "LGPL-2.1-or-later / GPL-2.0-or-later",
+    "url": "https://ffmpeg.org",
+    "note": {
+      "es": "Crea los vídeos MP4. No va dentro de la app: se usa el que tengas instalado, como programa aparte.",
+      "en": "Creates the MP4 videos. Not bundled: the one installed on your system is run as a separate program."
+    }
+  },
+  {
+    "name": "WebKitGTK · WebKit",
+    "authors": ["The WebKit Open Source Project"],
+    "license": "LGPL-2.1-or-later / BSD-2-Clause",
+    "url": "https://webkitgtk.org",
+    "note": {
+      "es": "Motor que dibuja la interfaz. Es el del sistema (WebKitGTK en Linux, WebKit en macOS).",
+      "en": "Engine that renders the interface. The system one is used (WebKitGTK on Linux, WebKit on macOS)."
+    }
+  }
+]

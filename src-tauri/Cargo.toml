@@ -31,3 +31,9 @@ webkit2gtk = "2.0"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2"
+
+[features]
+# Soporte para rar/cbr con UnRAR (freeware, no código abierto). Para un paquete 100 % libre:
+# cargo build --release -p imgxplorer --no-default-features
+default = ["rar"]
+rar = ["imgx-media/rar"]

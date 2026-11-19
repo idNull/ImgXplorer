@@ -7,6 +7,11 @@ export interface InputHandlers {
   /** factor multiplicativo de zoom alrededor de (x, y) en px CSS relativos al elemento. */
   zoom(factor: number, x: number, y: number, src: InputSource): void;
   pan(dx: number, dy: number, src: InputSource): void;
+  /**
+   * Rueda o desplazamiento con dos dedos sin Ctrl. Si devuelve `true` se encarga él (la tira
+   * vertical desplaza en vez de hacer zoom); si no, lo de siempre.
+   */
+  scroll?(dx: number, dy: number, src: InputSource): boolean;
   /** Inicio/fin de una interacción manual (el reproductor la usa para "override"). */
   interaction?(active: boolean): void;
   doubleClick?(x: number, y: number): void;
@@ -43,7 +48,9 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
     e.preventDefault();
     const [x, y] = local(e.clientX, e.clientY);
     const dy = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 40 : e.deltaY;
+    const dx = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaX * 40 : e.deltaX;
     pulse();
+    if (!e.ctrlKey && h.scroll?.(dx, dy, looksLikeMouseWheel(e) ? "rueda" : "touchpad-scroll")) return;
     if (e.ctrlKey) {
       h.zoom(Math.exp(-dy * 0.01), x, y, "ctrl+rueda"); // pellizco en Chromium/algunos WebKit
     } else if (looksLikeMouseWheel(e)) {

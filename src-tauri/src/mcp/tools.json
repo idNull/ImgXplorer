@@ -552,6 +552,72 @@
     }
   },
   {
+    "name": "get_adjust",
+    "description": "Image adjustments (🎨) of an image: its own ones (or null), those for all images, and the ones it uses. Adjustments never change the file; they show in the viewer, render_frames and the exported video.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Default: current image."
+        }
+      }
+    }
+  },
+  {
+    "name": "set_adjust",
+    "description": "Set image adjustments for one image or (omit image) for all. Fields left out stay as they are; 'reset': true clears them first. Use 'clean' on yellowed/grey scans (whitens paper, deepens ink). Prefer subtle values (±0.1–0.3). Night mode is a reading setting, not part of the project.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "integer",
+          "description": "Omit to set the adjustments for all images."
+        },
+        "reset": {
+          "type": "boolean",
+          "description": "Start from no adjustments (alone: remove them)."
+        },
+        "clean": {
+          "type": "number",
+          "description": "Clean scan 0..1 (paper to white, ink to black)."
+        },
+        "brightness": {
+          "type": "number",
+          "description": "-1..1"
+        },
+        "contrast": {
+          "type": "number",
+          "description": "-1..1"
+        },
+        "saturation": {
+          "type": "number",
+          "description": "-1 (grey) .. 1"
+        },
+        "exposure": {
+          "type": "number",
+          "description": "Midtones -1..1"
+        },
+        "temperature": {
+          "type": "number",
+          "description": "-1 (cold) .. 1 (warm)"
+        },
+        "sharpen": {
+          "type": "number",
+          "description": "0..1"
+        },
+        "tone": {
+          "type": "string",
+          "enum": [
+            "none",
+            "gray",
+            "sepia"
+          ]
+        }
+      }
+    }
+  },
+  {
     "name": "list_sounds",
     "description": "Sounds in the app's sound library (built-in effects and ambiences, imported files, recorded voices) with their id, duration and whether they loop well as ambience.",
     "inputSchema": {

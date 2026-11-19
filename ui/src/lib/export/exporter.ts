@@ -42,6 +42,10 @@ export interface ExportProgress {
 export type ExportSpec = Pick<PlaySpec, "timeline" | "transitionOut" | "holdBetween" | "audio" | "ambient" | "fx"> & {
   /** Pistas del proyecto (volumen, panorama, silencio y efectos). */
   tracks?: () => TrackSpec[];
+  /** Ajustes de imagen (🎨) de la imagen i, ya para el shader (espera a «limpiar escaneo»). */
+  adjust?: (i: number) => Promise<ArrayLike<number> | null>;
+  /** El proyecto tiene ajustes de imagen (para ofrecer aplicarlos o no). */
+  adjusted?: () => boolean;
 };
 
 interface Prepared {
@@ -51,6 +55,7 @@ interface Prepared {
   tl: wasm.WasmTimeline;
   audio: AudioTracks | undefined;
   fx: FxTrack | null;
+  adj: ArrayLike<number> | null;
   dur: number;
 }
 
@@ -87,7 +92,8 @@ export async function exportVideo(
       const tl = await spec.timeline(i, size, aspect);
       const audio = spec.audio?.(i);
       const list = spec.fx?.(i);
-      const p = { i, size, set, tl, audio, fx: FxTrack.of(list), dur: itemDuration(tl, audio, list) };
+      const adj = (await spec.adjust?.(i)) ?? null;
+      const p = { i, size, set, tl, audio, fx: FxTrack.of(list), adj, dur: itemDuration(tl, audio, list) };
       live.add(p);
       return p;
     } catch (e) {
@@ -147,7 +153,7 @@ export async function exportVideo(
         fraction = (i - o.from + k / n) / count;
         const pose = cur.tl.evaluate(Math.min(k / o.fps, cur.tl.duration()));
         const fx = cur.fx?.frame(k / o.fps, cur.size, pose, vp) ?? null;
-        gl.draw([{ set: cur.set, m: viewMatrix(pose, cur.size, vp), alpha: 1 }], vp, false, fx);
+        gl.draw([{ set: cur.set, m: viewMatrix(pose, cur.size, vp), alpha: 1, adj: cur.adj }], vp, false, fx);
         await emit();
       }
       schedule.imageEnd(frames / o.fps);
@@ -163,8 +169,8 @@ export async function exportVideo(
           const f = wasm.transition_frame(tr.json, tr.tpl, j / m, cur.size.w, cur.size.h, from, nx.size.w, nx.size.h, to, vp.w, vp.h);
           gl.draw(
             [
-              { set: cur.set, m: f.subarray(0, 6), alpha: f[6] },
-              { set: nx.set, m: f.subarray(7, 13), alpha: f[13] },
+              { set: cur.set, m: f.subarray(0, 6), alpha: f[6], adj: cur.adj },
+              { set: nx.set, m: f.subarray(7, 13), alpha: f[13], adj: nx.adj },
             ],
             vp,
             f[14] > 0,

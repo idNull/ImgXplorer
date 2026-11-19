@@ -48,6 +48,7 @@ Los nombres y las descripciones están en inglés, que es lo que mejor entienden
 | Ver | `view_image` (página con viñetas numeradas), `view_panel` (viñeta o zona a alta resolución), `get_panels`, `set_panels` |
 | Animar | `set_output`, `plan_shots`, `get_timeline`, `set_keyframes`, `apply_template`, `set_transition`, `set_hold_between` |
 | Sonido | `list_sounds`, `find_audio_files`, `import_sounds`, `list_tracks`, `add_track`, `edit_track`, `add_audio`, `edit_audio`, `remove_audio`, `add_ambient`, `edit_ambient`, `remove_ambient`, `set_mix`, `effects_catalog` |
+| Ajustes de imagen | `get_adjust`, `set_adjust` (limpiar escaneo, brillo, contraste, color, nitidez, blanco y negro o sepia; una imagen o todas) |
 | Efectos especiales | `fx_catalog`, `add_fx` (situación o efecto suelto, en segundos o en un plano de `plan_shots` con desfase, y con punto), `edit_fx`, `remove_fx` |
 | Revisar | `summary`, `render_frames`, `sound_report`, `play` |
 | Terminar | `export_video`, `export_status`, `cancel_export`, `inspect_video` |
@@ -78,6 +79,13 @@ La IA decide **qué** encuadrar y **cuánto tiempo**; las poses las calcula `img
 - **Inicio y final**: `start`/`end` `overview` enseñan la página entera al empezar o acabar.
 - **Lo que devuelve**: los tiempos de cada plano (`arrive`, `hold`, `end`), que la IA usa para colocar voces y efectos.
 - **El resultado** es un clip de keyframes normal («Planos»), editable en el editor. Conserva los sonidos de la imagen.
+
+### Ajustes de imagen
+
+- `get_adjust` dice los ajustes propios de una imagen, los de todas y los que usa.
+- `set_adjust` los cambia para una imagen o, sin `image`, para todas. Lo que no se indica se queda igual; `reset: true` empieza de cero.
+- `render_frames` y el vídeo los aplican; `view_image` y `view_panel` enseñan la página original, para leer bien el texto.
+- `summary` incluye los ajustes de cada imagen.
 
 ### Efectos especiales
 

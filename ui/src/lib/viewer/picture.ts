@@ -20,6 +20,8 @@ export interface PictureRef {
   fallback: string;
   /** La original ya es RGBA (formato que el webview no soporta). */
   decoded: boolean;
+  /** Posición en la fuente (para sus ajustes de imagen). */
+  index?: number;
 }
 
 async function fetchRgba(url: string): Promise<Picture> {

@@ -60,6 +60,13 @@ Starting values; adapt to the user's pace (calm ×1.3, action ×0.7):
 - `bounce`/`elastic` easing only for comedy; `rot` almost never.
 - Big moves across the page are fine, but not on every panel: vary the rhythm.
 
+## Image adjustments
+
+- `get_adjust` / `set_adjust` change how pages look without touching the files (for one image or, without
+  `image`, for all). They show in the viewer, `render_frames` and the video.
+- Use `clean: 1` for scans with yellowed or grey paper. Otherwise keep it subtle (±0.1–0.3); `tone: "sepia"` or
+  `"gray"` can mark a flashback chapter. Don't adjust pages that already look good.
+
 ## Visual special effects
 
 - `fx_catalog` lists effects and ready-made **situations**. A situation adds several synced effects and its

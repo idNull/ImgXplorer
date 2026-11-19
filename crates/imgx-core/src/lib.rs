@@ -1,5 +1,6 @@
 //! Núcleo de imgxplorer: sin IO, compilable a nativo y a WASM.
 
+pub mod adjust;
 pub mod camera;
 pub mod easing;
 pub mod fx;

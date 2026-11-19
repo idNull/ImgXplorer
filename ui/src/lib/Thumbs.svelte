@@ -9,8 +9,12 @@
     onpick: (i: number) => void;
     /** Tamaño de la tira: pequeña, mediana o grande. */
     size?: "s" | "m" | "l";
+    /** Páginas marcadas (🔖). */
+    marks?: Set<number>;
+    /** Páginas que se ven a la vez (doble página): también se resaltan. */
+    shown?: number[];
   }
-  let { count, current, url, name, onpick, size = "m" }: Props = $props();
+  let { count, current, url, name, onpick, size = "m", marks, shown = [] }: Props = $props();
   const HEIGHT = { s: 84, m: 112, l: 156 };
 
   let strip: HTMLDivElement;
@@ -32,13 +36,14 @@
 
 <div class="strip" bind:this={strip} onwheel={wheel} style:--h="{HEIGHT[size]}px">
   {#each { length: count } as _, i (i)}
-    <button class="thumb" class:current={i === current} data-i={i} title={name(i)} onclick={() => onpick(i)}>
+    <button class="thumb" class:current={i === current || shown.includes(i)} data-i={i} title={name(i)} onclick={() => onpick(i)}>
       {#if failed[i]}
         <span class="broken">?</span>
       {:else}
         <img src={url(i)} alt="" loading="lazy" decoding="async" draggable="false" onerror={() => (failed[i] = true)} />
       {/if}
       <span class="n">{i + 1}</span>
+      {#if marks?.has(i)}<span class="mark">🔖</span>{/if}
     </button>
   {/each}
 </div>
@@ -60,4 +65,5 @@
     font-size: 10px; background: rgb(0 0 0 / 0.65); color: var(--muted);
   }
   .broken { color: var(--muted); }
+  .mark { position: absolute; left: 2px; top: 0; font-size: 12px; line-height: 1; filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.7)); }
 </style>

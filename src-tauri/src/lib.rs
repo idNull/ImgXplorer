@@ -36,6 +36,10 @@ pub(crate) struct AppState {
     thumbs: serve::ThumbCache,
     /// Viñetas detectadas por imagen de la fuente abierta.
     panels: Mutex<HashMap<usize, Vec<PanelRect>>>,
+    /// Niveles («limpiar escaneo») por imagen de la fuente abierta.
+    levels: Mutex<HashMap<usize, imgx_media::levels::Levels>>,
+    /// Recuadro con contenido («✂ ajustar al contenido») por imagen de la fuente abierta.
+    boxes: Mutex<HashMap<usize, Option<PanelRect>>>,
     /// Última generación usada; no se reinicia al cerrar para que las URL nunca se repitan.
     last_generation: std::sync::atomic::AtomicU64,
 }
@@ -112,6 +116,8 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
     *guard = Some(Current { generation, source: src, path: opened.path, kind: opened.kind, fingerprint });
     state.thumbs.clear();
     state.panels.lock().unwrap().clear();
+    state.levels.lock().unwrap().clear();
+    state.boxes.lock().unwrap().clear();
     Ok(info)
 }
 
@@ -123,6 +129,8 @@ fn close_source(state: State<'_, AppState>) {
     }
     state.thumbs.clear();
     state.panels.lock().unwrap().clear();
+    state.levels.lock().unwrap().clear();
+    state.boxes.lock().unwrap().clear();
 }
 
 /// Viñetas de la imagen `index` (vacío si no se distinguen al menos dos).
@@ -145,6 +153,48 @@ async fn detect_panels(generation: u64, index: usize, state: State<'_, AppState>
     .map_err(|e| e.to_string())??;
     if state.current(generation).is_some() {
         state.panels.lock().unwrap().insert(index, found.clone());
+    }
+    Ok(found)
+}
+
+/// Color del papel y de la tinta de la imagen `index`, para «limpiar escaneo».
+#[tauri::command]
+async fn image_levels(generation: u64, index: usize, state: State<'_, AppState>) -> Result<imgx_media::levels::Levels, String> {
+    let cur = state.current(generation).ok_or("la fuente ya no está abierta")?;
+    if let Some(l) = state.levels.lock().unwrap().get(&index) {
+        return Ok(*l);
+    }
+    let src = cur.source.clone();
+    let found = tauri::async_runtime::spawn_blocking(move || {
+        let name = src.entries().get(index).ok_or("índice fuera de rango")?.name.clone();
+        let bytes = src.read(index).map_err(|e| e.to_string())?;
+        imgx_media::levels::levels(&name, &bytes).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    if state.current(generation).is_some() {
+        state.levels.lock().unwrap().insert(index, found);
+    }
+    Ok(found)
+}
+
+/// Recuadro con contenido de la imagen `index` (`None` si apenas tiene márgenes).
+#[tauri::command]
+async fn content_box(generation: u64, index: usize, state: State<'_, AppState>) -> Result<Option<PanelRect>, String> {
+    let cur = state.current(generation).ok_or("la fuente ya no está abierta")?;
+    if let Some(b) = state.boxes.lock().unwrap().get(&index) {
+        return Ok(*b);
+    }
+    let src = cur.source.clone();
+    let found = tauri::async_runtime::spawn_blocking(move || {
+        let name = src.entries().get(index).ok_or("índice fuera de rango")?.name.clone();
+        let bytes = src.read(index).map_err(|e| e.to_string())?;
+        imgx_media::panels::content_box(&name, &bytes).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    if state.current(generation).is_some() {
+        state.boxes.lock().unwrap().insert(index, found);
     }
     Ok(found)
 }
@@ -238,6 +288,8 @@ pub fn run() {
             close_source,
             initial_path,
             detect_panels,
+            image_levels,
+            content_box,
             project::save_project,
             prefs::load_prefs,
             prefs::save_prefs,
@@ -277,7 +329,8 @@ pub fn run() {
             mcp::install::mcp_clients,
             mcp::install::mcp_client_action,
             diagnostics::diagnostics_info,
-            diagnostics::dismiss_crash_notice
+            diagnostics::dismiss_crash_notice,
+            diagnostics::open_url
         ])
         .setup(move |app| {
             diagnostics::start_session(app.handle());

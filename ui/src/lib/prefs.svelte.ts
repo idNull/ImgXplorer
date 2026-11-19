@@ -5,6 +5,7 @@ import { setLang, type LangSetting } from "./i18n.svelte";
 import { cleanOverrides, type KeyOverrides } from "./keys";
 import { log } from "./log";
 import { library } from "./editor/libstore.svelte";
+import { reading } from "./reading/reading.svelte";
 
 export type ThumbSize = "s" | "m" | "l";
 
@@ -38,6 +39,10 @@ export interface Settings {
   sound: { master: number; mute: boolean; input: string };
   /** Una IA puede manejar la app (servidor MCP). */
   aiControl: boolean;
+  /** Modo noche de lectura (🌙): colores invertidos suaves. No sale en el vídeo salvo que se pida. */
+  night: boolean;
+  /** Barra fina de progreso de lectura abajo del visor (📖). */
+  progressBar: boolean;
   keys: KeyOverrides;
 }
 
@@ -123,6 +128,8 @@ export const DEFAULT_SETTINGS: Settings = {
   video: DEFAULT_VIDEO,
   sound: { master: 1, mute: false, input: "" },
   aiControl: false,
+  night: false,
+  progressBar: true,
   keys: {},
 };
 export const MAX_RECENTS = 20;
@@ -154,6 +161,8 @@ function clean(raw: unknown): Settings {
   if (typeof snd.mute === "boolean") s.sound.mute = snd.mute;
   if (typeof snd.input === "string") s.sound.input = snd.input.slice(0, 300);
   if (typeof r.aiControl === "boolean") s.aiControl = r.aiControl;
+  if (typeof r.night === "boolean") s.night = r.night;
+  if (typeof r.progressBar === "boolean") s.progressBar = r.progressBar;
   s.keys = cleanOverrides(r.keys);
   return s;
 }
@@ -183,10 +192,11 @@ class Prefs {
 
   async load() {
     try {
-      const p = await invoke<{ settings: string | null; recents: string | null; library: string | null }>("load_prefs");
+      const p = await invoke<{ settings: string | null; recents: string | null; library: string | null; reading: string | null }>("load_prefs");
       this.settings = clean(parse(p.settings, "settings.json"));
       this.recents = cleanRecents(parse(p.recents, "recents.json"));
       library.load(p.library);
+      reading.load(p.reading);
     } catch (e) {
       log.warn("no se pudieron leer los ajustes:", e);
     }
@@ -226,6 +236,7 @@ class Prefs {
   /** Escribe ya lo pendiente (al cerrar). */
   flush() {
     library.flush();
+    reading.flush();
     for (const name of ["settings", "recents"] as const) {
       if (this.#timers[name] === undefined) continue;
       clearTimeout(this.#timers[name]);

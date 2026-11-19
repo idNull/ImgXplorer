@@ -153,11 +153,14 @@ pub struct Defaults {
     /// Mezcla del sonido (si no está, la de fábrica).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mix: Option<Mix>,
+    /// Ajustes de imagen para todas (las imágenes con los suyos propios usan esos).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjust: Option<crate::adjust::Adjust>,
 }
 
 impl Default for Defaults {
     fn default() -> Self {
-        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3, template: None, mix: None }
+        Self { transition: Transition { kind: TransitionKind::Fade, duration: 0.5 }, hold_between: 0.3, template: None, mix: None, adjust: None }
     }
 }
 
@@ -215,6 +218,9 @@ pub struct Item {
     /// Viñetas dibujadas o corregidas a mano (sustituyen a la detección automática).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panels: Option<Vec<Rect>>,
+    /// Ajustes de imagen propios (brillo, limpiar escaneo…); si no hay, los de `defaults`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjust: Option<crate::adjust::Adjust>,
 }
 
 /// Rectángulo en coordenadas normalizadas de imagen (0..1).
@@ -444,11 +450,14 @@ mod tests {
             },
             transition_out: Some(Transition { kind: TransitionKind::ContinuousCamera { dir: None }, duration: 0.8 }),
             panels: Some(vec![Rect { x: 0.1, y: 0.1, w: 0.4, h: 0.3 }]),
+            adjust: Some(crate::adjust::Adjust { clean: 1.0, tone: crate::adjust::Tone::Gray, ..Default::default() }),
         });
+        p.defaults.adjust = Some(crate::adjust::Adjust { saturation: -0.3, ..Default::default() });
         let back = Project::from_json(&p.to_json()).unwrap();
         assert_eq!(p, back);
         assert!(p.to_json().contains(r#""type": "continuous-camera""#));
         assert!(p.to_json().contains(r#""type": "shockwave""#), "los efectos se guardan");
+        assert!(p.to_json().contains(r#""tone": "gray""#), "los ajustes de imagen se guardan");
     }
 
     #[test]

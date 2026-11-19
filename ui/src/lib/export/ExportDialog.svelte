@@ -67,6 +67,8 @@
     return false;
   });
   let withSound = $state(true);
+  const hasAdjust = $derived(!!spec.adjusted?.());
+  let withAdjust = $state(true);
 
   const save = () => prefs.saveSettings();
   const stem = (s: string) => s.replace(/\.[^./]+$/, "") || "video";
@@ -135,7 +137,7 @@
           to: span.b,
           sound: hasSound && withSound ? $state.snapshot(mix) : null,
         },
-        spec,
+        withAdjust ? spec : { ...spec, adjust: undefined },
         refAt,
         (p) => (progress = p),
         abort.signal,
@@ -283,6 +285,9 @@
         </div>
         {#if hasSound}
           <label class="sound"><input type="checkbox" bind:checked={withSound} /> {t("exportSound")}</label>
+        {/if}
+        {#if hasAdjust}
+          <label class="sound"><input type="checkbox" bind:checked={withAdjust} /> {t("exportAdjust")}</label>
         {/if}
         {#if exists}<p class="warn">{t("videoExists")}</p>{/if}
         <p class="note">{t("exportNote")}</p>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { listen } from "@tauri-apps/api/event";
@@ -35,6 +35,15 @@
   import { log } from "./lib/log";
   import { startMcp } from "./lib/mcp/host.svelte";
   import McpBadge from "./lib/mcp/McpBadge.svelte";
+  import AdjustPanel from "./lib/adjust/AdjustPanel.svelte";
+  import { adjustUniforms, normalize } from "./lib/adjust/adjust";
+  import { levels } from "./lib/adjust/levels.svelte";
+  import ReadingMenu from "./lib/reading/ReadingMenu.svelte";
+  import ProgressBar from "./lib/reading/ProgressBar.svelte";
+  import GoToPage from "./lib/reading/GoToPage.svelte";
+  import { reading, type Reading } from "./lib/reading/reading.svelte";
+  import { boxes } from "./lib/reading/boxes.svelte";
+  import { spreadOf, spreadStep, type Framing, type ReadLayout } from "./lib/reading/layout";
 
   interface DiagnosticsInfo {
     logDir: string | null;
@@ -90,12 +99,10 @@
     url: `${base}${s.generation}_${i}`,
     fallback: `${base}d/${s.generation}_${i}`,
     decoded: s.entries[i].decoded,
+    index: i,
   });
   const thumbUrl = (i: number) => `${base}t/${source!.generation}_${i}`;
   const current = $derived(source && source.entries.length ? ref(source, index) : null);
-  const neighbours = $derived(
-    source ? [index + 1, index - 1, index + 2].filter((i) => i >= 0 && i < source!.entries.length).map((i) => ref(source!, i)) : [],
-  );
 
   // Preguntas al usuario (cambios sin guardar…).
   let confirmSpec = $state<ConfirmSpec | null>(null);
@@ -165,6 +172,9 @@
     overlayPanels = null;
     detectedCount = null;
     panelCache.clear();
+    sizes.clear();
+    readingOpen = false;
+    gotoOpen = false;
     store.unload();
     clearSolo();
     invoke("close_source").catch((e) => log.warn("cerrar fuente:", e));
@@ -182,6 +192,10 @@
       panelCache.clear();
       clearSolo();
       await store.load(s.generation, { kind: s.kind, title: s.title, fingerprint: s.fingerprint }, s.project);
+      levels.reset(s.generation);
+      boxes.reset(s.generation);
+      sizes.clear();
+      sizeRev++;
       source = s;
       // Volver a la imagen en la que se dejó (salvo que se haya abierto una imagen concreta).
       const rec = prefs.find(s.path);
@@ -328,6 +342,13 @@
     fx: (i) => $state.snapshot(store.fxFor(source!.entries[i].name)),
     ambient: (i) => ambientSpecs(store.ambients, i, indexOfEntry),
     tracks: () => trackSpecs($state.snapshot(store.tracks)),
+    // Ajustes de imagen (🎨), sin el modo noche (es solo para leer).
+    adjust: async (i) => {
+      const adj = store.adjustFor(source!.entries[i].name);
+      if (!adj) return null;
+      return adjustUniforms(adj, adj.clean ? await levels.wait(i) : null, false);
+    },
+    adjusted: () => !!store.data && (!!normalize(store.data.defaults.adjust) || store.data.items.some((it) => normalize(it.adjust))),
   };
 
   /** Nombres de las entradas, en orden, y su posición (para los ambientes). */
@@ -401,6 +422,33 @@
   const imgW = $derived(status?.image?.w ?? 0);
   const imgH = $derived(status?.image?.h ?? 0);
   const curSize = $derived<[number, number] | null>(imgW && imgH ? [imgW, imgH] : null);
+  // Ajustes de imagen (🎨) de cada imagen para el visor. Se rehace (y el visor repinta) al cambiar
+  // los ajustes del proyecto, al llegar los niveles de «limpiar escaneo» o con el modo noche.
+  let adjustOpen = $state(false);
+  /** Mantener pulsada la tecla de comparar enseña el original. */
+  let comparing = $state(false);
+  const adjustAt = $derived.by(() => {
+    const s = source;
+    const data = store.data;
+    if (!s || !data) return null;
+    const night = prefs.settings.night;
+    void levels.rev;
+    const own = new Map(data.items.filter((i) => i.adjust).map((i) => [i.entry, normalize($state.snapshot(i.adjust))]));
+    const all = normalize($state.snapshot(data.defaults.adjust));
+    if (!own.size && !all && !night) return null;
+    return (i: number) => {
+      const name = s.entries[i]?.name;
+      const adj = (name !== undefined ? own.get(name) : null) ?? all;
+      return adjustUniforms(adj, adj?.clean ? levels.get(i) : null, night);
+    };
+  });
+  const curAdjust = $derived(curEntry ? store.adjustFor(curEntry) : null);
+  /** «Limpiar escaneo» activo en esta página pero aún sin su análisis. */
+  const analyzing = $derived.by(() => {
+    void levels.rev;
+    return !!curAdjust?.clean && !!source && levels.get(index) === null;
+  });
+
   const manualPanels = $derived(curEntry ? (store.item(curEntry)?.panels ?? null) : null);
 
   function setManualPanels(flat: number[]) {
@@ -470,6 +518,107 @@
   const playerKeys = $derived(keymap(prefs.settings.keys, "player"));
   const editorKeys = $derived(keymap(prefs.settings.keys, "editor"));
   const editorShown = $derived(editorOpen && !!source?.entries.length && !playerInfo);
+
+  // ── Lectura (📖): modo de cada cómic, doble página, tira vertical, marcadores ──
+  let readingOpen = $state(false);
+  let gotoOpen = $state(false);
+  const rd = $derived(reading.of(source?.path));
+  function setReading(patch: Partial<Reading>) {
+    if (source) reading.set(source.path, patch);
+  }
+  /** Tamaño de las imágenes ya cargadas (para saber cuáles son apaisadas en doble página). */
+  const sizes = new Map<number, Size>();
+  let sizeRev = $state(0);
+  function onSize(i: number, sz: Size) {
+    const had = sizes.get(i);
+    sizes.set(i, sz);
+    if (!had || had.w > had.h !== sz.w > sz.h) sizeRev++;
+  }
+  const wide = (i: number) => {
+    const sz = sizes.get(i);
+    return !!sz && sz.w > sz.h;
+  };
+  /** Los modos de lectura se aplican al leer: no en el editor, el Modo Acción ni la reproducción. */
+  const readingActive = $derived(!!source?.entries.length && !editorShown && !actionOpen && !panelEdit && !playerInfo);
+  const stripOn = $derived(readingActive && rd.strip);
+  const doubleOn = $derived(readingActive && rd.double && !rd.strip);
+  const count = $derived(source?.entries.length ?? 0);
+  /** Páginas que se ven ahora (dos en doble página). */
+  const spreadNow = $derived.by(() => {
+    void sizeRev;
+    return doubleOn ? spreadOf(index, count, rd.cover, wide) : [index];
+  });
+  const readLayout = $derived.by<ReadLayout | null>(() => {
+    const s = source;
+    if (!s || !s.entries.length) return null;
+    if (stripOn) return { kind: "strip", id: String(s.generation), count: s.entries.length, at: index };
+    if (doubleOn && spreadNow.length === 2) {
+      const pages = spreadNow.map((i) => ref(s, i));
+      return { kind: "double", pages: rd.rtl ? pages.reverse() : pages };
+    }
+    return null;
+  });
+  const framing = $derived.by<Framing | null>(() => {
+    if (!readingActive) return null;
+    const crop = rd.crop;
+    if (crop) void boxes.rev;
+    return { fit: rd.fit, rtl: rd.rtl, box: crop ? (i: number) => boxes.get(i) : null };
+  });
+  // Con ✂, el recuadro de las vecinas se pide antes de llegar a ellas (así no hay salto).
+  $effect(() => {
+    if (!rd.crop || !readingActive) return;
+    for (const n of neighbours) if (n.index !== undefined) boxes.get(n.index);
+  });
+  const markSet = $derived.by(() => {
+    const s = source;
+    if (!s) return new Set<number>();
+    const names = new Set(rd.marks);
+    return new Set(s.entries.flatMap((e, i) => (names.has(e.name) ? [i] : [])));
+  });
+  const markList = $derived([...markSet].sort((a, b) => a - b).map((i) => ({ index: i, name: source!.entries[i].name })));
+
+  /** Página siguiente o anterior (en doble página, de dos en dos). */
+  function pageStep(dir: 1 | -1) {
+    if (!source) return;
+    if (doubleOn) return go(spreadStep(index, dir, count, rd.cover, wide));
+    go(index + dir);
+  }
+  /** Volver atrás leyendo: la página anterior se encuadra por el final (al ancho, por abajo). */
+  function back() {
+    if (!source || spreadNow[0] <= 0) return;
+    if (readingActive && !rd.strip) viewer.arriveAtEnd();
+    pageStep(-1);
+  }
+  /** En los ajustes al ancho y al alto (y la tira), avanzar lee la página entera antes de pasarla. */
+  const scrollMode = () => readingActive && (rd.strip || rd.fit !== "window");
+  function primaryScroll(dir: 1 | -1): boolean {
+    if (rd.fit === "height" && !rd.strip) return viewer.scrollToward("x", rd.rtl ? (-dir as 1 | -1) : dir);
+    return viewer.scrollToward("y", dir);
+  }
+  async function changeReading(patch: Partial<Reading>, msg?: string) {
+    setReading(patch);
+    if (msg) say(msg);
+    await tick();
+    viewer?.fit();
+  }
+  function toggleMark() {
+    if (!source || !curEntry) return;
+    const on = reading.toggleMark(source.path, curEntry);
+    say(t(on ? "readMarked" : "readUnmarked", { n: index + 1 }));
+  }
+
+  // Si las páginas son muy altas (más de 2,5 veces su ancho), se ofrece leerlo como webtoon.
+  const webtoonAsk = $derived(
+    !!source && readingActive && !rd.strip && !rd.asked && imgW > 0 && imgH > imgW * 2.5 && source.entries.length > 1,
+  );
+
+  const neighbours = $derived(
+    source
+      ? (doubleOn ? [index + 2, index + 3, index - 1, index - 2, index + 1] : [index + 1, index - 1, index + 2])
+          .filter((i) => i >= 0 && i < source!.entries.length)
+          .map((i) => ref(source!, i))
+      : [],
+  );
 
   // Marco de reproducción: con el editor abierto el visor es más bajo que al reproducir (el
   // editor se oculta), así que el encuadre cambiaría. El visor se estrecha a la proporción que
@@ -546,6 +695,10 @@
       recentsOpen = false;
       return e.preventDefault();
     }
+    if (adjustOpen && e.key === "Escape" && !editorShown) {
+      adjustOpen = false;
+      return e.preventDefault();
+    }
     const combo = comboOf(e);
     if (!combo) return;
     if (playerKey(combo)) return e.preventDefault();
@@ -560,17 +713,29 @@
       finishPanelEdit();
       return e.preventDefault();
     }
+    if (gotoOpen && e.key === "Escape") {
+      gotoOpen = false;
+      return e.preventDefault();
+    }
+    if (readingOpen && e.key === "Escape") {
+      readingOpen = false;
+      return e.preventDefault();
+    }
     const action = viewerKeys.get(combo);
     if (!action) return;
     const zoomed = viewer?.isZoomedIn();
     const step = e.shiftKey ? 240 : 80;
+    const scroll = scrollMode();
+    // En manga, la página siguiente está a la izquierda.
+    const toRight = () => (readingActive && rd.rtl ? back() : pageStep(1));
+    const toLeft = () => (readingActive && rd.rtl ? pageStep(1) : back());
     switch (action) {
-      case "right": zoomed ? viewer.pan(-step, 0) : go(index + 1); break;
-      case "left": zoomed ? viewer.pan(step, 0) : go(index - 1); break;
-      case "down": zoomed ? viewer.pan(0, -step) : go(index + 1); break;
-      case "up": zoomed ? viewer.pan(0, step) : go(index - 1); break;
-      case "next": go(index + 1); break;
-      case "prev": go(index - 1); break;
+      case "right": scroll ? viewer.scrollToward("x", 1, step) || toRight() : zoomed ? viewer.pan(-step, 0) : toRight(); break;
+      case "left": scroll ? viewer.scrollToward("x", -1, step) || toLeft() : zoomed ? viewer.pan(step, 0) : toLeft(); break;
+      case "down": scroll ? viewer.scrollToward("y", 1, step) || pageStep(1) : zoomed ? viewer.pan(0, -step) : pageStep(1); break;
+      case "up": scroll ? viewer.scrollToward("y", -1, step) || back() : zoomed ? viewer.pan(0, step) : pageStep(-1); break;
+      case "next": scroll ? primaryScroll(1) || pageStep(1) : pageStep(1); break;
+      case "prev": scroll ? primaryScroll(-1) || back() : pageStep(-1); break;
       case "first": go(0); break;
       case "last": go(Infinity); break;
       case "zoomIn": zoomIn(); break;
@@ -594,8 +759,39 @@
       case "mute": toggleMute(); break;
       case "undo": store.undo(); break;
       case "redo": store.redo(); break;
+      case "adjust": if (source) adjustOpen = !adjustOpen; break;
+      case "night": prefs.settings.night = !prefs.settings.night; prefs.saveSettings(); break;
+      case "compare": comparing = true; break;
+      case "reading": if (source) readingOpen = !readingOpen; break;
+      case "fitWidth": if (source) changeReading({ fit: rd.fit === "width" ? "window" : "width" }, t(rd.fit === "width" ? "readFit_window" : "readFit_width")); break;
+      case "fitHeight": if (source) changeReading({ fit: rd.fit === "height" ? "window" : "height" }, t(rd.fit === "height" ? "readFit_window" : "readFit_height")); break;
+      case "double": if (source) changeReading({ double: !rd.double, strip: false }, t(rd.double && !rd.strip ? "readSingle" : "readDouble")); break;
+      case "strip": if (source) changeReading({ strip: !rd.strip }, t(rd.strip ? "readStripOff" : "readStrip")); break;
+      case "loupe": lensKey = true; viewer?.setLens(true); break;
+      case "goTo": if (source?.entries.length) gotoOpen = true; break;
+      case "bookmark": toggleMark(); break;
     }
     e.preventDefault();
+  }
+
+  /** Soltar la tecla de comparar vuelve a los ajustes. */
+  let lensKey = false;
+  function onKeyUp(e: KeyboardEvent) {
+    if (!comparing && !lensKey) return;
+    const combo = comboOf(e);
+    const a = combo ? viewerKeys.get(combo) : undefined;
+    if (a === "compare") comparing = false;
+    if (a === "loupe" || (lensKey && combo && combo.toLowerCase() === "z")) {
+      lensKey = false;
+      viewer?.setLens(false);
+    }
+  }
+  function onBlur() {
+    comparing = false;
+    if (lensKey) {
+      lensKey = false;
+      viewer?.setLens(false);
+    }
   }
 
   function openRecent(path: string) {
@@ -675,7 +871,7 @@
   });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onkeyup={onKeyUp} onblur={onBlur} />
 
 <main>
   <header>
@@ -695,15 +891,28 @@
       <button class="close-src" onclick={closeSource} disabled={opening} title="{t('closeSource')}{kt('closeSource')}">✕</button>
     {/if}
     <span class="spacer"></span>
-    <button onclick={() => go(index - 1)} disabled={!source || index === 0} title="{t('prev')}{kt('prev')}">◀</button>
-    <span class="counter">{source && source.entries.length ? `${index + 1} / ${source.entries.length}` : "–"}</span>
-    <button onclick={() => go(index + 1)} disabled={!source || index >= source.entries.length - 1} title="{t('next')}{kt('next')}">▶</button>
+    <button onclick={() => pageStep(-1)} disabled={!source || spreadNow[0] === 0} title="{t('prev')}{kt('prev')}">◀</button>
+    <span class="counter">{source && source.entries.length ? `${spreadNow.map((i) => i + 1).join("–")} / ${source.entries.length}` : "–"}</span>
+    <button onclick={() => pageStep(1)} disabled={!source || spreadNow[spreadNow.length - 1] >= source.entries.length - 1} title="{t('next')}{kt('next')}">▶</button>
     <button onclick={zoomOut} title={kt("zoomOut").trim()}>−</button>
     <span class="zoom">{status?.image ? `${status.zoomPercent}%` : ""}</span>
     <button onclick={zoomIn} title={kt("zoomIn").trim()}>+</button>
     <button onclick={() => viewer.fit()} title="{t('fit')}{kt('fit')}">{t("fit")}</button>
     <button onclick={() => viewer.actualSize()} title="{t('actual')}{kt('actual')}">1:1</button>
     <button onclick={() => viewer.rotate(90)} title="{t('rotate')}{kt('rotateCw')}">⟳</button>
+    <button class="adj-btn" onclick={() => (adjustOpen = !adjustOpen)} class:on={adjustOpen} class:dot={!!curAdjust || prefs.settings.night}
+      disabled={!source} title="{t('adjButton')}{kt('adjust')}">🎨</button>
+    <div class="menu">
+      <button class="adj-btn read-btn" onclick={() => (readingOpen = !readingOpen)} class:on={readingOpen}
+        class:dot={rd.fit !== "window" || rd.crop || rd.double || rd.strip || rd.rtl} disabled={!source} title="{t('readButton')}{kt('reading')}">📖</button>
+      {#if readingOpen && source}
+        <div class="backdrop" role="presentation" onclick={() => (readingOpen = false)}></div>
+        <div class="popup reading-popup">
+          <ReadingMenu {rd} marks={markList} ongo={(i) => { readingOpen = false; go(i); }} ongoto={() => { readingOpen = false; gotoOpen = true; }}
+            onchange={(p) => changeReading(p)} kt={(a) => kt(a)} />
+        </div>
+      {/if}
+    </div>
     <button onclick={toggleThumbs} class:on={prefs.settings.showThumbs} title="{t('thumbs')}{kt('thumbs')}">▦</button>
     <button onclick={() => (actionOpen = !actionOpen)} class:on={actionOpen} disabled={!source} title="{t('action')}{kt('action')}">🎬 {t("action")}</button>
     <button onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
@@ -740,9 +949,30 @@
       wheelSpeed={prefs.settings.wheelSpeed}
       onmanual={() => editor?.notifyManual()}
       {editPanels}
+      adjust={comparing ? null : adjustAt}
+      layout={readLayout}
+      {framing}
+      onsize={onSize}
+      onindex={(i) => (index = i)}
     />
     {#if frame}<span class="frame-tag" title={t("frameHelp")}>{t(frame.video ? "frameTagVideo" : "frameTag", { w: frame.pw, h: frame.ph })}</span>{/if}
     </div>
+    {#if adjustOpen && source}
+      <AdjustPanel {store} entry={curEntry} size={curSize} {analyzing} onclose={() => (adjustOpen = false)} />
+    {/if}
+    {#if gotoOpen && source}
+      <GoToPage count={source.entries.length} current={index} ongo={go} onclose={() => (gotoOpen = false)} />
+    {/if}
+    {#if webtoonAsk}
+      <div class="ask" role="alert">
+        <span>{t("readWebtoonAsk")}</span>
+        <button class="primary" onclick={() => changeReading({ strip: true, asked: true })}>{t("readWebtoonYes")}</button>
+        <button onclick={() => setReading({ asked: true })}>{t("readWebtoonNo")}</button>
+      </div>
+    {/if}
+    {#if prefs.settings.progressBar && source && source.entries.length > 1 && !playerInfo}
+      <ProgressBar count={source.entries.length} pages={spreadNow} marks={[...markSet]} rtl={rd.rtl} ongo={go} />
+    {/if}
     {#if panelEdit}
       <div class="panel-hint">{t("panelEditHint")}</div>
     {:else if toast}
@@ -829,6 +1059,8 @@
       name={(i) => source!.entries[i].name}
       onpick={go}
       size={prefs.settings.thumbSize}
+      marks={markSet}
+      shown={spreadNow}
     />
   {/if}
 </main>
@@ -895,6 +1127,20 @@
   .crash span { flex: 1; }
   .crash code { color: #fff; user-select: all; }
   header button.on { border-color: var(--accent); }
+  /* Un punto en 🎨 cuando la imagen se ve retocada (para no olvidarlo). */
+  .adj-btn { position: relative; }
+  .adj-btn.dot::after {
+    content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: #fbbf24;
+  }
+  .read-btn.dot::after { background: var(--accent); }
+  .reading-popup { width: 330px; left: auto; right: 0; }
+  .ask {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 8px; background: rgb(20 23 28 / 0.95); border: 1px solid var(--accent); font-size: 13px;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
+  }
+  .ask button { padding: 2px 10px; font-size: 12px; }
+  .ask .primary { background: var(--accent); color: #04121b; border-color: var(--accent); font-weight: 600; }
   .menu { position: relative; }
   .menu .backdrop { position: fixed; inset: 0; z-index: 9; }
   .popup {

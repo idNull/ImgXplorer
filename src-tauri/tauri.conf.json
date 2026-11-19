@@ -43,7 +43,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "imgxplorer",
+    "publisher": "Pedro López del Castillo",
+    "copyright": "© 2026 Pedro López del Castillo",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../THIRD-PARTY.md": "THIRD-PARTY.md"
+    },
     "longDescription": "Visor de imágenes y cómics (carpetas, cbz/cbr/cb7, formatos web, modernos, profesionales y RAW) con Modo Acción: animaciones de cámara por imagen, plantillas, editor de línea de tiempo y exportación a vídeo MP4.",
     "fileAssociations": [
       {

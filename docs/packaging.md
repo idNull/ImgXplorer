@@ -1,7 +1,7 @@
 # Instaladores
 
-Para usar imgxplorer o pasárselo a alguien **no hace falta** GitHub, una licencia ni una cuenta
-de Apple. Basta con los dos paquetes de `pnpm dist`. Lo de publicar (AUR, `.dmg` firmado) está al
+Para usar imgxplorer o pasárselo a alguien **no hace falta** GitHub ni una cuenta de Apple. El
+proyecto tiene licencia MIT (`LICENSE`). Basta con los dos paquetes de `pnpm dist`. Lo de publicar (AUR, `.dmg` firmado) está al
 final y es opcional.
 
 ## Paquetes para repartir: `pnpm dist`
@@ -29,6 +29,40 @@ Los dos instaladores siguen los mismos pasos:
 
 El registro queda en `~/.cache/imgxplorer-install.log` (Linux) o
 `~/Library/Logs/imgxplorer-install.log` (macOS).
+
+## Licencias de terceros
+
+Todos los paquetes llevan `LICENSE` y `THIRD-PARTY.md`:
+- en los `.tar.gz`, junto al instalador;
+- en Linux, `install.sh` los copia a `share/imgxplorer/`;
+- en AUR, a `/usr/share/licenses/imgxplorer-git/`;
+- en los paquetes de Tauri, como recursos (`bundle.resources`).
+
+La misma lista se ve en la app (Ajustes → Acerca de → Licencias de terceros).
+
+**Cuándo regenerarla.** Cada vez que cambien `Cargo.lock` o `pnpm-lock.yaml`:
+
+```bash
+cargo install cargo-about --locked --features cli   # una sola vez
+pnpm third-party
+```
+
+- Genera `ui/src/lib/about/licenses.json` y `THIRD-PARTY.md`, que se guardan en git. Así el Mac compila sin `cargo-about`.
+- `pnpm dist` y una prueba de `cargo test` (`src-tauri/tests/licenses.rs`) se detienen si la lista no corresponde a los locks.
+- **Rust:** `cargo-about`, con las licencias admitidas en `about.toml`. Si aparece una no admitida, falla.
+- **JavaScript:** la opción `build.license` de Vite, que solo recoge lo que acaba dentro de la interfaz.
+- **A mano:** `packaging/licenses-extra.json`, para lo que las herramientas no ven:
+  - UnRAR, cuyo texto sale del propio crate;
+  - libheif, libde265, dav1d y aom, con sus textos en `packaging/licenses/`;
+  - FFmpeg y WebKit.
+
+**Sin RAR.** UnRAR es *freeware*, no código abierto: algunas distribuciones (Debian, Fedora, Flathub) no lo aceptan. La función `rar` está activa por defecto. Para compilar sin ella:
+
+```bash
+pnpm tauri build -- --no-default-features
+```
+
+Así los `.rar`/`.cbr` dan el aviso «esta versión se ha compilado sin soporte RAR».
 
 ### Linux
 
@@ -149,9 +183,7 @@ Solo hace falta si quieres que cualquiera pueda instalarla sin que le pases el a
 
 - **AUR** (repositorio de Arch). Necesita dos cosas:
   - Un repositorio público, por ejemplo en GitHub (gratis), para cambiar `url` en el PKGBUILD.
-  - Una licencia. Una licencia no se compra ni se pide: es un texto que eliges y pones en el
-    proyecto (MIT, GPL…) y dice qué pueden hacer otros con tu código. Ahora el proyecto es
-    `UNLICENSED`, es decir, todos los derechos reservados. Para uso personal está bien.
+  - Una licencia: ya está (MIT, en `LICENSE`).
 
   Después se genera `.SRCINFO` con `makepkg --printsrcinfo > .SRCINFO`.
 - **`.dmg` firmado y notarizado**, para repartir la app de Mac ya compilada. Necesita una cuenta

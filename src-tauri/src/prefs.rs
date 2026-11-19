@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 /// Archivos que la interfaz puede leer y escribir (nada de rutas arbitrarias).
-const FILES: [&str; 3] = ["settings", "recents", "library"];
+const FILES: [&str; 4] = ["settings", "recents", "library", "reading"];
 
 fn file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     if !FILES.contains(&name) {
@@ -22,6 +22,8 @@ pub struct Prefs {
     settings: Option<String>,
     recents: Option<String>,
     library: Option<String>,
+    /// Modo de lectura y marcadores de cada cómic.
+    reading: Option<String>,
 }
 
 #[tauri::command]
@@ -36,7 +38,7 @@ pub fn load_prefs(app: AppHandle) -> Prefs {
             })
             .ok()
     };
-    Prefs { settings: read("settings"), recents: read("recents"), library: read("library") }
+    Prefs { settings: read("settings"), recents: read("recents"), library: read("library"), reading: read("reading") }
 }
 
 #[tauri::command]

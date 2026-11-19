@@ -1,13 +1,16 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { GlViewer, TextureError, type FxFrame, type Layer, type TextureSet } from "./gl";
+  import { onMount, untrack } from "svelte";
+  import { GlViewer, TextureError, then, type FxFrame, type Layer, type Lens, type TextureSet } from "./gl";
   import { attachInput } from "./input";
   import type { FxTrack } from "../fx/fx";
   import { HANDLES, cursorAt, handlePoint, press, type PanelEdit } from "./panelEdit";
   import { PictureCache, type PictureRef } from "./picture";
   import type { ViewerStatus } from "./types";
   import { Player, type PlayerInfo, type PlayOptions, type Scene } from "../action/player";
-  import { FIT, actualSizeZoom, lerpPose, panBy, rotated, viewMatrix, zoomAt, type Pose, type Size } from "../core";
+  import { FIT, actualSizeZoom, lerpPose, panBy, rotated, viewMatrix, zoomAt, type Affine, type Pose, type Size } from "../core";
+  import { WHOLE, framePose, unionBox, type Framing, type ReadLayout } from "../reading/layout";
+  import type { Box } from "../reading/boxes.svelte";
+  import { Strip } from "../reading/strip";
   import { t } from "../i18n.svelte";
   import { log } from "../log";
 
@@ -31,14 +34,27 @@
     onmanual?: () => void;
     /** Edición de viñetas: el botón izquierdo dibuja, mueve y redimensiona en vez de desplazar. */
     editPanels?: PanelEdit | null;
+    /** Ajustes de imagen (🎨) de la imagen i, listos para el shader. Cambiar la función repinta. */
+    adjust?: ((index: number) => ArrayLike<number> | null) | null;
+    /** Cómo se lee (📖): doble página o tira vertical. Sin él, una página como siempre. */
+    layout?: ReadLayout | null;
+    /** Encuadre de lectura (ventana, ancho, alto, ✂ contenido). Sin él, la imagen entera. */
+    framing?: Framing | null;
+    /** Ya se sabe el tamaño de la imagen i (la doble página lo necesita para emparejar). */
+    onsize?: (index: number, size: Size) => void;
+    /** En la tira vertical, la página del centro de la vista ha cambiado. */
+    onindex?: (index: number) => void;
   }
 
   let {
-    item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null,
+    item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null, adjust = null,
+    layout = null, framing = null, onsize, onindex,
   }: Props = $props();
 
   interface Slot {
     key: string;
+    /** Posición en la fuente (−1 si no se sabe). */
+    index: number;
     size: Size;
     set: TextureSet;
   }
@@ -60,6 +76,23 @@
   const slots = new Map<string, Slot>();
   const uploading = new Map<string, Promise<Slot>>();
   let shown: Slot | null = null;
+  /** Doble página: las dos imágenes como una sola de `size` (cada una con su matriz dentro). */
+  let spread: { key: string; size: Size; parts: { slot: Slot; m: Affine }[] } | null = null;
+  /** Tira vertical (webtoon). */
+  let strip: Strip | null = null;
+  let stripId = "";
+  /** Última página actual que se avisó desde la tira. */
+  let stripAt = -1;
+  /** Imágenes que usa la tira ahora (no se liberan). */
+  let stripKeys = new Set<string>();
+  /** La cámara sigue como la dejó el encuadre (sin tocar a mano): se puede reencuadrar sola. */
+  let touched = false;
+  /** La próxima imagen se encuadra por el final (al volver atrás leyendo). */
+  let arriveEnd = false;
+  let framedEnd = false;
+  /** Lupa: 1 = botón derecho, 2 = tecla; y el ratón sobre el visor. */
+  let lensBits = 0;
+  let mouse: { x: number; y: number } | null = null;
   let player: Player | null = null;
   let playerInfoAt = 0;
   let lastPlayerState = "";
@@ -74,9 +107,12 @@
 
   function report(patch: Partial<ViewerStatus>) {
     status = { ...status, ...patch };
-    if (shown) {
+    if (strip) {
+      const c = stripSlot(strip.center(vp));
+      if (c) status.zoomPercent = Math.round((strip.colW(vp) / c.size.w) * (window.devicePixelRatio || 1) * 100);
+    } else if (shown) {
       // % respecto a píxeles físicos (100% = 1:1 en pantalla)
-      status.zoomPercent = Math.round((pose[2] / actualSizeZoom(shown.size, vp)) * 100);
+      status.zoomPercent = Math.round((pose[2] / actualSizeZoom(viewSize()!, vp)) * 100);
     }
     onstatus?.(status);
   }
@@ -89,9 +125,13 @@
       p = cache
         .get(ref)
         .then((pic) => {
-          const slot = { key: ref.url, size: { w: pic.w, h: pic.h }, set: gl.createSet(pic) };
+          const slot = { key: ref.url, index: ref.index ?? -1, size: { w: pic.w, h: pic.h }, set: gl.createSet(pic) };
           slots.set(ref.url, slot);
           trimSlots(slot.key);
+          if (slot.index >= 0) {
+            strip?.setSize(slot.index, slot.size);
+            onsize?.(slot.index, slot.size);
+          }
           return slot;
         })
         .finally(() => uploading.delete(ref.url));
@@ -109,7 +149,7 @@
 
   /** Libera de la GPU las imágenes más antiguas que no se muestran ni usa el reproductor. */
   function trimSlots(fresh?: string) {
-    const keep = new Set([shown?.key, fresh, ...(player?.keys() ?? [])]);
+    const keep = new Set([shown?.key, fresh, ...(player?.keys() ?? []), ...(spread?.parts.map((p) => p.slot.key) ?? []), ...stripKeys]);
     for (const [k, s] of slots) {
       if (slots.size <= MAX_SLOTS) break;
       if (keep.has(k)) continue;
@@ -118,18 +158,68 @@
     }
   }
 
-  function show(slot: Slot, resetPose: boolean) {
-    const changed = shown !== slot;
+  function show(slot: Slot, resetPose: boolean, sp: typeof spread = null) {
+    const changed = shown !== slot || spread?.key !== sp?.key;
+    spread = sp;
     shown = touchSlot(slot);
     if (resetPose) {
-      pose = new Float64Array([0.5, 0.5, 1, 0]);
+      vp = gl.resize();
+      framedEnd = arriveEnd;
+      arriveEnd = false;
+      pose = framed(0, framedEnd);
       anim = null;
+      touched = false;
     }
     if (changed) {
       trimSlots();
-      report({ image: slot.size, error: null, tiles: slot.set.tiles.length });
+      const size = viewSize()!;
+      report({ image: size, error: null, tiles: sp ? sp.parts.reduce((n, p) => n + p.slot.set.tiles.length, 0) : slot.set.tiles.length });
     }
     dirty = true;
+  }
+
+  /** Dos imágenes juntas, a la misma altura. */
+  function showSpread(key: string, a: Slot, b: Slot) {
+    const h = Math.max(a.size.h, b.size.h);
+    const ka = h / a.size.h;
+    const kb = h / b.size.h;
+    const wa = a.size.w * ka;
+    touchSlot(b);
+    show(a, true, {
+      key,
+      size: { w: wa + b.size.w * kb, h },
+      parts: [
+        { slot: a, m: new Float64Array([ka, 0, 0, ka, 0, 0]) },
+        { slot: b, m: new Float64Array([kb, 0, 0, kb, wa, 0]) },
+      ],
+    });
+  }
+
+  /** Tamaño de lo que se ve: la imagen o la doble página. */
+  function viewSize(): Size | null {
+    return spread?.size ?? shown?.size ?? null;
+  }
+
+  /** Recuadro con contenido de lo que se ve (✂), normalizado; `null` sin recorte. */
+  function boxNow(): Box | null {
+    const f = framing?.box;
+    if (!f || !shown) return null;
+    if (!spread) return shown.index >= 0 ? f(shown.index) : null;
+    const { size } = spread;
+    const mapped = spread.parts.map(({ slot, m }) => {
+      const b = (slot.index >= 0 ? f(slot.index) : null) ?? WHOLE;
+      const k = m[0];
+      return [(m[4] + b[0] * slot.size.w * k) / size.w, (m[5] + b[1] * slot.size.h * k) / size.h, (b[2] * slot.size.w * k) / size.w, (b[3] * slot.size.h * k) / size.h] as Box;
+    });
+    const u = unionBox(mapped)!;
+    return u[2] >= 0.999 && u[3] >= 0.999 ? null : u;
+  }
+
+  /** Pose del encuadre de lectura (sin él, la imagen entera, como siempre). */
+  function framed(rot: number, end: boolean): Pose {
+    const size = viewSize();
+    if (!framing || !size) return new Float64Array([0.5, 0.5, 1, rot]);
+    return framePose(size, vp, rot, framing.fit, boxNow(), framing.rtl, end);
   }
 
   function setPose(p: Pose, animate = 0) {
@@ -145,6 +235,7 @@
   /** Antes de un movimiento manual: durante la reproducción, el reproductor cede el control. */
   function manual(): boolean {
     if (!player) {
+      touched = true;
       onmanual?.();
       return true;
     }
@@ -158,32 +249,109 @@
 
   // API pública (bind:this desde App)
   export function fit() {
+    if (strip && !player) {
+      strip.reset(vp);
+      dirty = true;
+      return report({});
+    }
     if (!manual()) return;
-    setPose(new Float64Array([0.5, 0.5, 1, pose[3]]), 180);
+    setPose(player ? new Float64Array([0.5, 0.5, 1, pose[3]]) : framed(pose[3], false), 180);
+    touched = false;
     status.lastInput = "teclado";
   }
   export function actualSize() {
+    if (strip && !player) {
+      const c = stripSlot(strip.center(vp));
+      if (c) strip.zoomAt(c.size.w / (window.devicePixelRatio || 1) / strip.colW(vp), vp.w / 2, vp.h / 2, vp);
+      dirty = true;
+      return report({});
+    }
     if (!shown || !manual()) return;
     const p = new Float64Array(pose);
-    p[2] = actualSizeZoom(shown.size, vp);
+    p[2] = actualSizeZoom(viewSize()!, vp);
     setPose(p, 180);
   }
   export function zoomBy(f: number) {
+    if (strip && !player) {
+      strip.zoomAt(f, vp.w / 2, vp.h / 2, vp);
+      dirty = true;
+      return report({});
+    }
     if (!shown || !manual()) return;
-    setPose(zoomAt(anim ? anim.to : pose, f, vp.w / 2, vp.h / 2, shown.size, vp), 140);
+    setPose(zoomAt(anim ? anim.to : pose, f, vp.w / 2, vp.h / 2, viewSize()!, vp), 140);
     status.lastInput = "teclado";
   }
   export function pan(dx: number, dy: number) {
+    if (strip && !player) {
+      strip.scroll(-dy, vp, true);
+      strip.pan(dx, vp);
+      dirty = true;
+      return;
+    }
     if (!shown || !manual()) return;
-    setPose(panBy(anim ? anim.to : pose, dx, dy, shown.size, vp), 120);
+    setPose(panBy(anim ? anim.to : pose, dx, dy, viewSize()!, vp), 120);
     status.lastInput = "teclado";
   }
   export function rotate(deg: number) {
+    if (strip && !player) return;
     if (!manual()) return;
     setPose(rotated(anim ? anim.to : pose, deg), 220);
   }
   export function isZoomedIn(): boolean {
-    return pose[2] > 1.01;
+    return !strip && pose[2] > 1.01;
+  }
+
+  /**
+   * Lectura: desplaza hacia abajo/derecha (`dir` 1) o arriba/izquierda (−1) lo que quede de página
+   * fuera de la vista en ese eje, como mucho `max` px. `false` si ya se ve ese borde (toca pasar
+   * de página). `max` 0 usa casi una pantalla.
+   */
+  export function scrollToward(axis: "x" | "y", dir: 1 | -1, max = 0): boolean {
+    if (player) return false;
+    const limit = max || (axis === "y" ? vp.h : vp.w) * 0.85;
+    if (strip) {
+      if (axis === "x") return false;
+      if (dir < 0 ? strip.atStart() : strip.atEnd(vp)) return false;
+      strip.scroll(dir * limit, vp, true);
+      dirty = true;
+      return true;
+    }
+    const size = viewSize();
+    if (!size) return false;
+    const from = anim ? anim.to : pose;
+    const m = viewMatrix(from, size, vp);
+    const [bx, by, bw, bh] = boxNow() ?? WHOLE;
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const [u, v] of [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]]) {
+      xs.push(m[0] * u * size.w + m[2] * v * size.h + m[4]);
+      ys.push(m[1] * u * size.w + m[3] * v * size.h + m[5]);
+    }
+    const lo = Math.min(...(axis === "x" ? xs : ys));
+    const hi = Math.max(...(axis === "x" ? xs : ys));
+    const over = dir > 0 ? hi - (axis === "x" ? vp.w : vp.h) : -lo;
+    if (over <= 1 || !manual()) return false;
+    const d = Math.min(over, limit) * dir;
+    setPose(panBy(from, axis === "x" ? -d : 0, axis === "y" ? -d : 0, size, vp), 200);
+    return true;
+  }
+
+  /** La próxima imagen que se muestre se encuadra por el final (volviendo atrás al leer). */
+  export function arriveAtEnd() {
+    arriveEnd = true;
+  }
+
+  /** Lupa con la tecla (mientras se mantiene pulsada). */
+  export function setLens(on: boolean) {
+    lensBits = on ? lensBits | 2 : lensBits & ~2;
+    dirty = true;
+  }
+
+  const LENS_ZOOM = 2.5;
+  function lensNow(): Lens | null {
+    if (!lensBits || !mouse || player || editPanels || picking) return null;
+    const r = Math.min(220, Math.max(90, Math.min(vp.w, vp.h) * 0.2));
+    return { x: mouse.x, y: mouse.y, r, zoom: LENS_ZOOM };
   }
 
   /**
@@ -258,6 +426,7 @@
   export function play(spec: Omit<PlayOptions, "load">) {
     stop();
     if (!refAt) return;
+    spread = null;
     const at = refAt;
     player = new Player(
       {
@@ -289,14 +458,40 @@
 
   $effect(() => {
     const ref = item;
+    const lay = layout;
     if (player) return; // durante la reproducción manda el reproductor
+    if (lay?.kind === "strip") return useStrip(lay);
+    if (strip) {
+      strip = null;
+      stripKeys = new Set();
+      shown = null;
+    }
     if (!ref) {
       shown = null;
+      spread = null;
       report({ image: null });
       dirty = true;
       return;
     }
-    if (shown?.key === ref.url) return;
+    if (lay?.kind === "double" && lay.pages.length === 2) {
+      const key = lay.pages.map((p) => p.url).join("|");
+      if (spread?.key === key) return;
+      let cancelled = false;
+      Promise.all(lay.pages.map(ensureSlot))
+        .then(([a, b]) => {
+          if (!cancelled && !player) showSpread(key, a, b);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          // Si una de las dos no se puede cargar, se ve la que pidió el usuario sola.
+          log.warn("doble página:", e);
+          ensureSlot(ref).then((slot) => !cancelled && !player && show(slot, true), () => {});
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!spread && shown?.key === ref.url) return;
     let cancelled = false;
     const t0 = performance.now();
     ensureSlot(ref)
@@ -351,17 +546,110 @@
     if (!a || !b) return drawShown();
     const f = scene.f;
     const layers: Layer[] = [
-      { set: a.set, m: f.subarray(0, 6), alpha: f[6] },
-      { set: b.set, m: f.subarray(7, 13), alpha: f[13] },
+      { set: a.set, m: f.subarray(0, 6), alpha: f[6], adj: adjOf(a) },
+      { set: b.set, m: f.subarray(7, 13), alpha: f[13], adj: adjOf(b) },
     ];
     gl.draw(layers, vp, f[14] > 0);
     clearOverlay();
   }
 
   function drawShown(fx: FxFrame | null = player || !fxNow || !shown ? null : fxNow.track.frame(fxNow.t, shown.size, pose, vp)) {
-    gl.draw(shown ? [{ set: shown.set, m: viewMatrix(pose, shown.size, vp), alpha: 1 }] : [], vp, false, fx);
+    let layers: Layer[] = [];
+    if (spread) {
+      const v = viewMatrix(pose, spread.size, vp);
+      layers = spread.parts.map((p) => ({ set: p.slot.set, m: then(p.m, v), alpha: 1, adj: adjOf(p.slot) }));
+    } else if (shown) {
+      layers = [{ set: shown.set, m: viewMatrix(pose, shown.size, vp), alpha: 1, adj: adjOf(shown) }];
+    }
+    gl.draw(layers, vp, false, fx, lensNow());
     drawOverlay();
   }
+
+  // ── Tira vertical ──────────────────────────────────────────────────────────
+
+  function useStrip(lay: Extract<ReadLayout, { kind: "strip" }>) {
+    if (!strip || stripId !== lay.id || strip.count !== lay.count) {
+      strip = new Strip(lay.count, lay.at);
+      strip.full = framing?.fit === "width";
+      stripId = lay.id;
+      stripAt = lay.at;
+      for (const sl of slots.values()) if (sl.index >= 0) strip.setSize(sl.index, sl.size);
+      strip.jump(lay.at, vp);
+      shown = null;
+      spread = null;
+      anim = null;
+      dirty = true;
+      return;
+    }
+    if (lay.at !== stripAt) {
+      // Se ha ido a otra página desde fuera (miniaturas, Inicio, Ctrl+G…).
+      stripAt = lay.at;
+      strip.jump(lay.at, vp);
+      dirty = true;
+    }
+  }
+
+  function stripSlot(i: number): Slot | null {
+    const r = refAt?.(i);
+    const s = r ? slots.get(r.url) : undefined;
+    return s?.set.tiles.length ? s : null;
+  }
+
+  function drawStrip() {
+    const s = strip!;
+    const col = s.column(vp);
+    const layers: Layer[] = [];
+    const keys = new Set<string>();
+    for (const p of s.visible(vp, 2)) {
+      const r = refAt?.(p.index);
+      if (!r) continue;
+      keys.add(r.url);
+      const slot = slots.get(r.url);
+      if (!slot?.set.tiles.length) {
+        ensureSlot(r).then(() => (dirty = true), (e) => log.warn(`tira: no se pudo cargar ${r.url}:`, e));
+        continue;
+      }
+      if (p.y >= vp.h || p.y + p.h <= 0) continue;
+      const k = col.w / slot.size.w;
+      layers.push({ set: slot.set, m: new Float64Array([k, 0, 0, k, col.x, p.y]), alpha: 1, adj: adjOf(slot) });
+    }
+    stripKeys = keys;
+    gl.draw(layers, vp, false, null, lensNow());
+    drawOverlay();
+    const c = s.center(vp);
+    if (c !== stripAt) {
+      stripAt = c;
+      onindex?.(c);
+    }
+    const cs = stripSlot(c);
+    if (cs && status.image !== cs.size) report({ image: cs.size, error: null, tiles: cs.set.tiles.length });
+  }
+
+  const adjOf = (s: Slot) => (adjust && s.index >= 0 ? adjust(s.index) : null);
+
+  $effect(() => {
+    void adjust;
+    dirty = true;
+  });
+
+  // Cambia el encuadre de lectura (o llega el recuadro con contenido): si la cámara sigue como la
+  // dejó el encuadre, se reencuadra.
+  $effect(() => {
+    const f = framing;
+    if (!mounted) return;
+    untrack(() => {
+      if (strip) {
+        const full = f?.fit === "width";
+        if (strip.full !== full) {
+          strip.full = full;
+          strip.reset(vp);
+          dirty = true;
+        }
+        return;
+      }
+      if (!touched && shown && !player && !picking) setPose(framed(pose[3], framedEnd), 160);
+    });
+  });
 
   function clearOverlay() {
     overlay.getContext("2d")!.clearRect(0, 0, overlay.width, overlay.height);
@@ -379,7 +667,20 @@
     const ctx = overlay.getContext("2d")!;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
-    if (!shown || player) return;
+    const lens = lensNow();
+    if (lens) {
+      ctx.lineWidth = 2 * dpr;
+      ctx.strokeStyle = "rgb(255 255 255 / 0.85)";
+      ctx.beginPath();
+      ctx.arc(lens.x * dpr, lens.y * dpr, lens.r * dpr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = "rgb(0 0 0 / 0.6)";
+      ctx.beginPath();
+      ctx.arc(lens.x * dpr, lens.y * dpr, (lens.r + 1.5) * dpr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (!shown || player || spread) return;
     if (editPanels) return drawEditing(ctx, dpr);
     if (!panels?.length) return;
     const m = viewMatrix(pose, shown.size, vp);
@@ -448,29 +749,73 @@
     }
   }
 
+  // Lupa con el botón derecho: mientras se mantiene pulsado.
+  function onLensDown(e: PointerEvent) {
+    if (e.button !== 2 || player || editPanels) return;
+    onMouse(e);
+    lensBits |= 1;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dirty = true;
+  }
+  function onLensUp(e: PointerEvent) {
+    if (!(lensBits & 1) || (e.type === "pointerup" && e.button !== 2)) return;
+    lensBits &= ~1;
+    dirty = true;
+  }
+  function onMouse(e: PointerEvent) {
+    const r = canvas.getBoundingClientRect();
+    mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    if (lensBits) dirty = true;
+  }
+
   onMount(() => {
     gl = new GlViewer(canvas);
     report({ maxTexture: gl.maxTexture });
 
     const detach = attachInput(canvas, {
       zoom(f, x, y, srcName) {
-        if (!shown) return;
         if (!Number.isFinite(f) || f <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) {
           log.warn(`zoom ignorado: factor=${f} en (${x}, ${y}) desde ${srcName}`);
           return;
         }
+        if (strip && !player) {
+          strip.zoomAt(f, x, y, vp);
+          dirty = true;
+          status.lastInput = srcName;
+          return report({});
+        }
+        if (!shown) return;
         if (!manual()) return;
         anim = null;
-        pose = zoomAt(pose, f, x, y, shown.size, vp);
+        pose = zoomAt(pose, f, x, y, viewSize()!, vp);
         dirty = true;
         status.lastInput = srcName;
       },
       pan(dx, dy, srcName) {
+        if (strip && !player) {
+          strip.scroll(-dy, vp);
+          strip.pan(dx, vp);
+          dirty = true;
+          status.lastInput = srcName;
+          return;
+        }
         if (!shown || !manual()) return;
         anim = null;
-        pose = panBy(pose, dx, dy, shown.size, vp);
+        pose = panBy(pose, dx, dy, viewSize()!, vp);
         dirty = true;
         status.lastInput = srcName;
+      },
+      scroll(dx, dy, srcName) {
+        // En la tira vertical, la rueda desplaza (Ctrl + rueda hace zoom).
+        if (!strip || player) return false;
+        if (srcName === "rueda") strip.scroll(dy * 1.4, vp, true);
+        else {
+          strip.scroll(dy, vp);
+          strip.pan(-dx, vp);
+        }
+        dirty = true;
+        status.lastInput = srcName;
+        return true;
       },
       interaction(active) {
         // Mientras se mantiene el arrastre o el pellizco, la animación no recupera el control.
@@ -488,21 +833,36 @@
         return cursorAt(editPanels, viewMatrix(pose, shown.size, vp), shown.size, x, y);
       },
       doubleClick(x, y) {
+        if (strip && !player) {
+          if (Math.abs(strip.zoom - 1) > 0.01) strip.reset(vp);
+          else strip.zoomAt(2, x, y, vp);
+          dirty = true;
+          return report({});
+        }
         if (!shown) return;
+        const size = viewSize()!;
         if (pose[2] > 1.01) fit();
-        else if (manual()) setPose(zoomAt(pose, actualSizeZoom(shown.size, vp) / pose[2], x, y, shown.size, vp), 200);
+        else if (manual()) setPose(zoomAt(pose, actualSizeZoom(size, vp) / pose[2], x, y, size, vp), 200);
       },
     });
 
     mounted = true;
-    const ro = new ResizeObserver(() => (dirty = true));
+    let resized = false;
+    const ro = new ResizeObserver(() => {
+      dirty = true;
+      resized = true;
+    });
     ro.observe(canvas);
 
     let raf = 0;
     let frames = 0;
     let fpsT0 = performance.now();
+    let last = performance.now();
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      const dt = Math.min(100, now - last);
+      last = now;
+      if (strip && !player && strip.step(dt, vp)) dirty = true;
       if (anim) {
         const u = Math.min(1, (now - anim.t0) / anim.ms);
         const e = 1 - (1 - u) ** 3; // ease-out
@@ -524,7 +884,14 @@
         if (!dirty) return;
         dirty = false;
         vp = gl.resize();
-        drawShown();
+        if (resized) {
+          resized = false;
+          // Al cambiar el tamaño de la ventana, el encuadre de lectura se rehace si no se ha tocado.
+          if (strip) strip.scroll(0, vp);
+          else if (framing && shown && !touched && !anim) pose = framed(pose[3], framedEnd);
+        }
+        if (strip) drawStrip();
+        else drawShown();
       }
       frames++;
       if (now - fpsT0 > 500) {
@@ -544,7 +911,9 @@
   });
 </script>
 
-<div class="viewer" class:picking={!!picking} onpointerdowncapture={onPickDown}>
+<div class="viewer" class:picking={!!picking} onpointerdowncapture={onPickDown} onpointerdown={onLensDown} onpointerup={onLensUp}
+  onpointercancel={onLensUp} onpointermove={onMouse} onpointerleave={() => { mouse = null; if (lensBits) dirty = true; }}
+  oncontextmenu={(e) => e.preventDefault()} role="presentation">
   <canvas bind:this={canvas}></canvas>
   <canvas class="overlay" bind:this={overlay}></canvas>
 </div>

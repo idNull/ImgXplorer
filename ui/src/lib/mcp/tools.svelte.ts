@@ -20,6 +20,7 @@ import { FrameRenderer, canvasOf, contactSheet, drawPanels, jpeg, mult4 } from "
 import { FxTrack, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
 import { fxCatalog, fxInfo } from "../fx/catalog";
 import { joinPath, dirOf } from "../files/dialog.svelte";
+import { SLIDERS, normalize, type Adjust } from "../adjust/adjust";
 
 export interface McpSource {
   title: string;
@@ -546,6 +547,39 @@ export class McpTools {
     const s = num(a, "seconds", 0.3, 0, 10);
     this.edit(() => this.store.setHoldBetween(s));
     return json({ holdBetween: s });
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Ajustes de imagen (🎨)
+
+  async t_get_adjust(a: Args): Promise<ToolResult> {
+    const { i, entry } = a.image === undefined || a.image === null ? { i: this.ctx.index(), entry: this.src().entries[this.ctx.index()].name } : this.img(a);
+    return json({
+      image: i,
+      own: normalize(this.store.item(entry)?.adjust),
+      all: normalize(this.store.data?.defaults.adjust),
+      uses: this.store.adjustFor(entry),
+      nightMode: prefs.settings.night,
+    });
+  }
+
+  async t_set_adjust(a: Args): Promise<ToolResult> {
+    this.writable();
+    const all = a.image === undefined || a.image === null;
+    const target = all ? null : this.img(a);
+    const base: Adjust = a.reset === true ? {} : { ...((all ? normalize(this.store.data?.defaults.adjust) : normalize(this.store.item(target!.entry)?.adjust)) ?? {}) };
+    for (const { key, min, max } of SLIDERS) {
+      if (a[key] === undefined || a[key] === null) continue;
+      base[key] = num(a, key, 0, min, max);
+    }
+    const tone = oneOf(a, "tone", ["none", "gray", "sepia"] as const);
+    if (tone) base.tone = tone;
+    if (all) this.edit(() => this.store.setAdjust(null, base));
+    else {
+      const size = await this.size(target!.i);
+      this.edit(() => this.store.setAdjust(target!.entry, base, size));
+    }
+    return json(all ? { all: normalize(this.store.data?.defaults.adjust) } : { image: target!.i, own: normalize(this.store.item(target!.entry)?.adjust), uses: this.store.adjustFor(target!.entry) });
   }
 
   // -------------------------------------------------------------------------------------------
@@ -1100,6 +1134,7 @@ export class McpTools {
         voices: audio.voice.length || undefined,
         sfx: audio.sfx.length || undefined,
         fx: fxl.length ? fxl.map((f) => `${f.preset ?? f.type}@${r2(f.start)}s`) : undefined,
+        adjust: this.store.adjustFor(entry) ?? undefined,
         transition: last ? undefined : `${tr.type} ${tr.duration}s`,
         warnings: warnings.length ? warnings : undefined,
       });
@@ -1142,10 +1177,12 @@ export class McpTools {
       const fh = mult4(fw / v.aspect);
       const frames = [];
       const track = FxTrack.of(fxl);
+      // Como saldrá en el vídeo: con sus ajustes de imagen.
+      const adj = (await this.ctx.sequence.adjust?.(i)) ?? null;
       try {
         for (const [k, t] of times.entries()) {
           const pose = Float64Array.from(tl.evaluate(Math.min(t, tl.duration())));
-          frames.push({ img: await this.frames().render(this.ctx.refAt(i), pose, fw, fh, prefs.settings.background, { track, t }), label: `${k + 1} · ${t.toFixed(2)} s` });
+          frames.push({ img: await this.frames().render(this.ctx.refAt(i), pose, fw, fh, prefs.settings.background, { track, t }, adj), label: `${k + 1} · ${t.toFixed(2)} s` });
         }
       } finally {
         track?.free();

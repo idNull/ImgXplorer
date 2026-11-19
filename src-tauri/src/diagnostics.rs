@@ -255,6 +255,27 @@ pub fn diagnostics_info(state: tauri::State<'_, Diagnostics>) -> DiagnosticsInfo
     }
 }
 
+/// Abre una página web en el navegador del sistema (enlaces del «Acerca de»). Solo http(s).
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    let valid = (url.starts_with("https://") || url.starts_with("http://"))
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control());
+    if !valid {
+        return Err(format!("dirección no válida: {url}"));
+    }
+    let program = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    let mut child = std::process::Command::new(program)
+        .arg(&url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("{program}: {e}"))?;
+    // Recoger el proceso cuando termine, para no dejar zombis.
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
 /// Descarta el aviso de cierre inesperado (ya mostrado al usuario).
 #[tauri::command]
 pub fn dismiss_crash_notice(state: tauri::State<'_, Diagnostics>) {

@@ -1,6 +1,7 @@
 {
   "name": "imgxplorer",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -9,6 +10,7 @@
     "check": "svelte-check --tsconfig ui/tsconfig.json",
     "wasm": "wasm-pack build crates/imgx-wasm --target web --out-dir ../../ui/src/lib/wasm/pkg --out-name imgx",
     "tauri": "tauri",
+    "third-party": "node packaging/licenses.mjs",
     "dist": "bash packaging/dist.sh all",
     "dist:linux": "bash packaging/dist.sh linux",
     "dist:mac": "bash packaging/dist.sh mac"

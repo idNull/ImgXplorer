@@ -76,6 +76,28 @@ Easing: `linear`, `ease-in`, `ease-out`, `ease-in-out`, `bounce`, `elastic`, `st
 - `fx`: efectos especiales visuales de la imagen (ver *Efectos especiales*). Igual que el sonido,
   pueden ir sin cámara.
 
+### Ajustes de imagen
+```json
+"defaults": { …, "adjust": { "clean": 1 } },
+"items": [ { "entry": "p07.jpg", "size": [1600, 2400], "adjust": { "tone": "sepia", "contrast": 0.2 } } ]
+```
+- `adjust` en `defaults` vale para todas las imágenes; en una entrada, para esa imagen (y entonces se usan solo los suyos).
+- No tocan el archivo: los aplica la GPU al dibujar (visor, capturas de la IA y vídeo).
+- Todos los campos son opcionales y 0 es neutro, así que un ajuste vacío no se guarda.
+
+| Campo | Rango | Qué hace |
+|---|---|---|
+| `clean` | 0..1 | Limpiar escaneo: lleva el color del papel a blanco y el de la tinta a negro (la app los mide en cada página). |
+| `brightness` | −1..1 | Brillo. |
+| `contrast` | −1..1 | Contraste. |
+| `saturation` | −1..1 | Saturación (−1: gris). |
+| `exposure` | −1..1 | Tonos medios (aclara u oscurece sin quemar blancos ni negros). |
+| `temperature` | −1..1 | Frío ↔ cálido. |
+| `sharpen` | 0..1 | Nitidez. |
+| `tone` | `none`, `gray`, `sepia` | Blanco y negro o sepia. |
+
+El modo noche no está en el proyecto: es un ajuste de lectura de la app.
+
 ### Efectos especiales
 ```json
 "fx": [

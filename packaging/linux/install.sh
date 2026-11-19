@@ -346,6 +346,10 @@ rm -f "$tmp"
 printf '%s\n' "${FILES[@]}" > "${tmp}.list"
 in_prefix install -Dm644 "${tmp}.list" "$MANIFEST"; rm -f "${tmp}.list"
 in_prefix install -Dm755 "$0" "$PREFIX/share/$APP/install.sh"
+# Licencia y avisos de terceros (se borran con --uninstall junto con share/$APP).
+for f in LICENSE THIRD-PARTY.md; do
+  if [ -f "$HERE/$f" ]; then in_prefix install -Dm644 "$HERE/$f" "$PREFIX/share/$APP/$f"; fi
+done
 command -v update-desktop-database >/dev/null && in_prefix update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null
 refresh_icons "$PREFIX"
 ok "Instalado en $PREFIX"

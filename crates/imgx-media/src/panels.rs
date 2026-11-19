@@ -91,6 +91,61 @@ pub fn detect(img: &GrayImage) -> Vec<PanelRect> {
     if panels.len() < 2 { Vec::new() } else { panels }
 }
 
+/// Recuadro con contenido de una imagen codificada (sin los márgenes del color del fondo), para
+/// «✂ ajustar al contenido». `None` si apenas hay margen que quitar.
+pub fn content_box(name: &str, bytes: &[u8]) -> Result<Option<PanelRect>, MediaError> {
+    Ok(content(&decode::preview(name, bytes, ANALYSIS_SIDE)?.to_luma8()))
+}
+
+/// Margen que se deja alrededor del contenido (fracción del lado).
+const CONTENT_PAD: f64 = 0.006;
+
+pub fn content(img: &GrayImage) -> Option<PanelRect> {
+    let (w, h) = img.dimensions();
+    if w < 32 || h < 32 {
+        return None;
+    }
+    let bg = border_median(img);
+    let ink = img.pixels().map(|p| (p[0] as i16 - bg as i16).abs() > INK_TOLERANCE).collect();
+    let m = Mask { w, h, ink };
+    let all = Region { x0: 0, y0: 0, x1: w, y1: h };
+    // Filas y columnas con algo de tinta (unos pocos píxeles sueltos son ruido del escaneo).
+    let rows = runs(h, (h / 100).max(2), |y| m.row_ink(y, &all) <= (w / 200).max(1));
+    let (y0, y1) = span(&rows, h)?;
+    let band = Region { y0, y1, ..all };
+    let cols = runs(w, (w / 100).max(2), |x| m.col_ink(x, &band) <= ((y1 - y0) / 200).max(1));
+    let (x0, x1) = span(&cols, w)?;
+    let (pw, ph) = (w as f64, h as f64);
+    let bx0 = (x0 as f64 / pw - CONTENT_PAD).max(0.0);
+    let by0 = (y0 as f64 / ph - CONTENT_PAD).max(0.0);
+    let bx1 = (x1 as f64 / pw + CONTENT_PAD).min(1.0);
+    let by1 = (y1 as f64 / ph + CONTENT_PAD).min(1.0);
+    let (bw, bh) = (bx1 - bx0, by1 - by0);
+    // Casi toda la página: no merece la pena moverse. Demasiado poco: algo ha salido mal.
+    if (bw >= 0.97 && bh >= 0.97) || bw < 0.2 || bh < 0.2 {
+        return None;
+    }
+    Some([bx0, by0, bw, bh])
+}
+
+/// Del primer al último tramo con tinta, sin los tramos diminutos de los bordes (números de
+/// página, marcas de escaneo) si hay contenido de verdad entre ellos.
+fn span(runs: &[(u32, u32)], len: u32) -> Option<(u32, u32)> {
+    let small = |r: &(u32, u32)| ((r.1 - r.0) as f64) < len as f64 * 0.03;
+    let mut a = 0;
+    let mut b = runs.len();
+    while b - a > 1 && small(&runs[a]) {
+        a += 1;
+    }
+    while b - a > 1 && small(&runs[b - 1]) {
+        b -= 1;
+    }
+    if a >= b {
+        return None;
+    }
+    Some((runs[a].0, runs[b - 1].1))
+}
+
 fn border_median(img: &GrayImage) -> u8 {
     let (w, h) = img.dimensions();
     let ring = (w.min(h) / 50).max(1);
@@ -221,6 +276,24 @@ mod tests {
     fn calles_negras() {
         let found = detect(&page(600, 900, &LAYOUT, 5, 230));
         assert_eq!(found.len(), 4, "{found:?}");
+    }
+
+    #[test]
+    fn contenido_sin_margenes_ni_numero_de_pagina() {
+        let mut img = page(600, 900, &[(90, 60, 510, 820)], 245, 10);
+        for y in 860..872 {
+            for x in 296..304 {
+                img.put_pixel(x, y, Luma([0]));
+            }
+        }
+        let b = content(&img).expect("hay margen");
+        assert!(near(b, (86, 56, 514, 825), 600, 900), "{b:?}");
+    }
+
+    #[test]
+    fn contenido_a_sangre_no_recorta() {
+        assert_eq!(content(&page(600, 900, &[(4, 4, 596, 896)], 245, 10)), None);
+        assert_eq!(content(&GrayImage::from_pixel(600, 900, Luma([250]))), None);
     }
 
     #[test]

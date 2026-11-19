@@ -191,7 +191,9 @@ impl Source for SevenZSource {
 }
 
 // ───────────────────────────── rar ─────────────────────────────
+// Opcional (función «rar», activa por defecto): UnRAR es freeware, no código abierto.
 
+#[cfg(feature = "rar")]
 pub struct RarSource {
     path: std::path::PathBuf,
     title: String,
@@ -202,10 +204,12 @@ pub struct RarSource {
     cache: Mutex<ByteCache>,
 }
 
+#[cfg(feature = "rar")]
 fn rar_name(p: &Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(feature = "rar")]
 impl RarSource {
     pub fn open(path: &Path) -> Result<Self, MediaError> {
         let listing = unrar::Archive::new(path).open_for_listing().map_err(arc_err)?;
@@ -230,6 +234,7 @@ impl RarSource {
     }
 }
 
+#[cfg(feature = "rar")]
 impl Source for RarSource {
     fn title(&self) -> &str {
         &self.title
