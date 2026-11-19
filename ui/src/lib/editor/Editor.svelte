@@ -586,6 +586,19 @@
   /** Pista por defecto: las grabaciones a la voz, el resto a efectos. */
   const busFor = (s: SoundInfo): AudioBus => (s.kind === "recorded" ? "voice" : "sfx");
 
+  let removedAt = -Infinity;
+
+  /**
+   * Borra el ambiente en la imagen actual: si empieza aquí, entero; si viene de una imagen
+   * anterior, solo deja de sonar en esta (se acorta o se parte en dos).
+   */
+  function removeAmbientHere(id: string) {
+    ambsel = null;
+    const done = store.removeAmbientAt(id, index, entries);
+    if (done === "here") say(t("ambientRemovedHere", { n: index + 1 }));
+    else if (done === "all") say(t("ambientRemovedAll"));
+  }
+
   function removeAudio() {
     const s = asel;
     if (!s) return;
@@ -812,21 +825,14 @@
         else void startVoice();
         return true;
       case "remove":
-        if (fsel !== null) {
-          removeFx();
-          return true;
-        }
-        if (asel) {
-          removeAudio();
-          return true;
-        }
-        if (ambsel) {
-          store.removeAmbient(ambsel);
-          ambsel = null;
-          return true;
-        }
-        if (!sel) return false;
-        removeSelection();
+        if (fsel !== null) removeFx();
+        else if (asel) removeAudio();
+        else if (ambsel) removeAmbientHere(ambsel);
+        else if (sel) removeSelection();
+        // Justo después de borrar, otra pulsación no hace nada: con `Retroceso` (que fuera del
+        // editor es «imagen anterior») un doble toque no te saca de la imagen.
+        else return performance.now() - removedAt < 1200;
+        removedAt = performance.now();
         return true;
       case "markPrev":
         mark(-1);
@@ -1349,7 +1355,8 @@
       {:else if ambsel && store.ambients.find((x) => x.id === ambsel)}
         {@const am = store.ambients.find((x) => x.id === ambsel)!}
         <h5 class="amb-title">🔁 {am.name ?? sounds.name(am.sound)}</h5>
-        <AmbientEditor clip={am} {entries} {index} {tracks} edit={(fn) => store.editAmbient(am.id, fn)} onremove={() => { store.removeAmbient(am.id); ambsel = null; }} />
+        <AmbientEditor clip={am} {entries} {index} {tracks} edit={(fn) => store.editAmbient(am.id, fn)} onremove={() => { store.removeAmbient(am.id); ambsel = null; }}
+          onremovehere={() => removeAmbientHere(am.id)} />
       {:else if asel && audio[asel.bus][asel.idx]}
         {@const a = asel}
         <AudioInspector

@@ -337,6 +337,32 @@ export class ProjectStore {
     this.changed();
   }
 
+  /**
+   * Borra un ambiente desde la imagen `index` (`entries`: nombres en orden). En la imagen donde
+   * empieza se borra entero; en una de las siguientes solo deja de sonar en esa: el tramo se
+   * acorta o se parte en dos (antes y después). Es un solo paso de deshacer.
+   */
+  removeAmbientAt(id: string, index: number, entries: string[]): "all" | "here" | null {
+    const a = this.data?.ambient?.find((x) => x.id === id);
+    if (!a || this.readOnly) return null;
+    const from = entries.indexOf(a.from);
+    const to = entries.indexOf(a.to) < 0 ? from : entries.indexOf(a.to);
+    const [lo, hi] = [Math.min(from, to), Math.max(from, to)];
+    if (from < 0 || index <= lo || index > hi) {
+      this.removeAmbient(id);
+      return "all";
+    }
+    const rest = index < hi ? { ...$state.snapshot(a), from: entries[index + 1], to: entries[hi] } : null;
+    a.from = entries[lo];
+    a.to = entries[index - 1];
+    if (rest) {
+      const copy: AmbientClip = { ...rest, id: `amb-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` };
+      this.data!.ambient!.splice(this.data!.ambient!.indexOf(a) + 1, 0, copy);
+    }
+    this.changed();
+    return "here";
+  }
+
   /** Mezcla del proyecto (la de fábrica si no se ha tocado). */
   get mix(): MixLevels {
     return this.data?.defaults.mix ?? DEFAULT_LEVELS;

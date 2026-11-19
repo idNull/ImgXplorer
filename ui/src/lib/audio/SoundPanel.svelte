@@ -90,7 +90,8 @@
         <span class="range">{range(r)}</span>
       </button>
       {#if open === a.id}
-        <AmbientEditor clip={a} {entries} {index} tracks={store.tracks} edit={(fn) => store.editAmbient(a.id, fn)} onremove={() => store.removeAmbient(a.id)} />
+        <AmbientEditor clip={a} {entries} {index} tracks={store.tracks} edit={(fn) => store.editAmbient(a.id, fn)} onremove={() => store.removeAmbient(a.id)}
+          onremovehere={() => store.removeAmbientAt(a.id, index, entries)} />
       {/if}
     </div>
   {:else}

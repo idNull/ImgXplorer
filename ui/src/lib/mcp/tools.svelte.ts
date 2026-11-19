@@ -844,8 +844,16 @@ export class McpTools {
   async t_remove_ambient(a: Args): Promise<ToolResult> {
     const id = str(a, "id") ?? fail("id is required");
     if (!this.store.ambients.some((y) => y.id === id)) fail(`unknown ambience ${id}`);
-    this.edit(() => this.store.removeAmbient(id));
-    return json({ removed: id });
+    if (a.image === undefined || a.image === null) {
+      this.edit(() => this.store.removeAmbient(id));
+      return json({ removed: id });
+    }
+    // Solo en una imagen: en la primera se borra entero; en otra, el tramo se acorta o se parte.
+    const { i } = this.img(a);
+    const entries = this.src().entries.map((e) => e.name);
+    let done: "all" | "here" | null = null;
+    this.edit(() => (done = this.store.removeAmbientAt(id, i, entries)));
+    return json({ removed: id, from: done === "here" ? "this image only" : "all images", ambients: this.store.ambients.map((y) => this.ambientInfo(y)) });
   }
 
   async t_set_mix(a: Args): Promise<ToolResult> {

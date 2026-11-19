@@ -76,7 +76,7 @@ export const DEFAULTS = {
     keyframe: ["k", "K"],
     record: ["g", "G"],
     recordVoice: ["v", "V"],
-    remove: ["Delete"],
+    remove: ["Delete", "Backspace"],
     markPrev: [","],
     markNext: ["."],
     cancel: ["Escape"],

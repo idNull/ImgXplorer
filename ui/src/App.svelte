@@ -943,7 +943,10 @@
     // solo se quedan las teclas sueltas (flechas…): los atajos con Ctrl siguen funcionando.
     const textField = tgt instanceof HTMLTextAreaElement || (tgt instanceof HTMLInputElement && !["range", "checkbox", "radio", "color"].includes(tgt.type));
     if (textField) return;
-    if ((tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement) && !e.ctrlKey && !e.metaKey) return;
+    // Borrar en el editor funciona aunque acabes de mover un deslizador o elegir en una lista del
+    // inspector (ahí Supr y Retroceso no hacen nada más).
+    const editorRemove = editorShown && editorKeys.get(comboOf(e) ?? "") === "remove";
+    if ((tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement) && !e.ctrlKey && !e.metaKey && !editorRemove) return;
     if (recentsOpen && e.key === "Escape") {
       recentsOpen = false;
       return e.preventDefault();

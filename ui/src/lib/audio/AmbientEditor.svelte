@@ -16,9 +16,12 @@
     /** Pistas del proyecto (se elige una de ambiente). */
     tracks: Track[];
     edit: (fn: (a: AmbientClip) => void) => void;
+    /** Borrar en todas las imágenes. */
     onremove: () => void;
+    /** Quitarlo solo de la imagen actual (si no está, no sale el botón). */
+    onremovehere?: () => void;
   }
-  let { clip, entries, index, tracks, edit, onremove }: Props = $props();
+  let { clip, entries, index, tracks, edit, onremove, onremovehere }: Props = $props();
   const ambTracks = $derived(tracks.filter((x) => x.bus === "ambient"));
   const trackId = $derived(resolveTrack(tracks, clip.track, "ambient").id);
   function setTrack(id: string) {
@@ -46,6 +49,12 @@
       if (entries.indexOf(a.to) < entries.indexOf(a.from)) a.from = a.to;
     });
   }
+  const lo = $derived(Math.min(from, to < 0 ? from : to));
+  const hi = $derived(Math.max(from, to < 0 ? from : to));
+  /** Imágenes en las que suena. */
+  const span = $derived(from < 0 ? 0 : hi - lo + 1);
+  /** La imagen actual es una de las que lo continúan (no la primera). */
+  const continued = $derived(span > 1 && index > lo && index <= hi);
   // Primero los pensados para ambiente; luego el resto.
   const options = $derived([...sounds.list].sort((a, b) => Number(b.ambient) - Number(a.ambient)));
 </script>
@@ -93,7 +102,18 @@
   </label>
   <h6>{t("effects")}</h6>
   <EffectsEditor effects={clip.effects ?? []} onchange={(list) => edit((a) => { if (list.length) a.effects = list; else delete a.effects; })} />
-  <div class="buttons"><button onclick={onremove}>{t("remove")}</button></div>
+  {#if span > 1}
+    <p class="hint">{continued ? t("ambientContinued", { a: lo + 1, n: span }) : t("ambientStartsHere", { n: span })}</p>
+  {/if}
+  <div class="buttons">
+    {#if continued && onremovehere}
+      <button onclick={onremovehere} title={t("ambientRemoveHereHelp")}>✂ {t("ambientRemoveHere")}</button>
+    {/if}
+    {#if span > 1 && index >= lo && index < hi}
+      <button onclick={() => setTo(index + 1)} title={t("ambientEndHereHelp")}>⏹ {t("ambientEndHere")}</button>
+    {/if}
+    <button class:danger={span > 1} onclick={onremove}>{span > 1 ? t("ambientRemoveAll", { n: span }) : t("remove")}</button>
+  </div>
 </div>
 
 <style>
@@ -107,7 +127,9 @@
   input[type="range"] { width: 100%; }
   output { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   .here { padding: 0 4px; }
-  .buttons { display: flex; gap: 4px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+  .hint { margin: 4px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .danger { color: #fca5a5; }
   h6 { margin: 6px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
   .buttons button { padding: 2px 8px; font-size: 12px; }
 </style>

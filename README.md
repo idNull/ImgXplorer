@@ -185,7 +185,7 @@ Temblores, destellos, ondas expansivas y recursos del manga colocados en la lín
 - **💬 Subtítulos y textos**: texto fijo en la pantalla que no tiembla, en tres estilos: **subtítulo** (abajo, con contorno, parte las líneas largas), **cartel** (grande en el centro: «Mientras tanto…») y **narración** (cartela amarilla arriba a la izquierda, como en los cómics). Entran y salen con un fundido.
   - Al exportar se pueden guardar también como **`.srt`**, junto al vídeo, para subirlos a YouTube.
   - Están en la misma fila *✨ Efectos*, así que se mueven, se estiran y se deshacen como los demás.
-- **Editar**: en la fila *✨ Efectos* se arrastran y se estiran por los bordes, con ajuste magnético a claves, sonidos y otros efectos. El inspector tiene ajuste, intensidad, inicio, duración y mandos.
+- **Editar**: en la fila *✨ Efectos* se arrastran y se estiran por los bordes, con ajuste magnético a claves, sonidos y otros efectos. El inspector tiene ajuste, intensidad, inicio, duración y mandos. `Supr` o `Retroceso` borran el efecto seleccionado (también justo después de mover uno de sus mandos).
 - **Punto**: **⌖ Elegir** y un clic en la imagen marcan dónde ocurre (el centro de la explosión, el puño). Sigue a la imagen aunque la cámara se mueva.
 - **Seguridad**: destellos y negativos no parpadean más de 3 veces por segundo.
 - **Cómo funciona**: el núcleo en Rust (`crates/imgx-core/src/fx.rs`) calcula cada fotograma de forma determinista y el visor WebGL aplica el temblor a la matriz de cámara y el resto en una sola pasada de shader. Sin efectos activos, no cuesta nada.
@@ -238,6 +238,11 @@ Cada imagen puede llevar **voz** y **efectos**, y el proyecto, **ambientes o mú
   - Suena desde la imagen actual hasta la última, en bucle; luego se cambia *desde* y *hasta*, el volumen y los fundidos.
   - También se puede soltar un sonido en una pista de ambiente del editor, y entonces suena en esa imagen. Cada ambiente puede ir en su propia pista y llevar sus efectos.
   - Al pasar de una imagen a otra del tramo, el ambiente **no se corta**: solo se funde al entrar y al salir.
+  - **Borrar** (`Supr` o `Retroceso` con la barra del ambiente seleccionada en el editor, o los botones del inspector):
+    - En la imagen donde **empieza**, se borra de **todas** las imágenes en las que suena.
+    - En una de las **siguientes**, se quita **solo de esa imagen**: el tramo se acorta o se parte en dos (por ejemplo, de la 2 a la 9 quitando la 5 queda 2–4 y 6–9). El inspector dice de qué imagen viene y cuántas abarca.
+    - **Que acabe aquí** lo corta en la imagen actual, y **Borrar en las N imágenes** lo borra entero desde cualquiera.
+    - Todo se deshace con `Ctrl+Z` en un solo paso.
   - Si mueves la cámara a mano, la voz y los efectos se congelan con la imagen, pero el ambiente sigue.
 - **Mezclador** (sección *Sonido* del Modo Acción): volumen de cada grupo (voces, efectos y ambiente) y, debajo, de cada una de sus pistas, con **M** y **S**. Opción para **bajar el ambiente mientras hay voz** (de las pistas que no estén silenciadas), que se calcula según dónde están los clips de voz, así que suena igual en directo que en el vídeo.
 - **Efectos de audio**, en una pista (afectan a todo lo que suena en ella) o en un clip concreto (solo a ese sonido; los de la pista se aplican después). Cada uno tiene ajustes predefinidos y mandos para afinar (doble clic en un mando lo devuelve a su valor), se enciende y apaga, y se reordena con ▲▼:
@@ -369,7 +374,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
 | `Espacio` | Reproducir / pausar la vista previa |
 | `K` | Guardar la vista actual como clave en el cabezal |
 | `G` | Grabar el movimiento / terminar |
-| `Supr` | Borrar el clip o la clave seleccionados |
+| `Supr` · `Retroceso` | Borrar lo seleccionado: clip, clave, sonido, efecto o ambiente (un ambiente que viene de otra imagen se quita solo de esta). Funciona aunque acabes de mover un deslizador o elegir en una lista del inspector. En el Mac, la tecla «delete» es `Retroceso`. Pulsado otra vez justo después de borrar no cambia de imagen |
 | `,` / `.` | Clave anterior / siguiente |
 | `Esc` | Descartar la grabación, parar o deseleccionar |
 
