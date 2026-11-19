@@ -147,7 +147,7 @@ La app usa la libheif de Homebrew, así que no hay que desinstalarla.
 **Cómo pasar el paquete al Mac**
 - **Lápiz USB:** lo más simple.
 - **Por la red local:** en el PC, dentro de `dist/`, ejecuta `python3 -m http.server 8000`. En el
-  Mac, en Terminal: `curl -O http://<IP-del-PC>:8000/imgxplorer-0.1.0-mac.tar.gz`. La IP se ve con
+  Mac, en Terminal: `curl -O http://<IP-del-PC>:8000/imgxplorer-1.0.0-mac.tar.gz`. La IP se ve con
   `ip -4 addr`, y si hay cortafuegos tiene que dejar pasar el puerto 8000.
 - Lo que llega por AirDrop o desde el navegador queda «en cuarentena». No importa porque el
   instalador se ejecuta con `bash`, pero por eso no conviene abrirlo con doble clic.

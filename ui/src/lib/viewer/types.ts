@@ -13,4 +13,6 @@ export interface ViewerStatus {
   tiles: number;
   /** Tiempo hasta tener la imagen lista (lectura + decodificación), ms. */
   loadMs: number;
+  /** Imagen a la que se refiere `loadMs`. */
+  loadedUrl?: string;
 }

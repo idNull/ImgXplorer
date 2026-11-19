@@ -54,7 +54,7 @@
   import Tour from "./lib/help/Tour.svelte";
   import OrderDialog from "./lib/voices/OrderDialog.svelte";
   import { order } from "./lib/voices/voices.svelte";
-  import { tour } from "./lib/help/tour.svelte";
+  import { tour } from "./lib/help/tourState.svelte";
 
   interface DiagnosticsInfo {
     logDir: string | null;
@@ -1109,6 +1109,7 @@
       },
       stop: () => viewer?.stop(),
       playing: () => !!playerInfo,
+      loaded: () => (status?.loadedUrl ? { ms: status.loadMs, url: status.loadedUrl } : null),
       say,
     });
     // Primero los ajustes y recientes: abrir la ruta inicial necesita saber dónde se quedó.

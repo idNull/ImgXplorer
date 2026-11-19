@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title>imgXplorer: qué hace</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d10"/>
+      <stop offset="1" stop-color="#141a22"/>
+    </linearGradient>
+    <style>
+      .card { fill: #161b22; stroke: #2a2f38; stroke-width: 1.5; }
+      .t { fill: #e6edf3; font-size: 22px; font-weight: 700; }
+      .d { fill: #9aa4b2; font-size: 15px; }
+      .i { font-size: 30px; }
+      .k { fill: #38bdf8; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; }
+    </style>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+
+  <text x="60" y="88" fill="#e6edf3" font-size="54" font-weight="800">img<tspan fill="#38bdf8">X</tspan>plorer</text>
+  <text x="62" y="124" fill="#9aa4b2" font-size="20">Visor de cómics e imágenes para Linux y macOS que convierte tu cómic en un vídeo, viñeta a viñeta.</text>
+
+  <!-- Fila 1: leer -->
+  <text x="60" y="176" class="k">LEER</text>
+  <g transform="translate(60,190)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">📚</text><text x="70" y="46" class="t">Abre lo que sea</text>
+    <text x="22" y="82" class="d">Carpetas, cbz, cbr y cb7. JPG, HEIC,</text>
+    <text x="22" y="104" class="d">JPEG XL, PSD, SVG y RAW de cámara.</text>
+    <text x="22" y="126" class="d">Estantería con portadas y progreso.</text>
+  </g>
+  <g transform="translate(430,190)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">📖</text><text x="70" y="46" class="t">Lee a tu manera</text>
+    <text x="22" y="82" class="d">Al ancho, al alto, doble página, manga</text>
+    <text x="22" y="104" class="d">y tira vertical para webtoons. Lupa,</text>
+    <text x="22" y="126" class="d">marcadores y pantalla completa limpia.</text>
+  </g>
+  <g transform="translate(800,190)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">🎨</text><text x="70" y="46" class="t">Mejora la imagen</text>
+    <text x="22" y="82" class="d">Limpia escaneos amarillentos, blanco y</text>
+    <text x="22" y="104" class="d">negro, sepia, modo noche y nitidez,</text>
+    <text x="22" y="126" class="d">sin tocar nunca tus archivos.</text>
+  </g>
+
+  <!-- Fila 2: animar -->
+  <text x="60" y="380" class="k">ANIMAR</text>
+  <g transform="translate(60,394)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">🎬</text><text x="70" y="46" class="t">Modo Acción</text>
+    <text x="22" y="82" class="d">La cámara recorre las viñetas sola,</text>
+    <text x="22" y="104" class="d">en orden de lectura. Transiciones y</text>
+    <text x="22" y="126" class="d">reproductor con pausa y velocidad.</text>
+  </g>
+  <g transform="translate(430,394)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">✎</text><text x="70" y="46" class="t">Línea de tiempo</text>
+    <text x="22" y="82" class="d">Encuadra y pulsa K, o graba el</text>
+    <text x="22" y="104" class="d">movimiento. Clips, curvas, marco de</text>
+    <text x="22" y="126" class="d">vídeo y deshacer en todo.</text>
+  </g>
+  <g transform="translate(800,394)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">💥</text><text x="70" y="46" class="t">Efectos especiales</text>
+    <text x="22" y="82" class="d">Temblor, destello, onda expansiva,</text>
+    <text x="22" y="104" class="d">onomatopeyas animadas («¡BOOM!»),</text>
+    <text x="22" y="126" class="d">subtítulos y 13 situaciones listas.</text>
+  </g>
+
+  <!-- Fila 3: contar -->
+  <text x="60" y="584" class="k">CONTAR</text>
+  <g transform="translate(60,598)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">🔊</text><text x="70" y="46" class="t">Sonido</text>
+    <text x="22" y="82" class="d">Voz con micrófono, efectos, ambientes</text>
+    <text x="22" y="104" class="d">y música en varias pistas, con</text>
+    <text x="22" y="126" class="d">mezclador y efectos de audio.</text>
+  </g>
+  <g transform="translate(430,598)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">🗣</text><text x="70" y="46" class="t">Voces con IA</text>
+    <text x="22" y="82" class="d">Un reparto de personajes con voz</text>
+    <text x="22" y="104" class="d">propia (ElevenLabs). Ves el pedido y</text>
+    <text x="22" y="126" class="d">el coste antes de gastar nada.</text>
+  </g>
+  <g transform="translate(800,598)">
+    <rect class="card" width="340" height="150" rx="14"/>
+    <text x="22" y="48" class="i">🎞</text><text x="70" y="46" class="t">Vídeo y tu IA</text>
+    <text x="22" y="82" class="d">MP4, WebM y GIF, también vertical.</text>
+    <text x="22" y="104" class="d">Claude, Codex o Gemini lo montan</text>
+    <text x="22" y="126" class="d">por ti: lo ves y lo deshaces.</text>
+  </g>
+
+  <text x="600" y="780" fill="#5b6472" font-size="14" text-anchor="middle">Código abierto (MIT) · Rust + Tauri + Svelte + WebGL2</text>
+</svg>

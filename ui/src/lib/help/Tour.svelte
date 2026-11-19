@@ -2,7 +2,7 @@
   // Visita guiada (4 pasos, con «Saltar»). Cada paso ilumina sus botones de la cabecera
   // (`data-tour="…"`); si no se ven (ventana estrecha), señala el menú «⋯».
   import { t, type Key } from "../i18n.svelte";
-  import { tour } from "./tour.svelte";
+  import { tour } from "./tourState.svelte";
 
   const STEPS: { icon: string; title: Key; text: Key; targets: string[] }[] = [
     { icon: "📂", title: "tour1Title", text: "tour1Text", targets: ["open"] },

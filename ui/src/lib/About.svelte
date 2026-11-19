@@ -8,7 +8,7 @@
   import ThirdParty from "./about/ThirdParty.svelte";
   import { loadLicenses, type Licenses } from "./about/licenses";
   import { THANKS, type Thanks } from "./about/thanks";
-  import { tour } from "./help/tour.svelte";
+  import { tour } from "./help/tourState.svelte";
 
   const AUTHOR = "Pedro López del Castillo";
 

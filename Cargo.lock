@@ -2529,7 +2529,7 @@ checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
 
 [[package]]
 name = "imgx-audio"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cpal",
  "hound",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "imgx-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2550,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "imgx-media"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "image",
  "jxl-oxide",
@@ -2568,7 +2568,7 @@ dependencies = [
 
 [[package]]
 name = "imgx-wasm"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "imgx-core",
  "serde_json",
@@ -2577,7 +2577,7 @@ dependencies = [
 
 [[package]]
 name = "imgxplorer"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "gtk",

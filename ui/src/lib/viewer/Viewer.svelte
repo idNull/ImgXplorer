@@ -566,7 +566,7 @@
       .then((slot) => {
         if (cancelled || player) return;
         show(slot, true);
-        report({ loadMs: Math.round(performance.now() - t0) });
+        report({ loadMs: Math.round(performance.now() - t0), loadedUrl: ref.url });
       })
       .catch((e) => {
         if (cancelled) return;

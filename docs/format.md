@@ -220,7 +220,7 @@ cadena. Un archivo con una versión mayor que la soportada se rechaza con un men
 
 Zip para compartir clips y plantillas propias:
 
-- `manifest.json`: `{ "format": "imgxpack", "version": 1, "app": "0.1.0" }`. Un paquete de una
+- `manifest.json`: `{ "format": "imgxpack", "version": 1, "app": "1.0.0" }`. Un paquete de una
   versión más nueva no se importa.
 - `library.json`: `{ "clips": [ { "id", "name", "clip" } ], "templates": [ { "id", "name", "template": { "id", "params" } } ] }`.
   Al importar se valida cada clip (tiempos crecientes, zoom positivo…) y se descarta lo que no

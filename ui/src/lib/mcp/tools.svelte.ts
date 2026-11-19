@@ -48,6 +48,8 @@ export interface McpContext {
   stop(): void;
   playing(): boolean;
   say(msg: string): void;
+  /** La última imagen que se ha visto y lo que tardó en verse (ms). */
+  loaded(): { ms: number; url: string } | null;
 }
 
 export interface ToolResult {
@@ -241,6 +243,8 @@ export class McpTools {
       output: this.video(),
       playing: this.ctx.playing(),
       exporting: this.exportJob?.state === "running",
+      // Cuánto tardó en verse la imagen actual (sin dato: aún se está cargando).
+      loadMs: s?.entries[i] && this.ctx.loaded()?.url === this.ctx.refAt(i).url ? this.ctx.loaded()!.ms : undefined,
     });
   }
 

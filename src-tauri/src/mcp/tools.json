@@ -9,7 +9,7 @@
   },
   {
     "name": "app_status",
-    "description": "What imgxplorer has open: source (comic/folder), number of images, project file, video output size, current image, whether the project is read-only.",
+    "description": "What imgxplorer has open: source (comic/folder), number of images, project file, video output size, current image, whether the project is read-only. loadMs: how long the current image took to show (missing while it is still loading).",
     "inputSchema": {
       "type": "object",
       "properties": {}

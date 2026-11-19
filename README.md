@@ -2,7 +2,13 @@
 
 Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4.
 
-> Estado: **en desarrollo**. Este README recoge lo que ya funciona y lo que viene. Se actualiza con cada fase.
+> Estado: **versión 1.0.0 en pruebas**, todavía sin publicar. Lo que trae está en [CHANGELOG.md](CHANGELOG.md) y lo que falta comprobar en los tres equipos, en [docs/lista-comprobacion.md](docs/lista-comprobacion.md). Este README se actualiza con cada cambio.
+
+![Qué hace imgXplorer](docs/img/infografia.svg)
+
+![El Modo Acción recorre una página viñeta a viñeta, con una explosión y su «¡BOOM!»](docs/img/modo-accion.gif)
+
+*El GIF lo ha exportado la propia app a partir de una página de demostración original ([docs/img/demo](docs/img/demo), de dominio público, CC0).*
 
 ## Funciones
 
@@ -490,7 +496,9 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Onomatopeyas animadas, subtítulos (con `.srt`), WebM, GIF y vídeo vertical para redes.
   - [x] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
   - [x] Voces con IA (ElevenLabs): reparto, guion por imagen, resumen del pedido antes de gastar, efectos y música, clave en el llavero, caché, modo simulado y automatización por IA.
-  - [ ] Pulido, pruebas en Linux, Ubuntu con Nvidia y Mac, versión 1.0.0 y documento «imgXplorer, la historia detrás».
+  - [x] Versión 1.0.0, [CHANGELOG.md](CHANGELOG.md), [lista de comprobación](docs/lista-comprobacion.md), medidas de rendimiento, infografía y GIF de demostración.
+  - [ ] Pruebas en CachyOS, Ubuntu con Nvidia y Mac (con ElevenLabs de verdad).
+  - [ ] Documento «imgXplorer, la historia detrás».
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
 
 ### Propuestas de mejora

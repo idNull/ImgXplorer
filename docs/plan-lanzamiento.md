@@ -319,7 +319,19 @@ Al hacerlo: la ayuda también se abre con `F1`, desde el menú del clic derecho 
   - la clave nunca aparece en el proyecto ni en los registros.
 - **Con ElevenLabs de verdad, juntos y con tu cuenta.** Tú pones la clave y apruebas cada pedido, y la usamos con frases cortas para gastar poco.
 
-## Fase 8 — Preparar el lanzamiento 🚀
+## Fase 8 — Preparar el lanzamiento 🚀 (casi)
+> **Hecho:**
+> - **Rendimiento medido** ([docs/rendimiento.md](rendimiento.md), con `packaging/rendimiento.py`): la primera página en 0,25 s, pasar página en 8 ms de mediana (máximo 23 ms) y memoria estable en unos 740 MB a lo largo de 300 páginas. No ha hecho falta tocar el código para cumplirlo; `app_status` ahora da `loadMs`.
+> - [Lista de comprobación](lista-comprobacion.md) para los tres equipos.
+> - Versión 1.0.0 y [CHANGELOG.md](../CHANGELOG.md).
+> - Paquetes con `pnpm dist`.
+> - Infografía (`docs/img/infografia.svg`) y GIF del Modo Acción (`docs/img/modo-accion.gif`), exportado por la propia app con una página de demostración original (CC0).
+>
+> **Falta:**
+> - Las pruebas en los tres equipos, con ElevenLabs de verdad.
+> - Capturas de la app real (las hace el usuario en su escritorio).
+> - Elegir la frase que acompaña al nombre.
+
 - **Pulido de rendimiento**, con estos objetivos medidos:
   - la primera página de un cómic, en menos de 1 s;
   - pasar página ya precargada, en menos de 50 ms;
