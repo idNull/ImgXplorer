@@ -16,7 +16,8 @@
   <rect width="1200" height="800" fill="url(#bg)"/>
 
   <text x="60" y="88" fill="#e6edf3" font-size="54" font-weight="800">img<tspan fill="#38bdf8">X</tspan>plorer</text>
-  <text x="62" y="124" fill="#9aa4b2" font-size="20">Visor de cómics e imágenes para Linux y macOS que convierte tu cómic en un vídeo, viñeta a viñeta.</text>
+  <text x="370" y="86" fill="#38bdf8" font-size="28" font-style="italic" font-weight="600">— tu cómic, viñeta a viñeta</text>
+  <text x="62" y="124" fill="#9aa4b2" font-size="20">Visor de cómics e imágenes para Linux y macOS que, si quieres, convierte tu cómic en un vídeo animado.</text>
 
   <!-- Fila 1: leer -->
   <text x="60" y="176" class="k">LEER</text>

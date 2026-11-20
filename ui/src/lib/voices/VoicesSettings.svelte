@@ -129,6 +129,8 @@
 
 <h4>{t("voicesPrivacyTitle")}</h4>
 <p class="note">{t("voicesPrivacy")}</p>
+<h4>{t("voicesRightsTitle")}</h4>
+<p class="note">{t("voicesRights")}</p>
 
 <style>
   .row { display: grid; grid-template-columns: 1fr 200px; align-items: center; gap: 10px; }

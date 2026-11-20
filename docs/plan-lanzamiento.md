@@ -325,12 +325,12 @@ Al hacerlo: la ayuda también se abre con `F1`, desde el menú del clic derecho 
 > - [Lista de comprobación](lista-comprobacion.md) para los tres equipos.
 > - Versión 1.0.0 y [CHANGELOG.md](../CHANGELOG.md).
 > - Paquetes con `pnpm dist`.
+> - Frase elegida: **«imgXplorer — tu cómic, viñeta a viñeta»** (en «Acerca de», el README y la infografía).
 > - Infografía (`docs/img/infografia.svg`) y GIF del Modo Acción (`docs/img/modo-accion.gif`), exportado por la propia app con una página de demostración original (CC0).
 >
 > **Falta:**
 > - Las pruebas en los tres equipos, con ElevenLabs de verdad.
 > - Capturas de la app real (las hace el usuario en su escritorio).
-> - Elegir la frase que acompaña al nombre.
 
 - **Pulido de rendimiento**, con estos objetivos medidos:
   - la primera página de un cómic, en menos de 1 s;
@@ -351,7 +351,13 @@ Al hacerlo: la ayuda también se abre con `F1`, desde el menú del clic derecho 
   - una infografía de «qué hace»;
   - una frase que acompañe al nombre, para que se recuerde, por ejemplo «imgXplorer — tu cómic, viñeta a viñeta» o «Lee, anima y cuenta tus cómics». La eliges tú; el nombre no cambia.
 
-## Fase 9 — Documento de Word: «imgXplorer, la historia detrás» 📄
+## Fase 9 — Documento de Word: «imgXplorer, la historia detrás» 📄 ✅
+> **Hecho:** `docs/imgXplorer-la-historia.docx`, de 17 páginas en A4, revisado página a página en PDF.
+> - **Capítulos:** los del plan; «Gracias» incluye las menciones de honor y una nota sobre licencias, y el glosario cierra el documento.
+> - **Capturas:** de la interfaz real, con la parte de Rust simulada y la página de demostración. Las de tu escritorio siguen pendientes para GitHub.
+> - **Diagramas** hechos para el documento: `docs/img/piezas.svg` y `docs/img/camino.svg`.
+> - **Índice:** es un campo de Word; los números de página se rellenan al abrirlo en Word.
+
 Con la skill de documentos Word (docx), en `docs/imgXplorer-la-historia.docx`. No es una entrevista: son capítulos cortos que responden a lo que preguntaría un entrevistador.
 
 **Tono:**
@@ -409,6 +415,7 @@ Con la skill de documentos Word (docx), en `docs/imgXplorer-la-historia.docx`. N
 - Partículas (chispas, lluvia, nieve) y efectos en las transiciones.
 - Instrucciones de estilo para la IA (ya en «Propuestas de mejora»).
 - Idea para más adelante: que la IA lea los bocadillos (OCR) para subtitular o traducir.
+- **imgXplorer en el móvil** (en estudio): abrir el cómic con su animación y verlo en vertical, con sonido, voces y controles táctiles para avanzar a tu ritmo, sin pasarlo a vídeo. Por decidir: seguir con Tauri (iOS y Android) adaptando la interfaz, o hacerla nativa en cada plataforma; el motor en Rust sirve para los dos caminos.
 
 ## Archivos principales que se tocarán
 - **Núcleo:**

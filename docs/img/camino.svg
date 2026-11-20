@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="420" viewBox="0 0 1600 420" font-family="'Noto Sans', 'DejaVu Sans', Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#475569"/></marker>
+    <style>
+      .n { font-size: 54px; text-anchor: middle; }
+      .h { font-size: 24px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .s { font-size: 19px; fill: #475569; text-anchor: middle; }
+      .ln { stroke: #475569; stroke-width: 3; fill: none; marker-end: url(#a); }
+    </style>
+  </defs>
+  <rect width="1600" height="420" fill="#ffffff"/>
+  <g>
+    <circle cx="140" cy="130" r="80" fill="#f1f5f9" stroke="#94a3b8" stroke-width="3"/>
+    <text x="140" y="148" class="n">📦</text>
+    <text x="140" y="260" class="h">El cómic</text>
+    <text x="140" y="292" class="s">Tomo 1.cbz</text>
+    <text x="140" y="318" class="s">(un zip con páginas)</text>
+  </g>
+  <path class="ln" d="M230 130 H340"/>
+  <g>
+    <circle cx="430" cy="130" r="80" fill="#ffedd5" stroke="#f97316" stroke-width="3"/>
+    <text x="430" y="148" class="n">🦀</text>
+    <text x="430" y="260" class="h">Rust la saca</text>
+    <text x="430" y="292" class="s">lee solo esa página,</text>
+    <text x="430" y="318" class="s">sin descomprimir todo</text>
+  </g>
+  <path class="ln" d="M520 130 H630"/>
+  <g>
+    <circle cx="720" cy="130" r="80" fill="#e0f2fe" stroke="#38bdf8" stroke-width="3"/>
+    <text x="720" y="148" class="n">🖼</text>
+    <text x="720" y="260" class="h">Se decodifica</text>
+    <text x="720" y="292" class="s">el navegador del sistema;</text>
+    <text x="720" y="318" class="s">si no sabe, Rust (HEIC, RAW…)</text>
+  </g>
+  <path class="ln" d="M810 130 H920"/>
+  <g>
+    <circle cx="1010" cy="130" r="80" fill="#e0f2fe" stroke="#38bdf8" stroke-width="3"/>
+    <text x="1010" y="148" class="n">🎮</text>
+    <text x="1010" y="260" class="h">Sube a la GPU</text>
+    <text x="1010" y="292" class="s">como textura (en teselas</text>
+    <text x="1010" y="318" class="s">si es enorme)</text>
+  </g>
+  <path class="ln" d="M1100 130 H1210"/>
+  <g>
+    <circle cx="1300" cy="130" r="80" fill="#ecfccb" stroke="#84cc16" stroke-width="3"/>
+    <text x="1300" y="148" class="n">🎥</text>
+    <text x="1300" y="260" class="h">La cámara la encuadra</text>
+    <text x="1300" y="292" class="s">zoom, giro, efectos y ajustes,</text>
+    <text x="1300" y="318" class="s">60 veces por segundo</text>
+  </g>
+  <path class="ln" d="M1390 130 H1460"/>
+  <text x="1525" y="148" class="n">🖥️</text>
+  <text x="800" y="395" class="s" font-style="italic">Mientras lees, las páginas de al lado ya se están preparando: por eso pasar página tarda unas 8 milésimas de segundo.</text>
+</svg>

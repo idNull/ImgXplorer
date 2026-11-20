@@ -1,7 +1,9 @@
 [
   {
     "name": "UnRAR",
-    "authors": ["Alexander Roshal"],
+    "authors": [
+      "Alexander Roshal"
+    ],
     "license": "UnRAR (freeware)",
     "url": "https://www.rarlab.com/rar_add.htm",
     "text": "unrar",
@@ -12,7 +14,9 @@
   },
   {
     "name": "libheif",
-    "authors": ["struktur AG"],
+    "authors": [
+      "struktur AG"
+    ],
     "license": "LGPL-3.0-or-later",
     "url": "https://github.com/strukturag/libheif",
     "text": "packaging/licenses/LGPL-3.0.txt",
@@ -23,7 +27,9 @@
   },
   {
     "name": "libde265",
-    "authors": ["struktur AG"],
+    "authors": [
+      "struktur AG"
+    ],
     "license": "LGPL-3.0-or-later",
     "url": "https://github.com/strukturag/libde265",
     "text": "packaging/licenses/LGPL-3.0.txt",
@@ -34,7 +40,9 @@
   },
   {
     "name": "dav1d",
-    "authors": ["VideoLAN and dav1d authors"],
+    "authors": [
+      "VideoLAN and dav1d authors"
+    ],
     "license": "BSD-2-Clause",
     "url": "https://code.videolan.org/videolan/dav1d",
     "text": "packaging/licenses/dav1d.txt",
@@ -45,7 +53,9 @@
   },
   {
     "name": "libaom",
-    "authors": ["Alliance for Open Media"],
+    "authors": [
+      "Alliance for Open Media"
+    ],
     "license": "BSD-2-Clause",
     "url": "https://aomedia.googlesource.com/aom",
     "text": "packaging/licenses/aom.txt",
@@ -56,22 +66,38 @@
   },
   {
     "name": "FFmpeg",
-    "authors": ["FFmpeg developers"],
+    "authors": [
+      "FFmpeg developers"
+    ],
     "license": "LGPL-2.1-or-later / GPL-2.0-or-later",
     "url": "https://ffmpeg.org",
     "note": {
-      "es": "Crea los vídeos MP4. No va dentro de la app: se usa el que tengas instalado, como programa aparte.",
-      "en": "Creates the MP4 videos. Not bundled: the one installed on your system is run as a separate program."
+      "es": "Crea los vídeos (MP4, WebM y GIF). No va dentro de la app: se usa el que tengas instalado, como programa aparte.",
+      "en": "Creates the videos (MP4, WebM and GIF). Not bundled: the one installed on your system is run as a separate program."
     }
   },
   {
     "name": "WebKitGTK · WebKit",
-    "authors": ["The WebKit Open Source Project"],
+    "authors": [
+      "The WebKit Open Source Project"
+    ],
     "license": "LGPL-2.1-or-later / BSD-2-Clause",
     "url": "https://webkitgtk.org",
     "note": {
       "es": "Motor que dibuja la interfaz. Es el del sistema (WebKitGTK en Linux, WebKit en macOS).",
       "en": "Engine that renders the interface. The system one is used (WebKitGTK on Linux, WebKit on macOS)."
+    }
+  },
+  {
+    "name": "ElevenLabs",
+    "authors": [
+      "ElevenLabs"
+    ],
+    "license": "Términos del servicio · Terms of service",
+    "url": "https://elevenlabs.io/terms-of-use",
+    "note": {
+      "es": "Servicio externo y opcional para las voces, efectos y música con IA. No va dentro de la app: se usa con tu cuenta y bajo sus condiciones. Lo generado es tuyo, pero con el plan gratuito solo se permite uso no comercial; para usarlo en vídeos comerciales hace falta un plan de pago. La música tiene condiciones propias (https://elevenlabs.io/music-terms): con el plan gratuito hay que indicar que está hecha con Eleven Music. Los efectos de sonido no se pueden vender sueltos.",
+      "en": "Optional external service for AI voices, sound effects and music. Not bundled: it is used with your account and under its terms. The output is yours, but the free plan only allows non-commercial use; commercial videos need a paid plan. Music has its own terms (https://elevenlabs.io/music-terms): on the free plan you must credit Eleven Music. Sound effects may not be sold on their own."
     }
   }
 ]

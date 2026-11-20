@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'Noto Sans', 'DejaVu Sans', Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#475569"/></marker>
+    <style>
+      .box { rx: 18; stroke-width: 3; }
+      .h { font-size: 30px; font-weight: 700; fill: #0f172a; }
+      .s { font-size: 21px; fill: #334155; }
+      .l { font-size: 20px; fill: #475569; font-style: italic; }
+      .ln { stroke: #475569; stroke-width: 3; fill: none; marker-end: url(#a); }
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#ffffff"/>
+  <!-- Usuario -->
+  <rect class="box" x="620" y="30" width="360" height="90" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="800" y="70" class="h" text-anchor="middle">Tú</text>
+  <text x="800" y="102" class="s" text-anchor="middle">ratón, teclado, touchpad</text>
+  <!-- Interfaz -->
+  <rect class="box" x="420" y="190" width="760" height="230" fill="#e0f2fe" stroke="#38bdf8"/>
+  <text x="450" y="235" class="h">La interfaz (lo que ves)</text>
+  <text x="450" y="272" class="s">Svelte 5 + TypeScript dentro de una ventana web del sistema</text>
+  <rect x="450" y="295" width="220" height="100" rx="12" fill="#fff" stroke="#38bdf8" stroke-width="2"/>
+  <text x="560" y="335" class="h" text-anchor="middle" font-size="24">WebGL 2</text>
+  <text x="560" y="368" class="s" text-anchor="middle">la GPU dibuja</text>
+  <rect x="690" y="295" width="220" height="100" rx="12" fill="#fff" stroke="#38bdf8" stroke-width="2"/>
+  <text x="800" y="335" class="h" text-anchor="middle" font-size="22">WebAssembly</text>
+  <text x="800" y="368" class="s" text-anchor="middle">motor de cámara</text>
+  <rect x="930" y="295" width="220" height="100" rx="12" fill="#fff" stroke="#38bdf8" stroke-width="2"/>
+  <text x="1040" y="335" class="h" text-anchor="middle" font-size="24">Editor</text>
+  <text x="1040" y="368" class="s" text-anchor="middle">línea de tiempo</text>
+  <!-- Rust -->
+  <rect class="box" x="200" y="510" width="1200" height="230" fill="#ffedd5" stroke="#f97316"/>
+  <text x="230" y="555" class="h">El motor en Rust (Tauri)</text>
+  <text x="230" y="592" class="s">rápido y seguro con la memoria; el mismo código del motor de cámara va a WebAssembly</text>
+  <g font-size="22">
+    <rect x="230" y="615" width="260" height="100" rx="12" fill="#fff" stroke="#f97316" stroke-width="2"/>
+    <text x="360" y="655" class="h" text-anchor="middle" font-size="23">imgx-media</text>
+    <text x="360" y="688" class="s" text-anchor="middle">comprimidos, formatos</text>
+    <rect x="510" y="615" width="260" height="100" rx="12" fill="#fff" stroke="#f97316" stroke-width="2"/>
+    <text x="640" y="655" class="h" text-anchor="middle" font-size="23">imgx-core</text>
+    <text x="640" y="688" class="s" text-anchor="middle">cámara, efectos, .imgx</text>
+    <rect x="790" y="615" width="260" height="100" rx="12" fill="#fff" stroke="#f97316" stroke-width="2"/>
+    <text x="920" y="655" class="h" text-anchor="middle" font-size="23">imgx-audio</text>
+    <text x="920" y="688" class="s" text-anchor="middle">mezclador y efectos</text>
+    <rect x="1070" y="615" width="300" height="100" rx="12" fill="#fff" stroke="#f97316" stroke-width="2"/>
+    <text x="1220" y="655" class="h" text-anchor="middle" font-size="23">app (src-tauri)</text>
+    <text x="1220" y="688" class="s" text-anchor="middle">archivos, MCP, voces</text>
+  </g>
+  <!-- Externos -->
+  <rect class="box" x="30" y="790" width="330" height="90" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="195" y="830" class="h" text-anchor="middle" font-size="25">Tus cómics</text>
+  <text x="195" y="862" class="s" text-anchor="middle">carpetas, cbz, cbr, cb7</text>
+  <rect class="box" x="420" y="790" width="330" height="90" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="585" y="830" class="h" text-anchor="middle" font-size="25">FFmpeg</text>
+  <text x="585" y="862" class="s" text-anchor="middle">MP4, WebM y GIF</text>
+  <rect class="box" x="810" y="790" width="330" height="90" fill="#ecfccb" stroke="#84cc16"/>
+  <text x="975" y="830" class="h" text-anchor="middle" font-size="25">Tu IA (MCP)</text>
+  <text x="975" y="862" class="s" text-anchor="middle">Claude, Codex, Gemini</text>
+  <rect class="box" x="1200" y="790" width="370" height="90" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="1385" y="830" class="h" text-anchor="middle" font-size="25">ElevenLabs</text>
+  <text x="1385" y="862" class="s" text-anchor="middle">voces, efectos y música</text>
+  <!-- Flechas -->
+  <path class="ln" d="M800 120 V185"/>
+  <path class="ln" d="M700 420 V505"/>
+  <path class="ln" d="M900 505 V425"/>
+  <text x="580" y="470" class="l">órdenes</text>
+  <text x="915" y="470" class="l">imágenes, sonido</text>
+  <path class="ln" d="M195 790 V745"/>
+  <path class="ln" d="M585 745 V785"/>
+  <path class="ln" d="M975 790 V745"/>
+  <path class="ln" d="M1385 785 V745"/>
+</svg>

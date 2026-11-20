@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). L
 
 ## [1.0.0] — en pruebas, sin publicar
 
-La primera versión completa: un visor rápido de cómics e imágenes para Linux y macOS que, si quieres, convierte un cómic en un vídeo animado viñeta a viñeta, con sonido, efectos y voces.
+*imgXplorer — tu cómic, viñeta a viñeta.* La primera versión completa: un visor rápido de cómics e imágenes para Linux y macOS que, si quieres, convierte un cómic en un vídeo animado viñeta a viñeta, con sonido, efectos y voces.
 
 ### Visor
 

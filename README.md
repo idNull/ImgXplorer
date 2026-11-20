@@ -1,5 +1,7 @@
 # imgxplorer
 
+**imgXplorer — tu cómic, viñeta a viñeta.**
+
 Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4.
 
 > Estado: **versión 1.0.0 en pruebas**, todavía sin publicar. Lo que trae está en [CHANGELOG.md](CHANGELOG.md) y lo que falta comprobar en los tres equipos, en [docs/lista-comprobacion.md](docs/lista-comprobacion.md). Este README se actualiza con cada cambio.
@@ -97,6 +99,7 @@ Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
   - Versión, autor y con qué se ha hecho (tecnologías y Claude Code).
   - La licencia (MIT), con su texto.
   - **Agradecimientos especiales** a los amigos y colaboradores que han ayudado (probando la app, dando ideas…). Se añaden en `ui/src/lib/about/thanks.ts`, con su nombre y, si se quiere, qué hicieron.
+  - **Menciones de honor**: personas que han inspirado el proyecto sin participar en él. Están en el mismo archivo, en la lista `HONOR`.
   - **Licencias de terceros**: todas las bibliotecas que usa la app, agrupadas por licencia, con sus autores, un buscador, el texto de cada licencia y un enlace a la página de cada proyecto. Arriba van los avisos especiales: UnRAR, libheif y sus decodificadores, FFmpeg y WebKit.
   - «Ver la visita guiada» repite el primer uso guiado.
   - Una línea con los datos del sistema (versión, sistema, sesión y WebKitGTK) que se copia con un botón para informar de un problema.
@@ -225,6 +228,7 @@ Pon voz a los personajes con una IA externa, [ElevenLabs](https://elevenlabs.io)
   - **Caché**: la misma frase con la misma voz, modelo y ajustes no se vuelve a pagar.
   - **Tope por sesión** de caracteres de voz (5000 de fábrica; 0 = sin tope).
   - La primera vez, un aviso de que los textos y las descripciones se envían a ElevenLabs.
+- **Derechos de uso**: lo generado es tuyo, pero siguen las condiciones de ElevenLabs. Con el plan gratuito solo se permite uso no comercial, y la música hay que atribuirla a Eleven Music; para vídeos comerciales hace falta un plan de pago ([términos](https://elevenlabs.io/terms-of-use), [música](https://elevenlabs.io/music-terms)).
 - **Modo simulado** (Ajustes → Voces IA → Proveedor): para probarlo todo sin internet ni gastar. Las «voces» son tonos con la duración que tendría la frase.
 - **Todo se deshace** con `Ctrl+Z` y se guarda en el proyecto `.imgx` (el reparto y el guion; ver [docs/format.md](docs/format.md)). La clave nunca va en el proyecto.
 - **Con tu IA** (Claude, Codex, Gemini): puede leer los bocadillos, crear el reparto, escribir el guion, estimar el coste y generar. Lo que gasta te enseña el pedido y espera a que aceptes (ver «Control por IA»).
@@ -498,7 +502,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Voces con IA (ElevenLabs): reparto, guion por imagen, resumen del pedido antes de gastar, efectos y música, clave en el llavero, caché, modo simulado y automatización por IA.
   - [x] Versión 1.0.0, [CHANGELOG.md](CHANGELOG.md), [lista de comprobación](docs/lista-comprobacion.md), medidas de rendimiento, infografía y GIF de demostración.
   - [ ] Pruebas en CachyOS, Ubuntu con Nvidia y Mac (con ElevenLabs de verdad).
-  - [ ] Documento «imgXplorer, la historia detrás».
+  - [x] Documento [«imgXplorer, la historia detrás»](docs/imgXplorer-la-historia.docx) (Word, 17 páginas): el nombre, cómo empezó, qué hace, por qué Rust, cada tecnología, cómo funciona por dentro, programar con una IA, anécdotas, cifras y glosario.
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
 
 ### Propuestas de mejora
@@ -512,8 +516,16 @@ El plan del primer lanzamiento, con todas las mejoras por fases, está en [docs/
   - Lo que se pida en el mensaje manda sobre el cuadro.
   - Límite de unos 2.000 caracteres.
   - Más adelante: un estilo propio para cada proyecto.
+- **imgXplorer en el móvil** (en estudio, sin decidir todavía):
+  - Abrir en el móvil el cómic con la animación preparada en el ordenador y verla en vertical, a pantalla completa, sin pasarla a vídeo.
+  - Con todo: cámara viñeta a viñeta, efectos, onomatopeyas, subtítulos, sonidos, música y voces.
+  - A tu ritmo: tocar para pasar de viñeta, deslizar para cambiar de página, volver atrás, pausar o dejar que avance sola.
+  - Más ligero que un vídeo: lleva el cómic, la animación y los sonidos, y el móvil lo dibuja en directo. Desde el ordenador se prepararía un único archivo para pasarlo al móvil.
+  - Dos caminos en estudio: seguir con Tauri, que también funciona en iOS y Android, adaptando la interfaz al tacto; o hacerla nativa en cada plataforma (Swift y Kotlin). En los dos se podría reutilizar el motor en Rust.
 
 El formato de animaciones está especificado en [docs/format.md](docs/format.md).
+
+La historia del proyecto, para todos los públicos, está en [docs/imgXplorer-la-historia.docx](docs/imgXplorer-la-historia.docx).
 
 ## Instalar
 
@@ -619,11 +631,25 @@ Creado por **Pedro López del Castillo**, programado con **Claude Code** (Anthro
 - **Alex**: mi mejor amigo y el primero en probarla en Linux. Me ayudó a corregir los fallos en Ubuntu y con tarjetas Nvidia. ¡Muchas gracias, Alex!
 - **Gerard**: mi primo, que la probará en cuanto la publique. ¡Gracias, Gerard!
 
+**Menciones de honor**: personas que admiro y que me han inspirado. No han participado en el proyecto; es mi pequeño homenaje.
+- **Steve Jobs**: un icono de la era moderna. Demostró que la tecnología, cuidada hasta el último detalle, puede cambiar la vida de la gente. Admiro todo lo que fue capaz de construir.
+- **Julio César Fernández**: programador y youtuber que me ha inspirado muchas veces a programar para Mac e iOS.
+- **MoureDev**: youtuber al que admiro por su historia y por su gran trabajo creando cursos y contenido para aprender a programar.
+- **Midudev (Miguel Ángel Durán)**: lo admiro por su gran trabajo en la programación y en la divulgación.
+
 imgxplorer existe gracias al trabajo de muchas personas y proyectos de código abierto: la lista completa, con sus licencias, está en [THIRD-PARTY.md](THIRD-PARTY.md) y en Ajustes → Acerca de → Licencias de terceros.
 
 ## Licencia
 
 [MIT](LICENSE) © 2026 Pedro López del Castillo.
+
+**Avisos:**
+- Las **bibliotecas de terceros** conservan sus licencias, todas compatibles con la MIT. La lista completa, con los textos, está en [THIRD-PARTY.md](THIRD-PARTY.md) y en la app (Ajustes → Acerca de → Licencias de terceros). Se genera sola con `pnpm third-party`.
+- **UnRAR** (para abrir `.cbr`) es *freeware* y no código abierto. Se puede compilar sin él para un paquete 100 % libre: ver «Sin RAR» en «Desarrollo».
+- **FFmpeg** y **ElevenLabs** no van dentro de la app: FFmpeg es el de tu sistema, y ElevenLabs, un servicio opcional que se usa con tu cuenta y bajo sus condiciones.
+- Los **cómics e imágenes** que abras son de sus autores. Si publicas un vídeo hecho con un cómic, asegúrate de tener derecho a hacerlo.
+- La **página de demostración** de `docs/img/demo`, la infografía y el GIF de este README son originales y de dominio público (CC0).
+- Las **menciones de honor** son un homenaje personal: esas personas no han participado ni respaldan el proyecto.
 
 - Las bibliotecas de terceros conservan sus licencias ([THIRD-PARTY.md](THIRD-PARTY.md)). Casi todas son permisivas (MIT, Apache-2.0, BSD…); Symphonia es MPL-2.0.
 - **UnRAR** (para abrir `.rar`/`.cbr`) es *freeware*, no código abierto: se puede repartir, pero no usar para crear un compresor RAR. Va incluido por defecto y se puede compilar sin él.

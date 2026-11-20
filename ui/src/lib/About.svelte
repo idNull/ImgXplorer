@@ -7,7 +7,7 @@
   import licenseText from "../../../LICENSE?raw";
   import ThirdParty from "./about/ThirdParty.svelte";
   import { loadLicenses, type Licenses } from "./about/licenses";
-  import { THANKS, type Thanks } from "./about/thanks";
+  import { HONOR, THANKS, type Thanks } from "./about/thanks";
   import { tour } from "./help/tourState.svelte";
 
   const AUTHOR = "Pedro López del Castillo";
@@ -38,6 +38,7 @@
     { group: () => t("aboutSound"), items: ["Symphonia", "cpal", "hound"] },
     { group: () => t("aboutVideo"), items: ["FFmpeg"] },
     { group: () => t("aboutAi"), items: ["Model Context Protocol (MCP)"] },
+    { group: () => t("aboutVoices"), items: ["ElevenLabs", "ureq", "rustls", "keyring"] },
   ];
 
   const system = $derived(
@@ -69,6 +70,7 @@
     <img src={icon} alt="" width="72" height="72" />
     <div>
       <h3>imgxplorer <span class="ver">{version}</span></h3>
+      <p class="tagline">{t("aboutTagline")}</p>
       <p class="desc">{t("aboutDesc")}</p>
     </div>
   </div>
@@ -94,6 +96,18 @@
       <p class="muted small-text">{t("aboutThanksHelp")}</p>
       <div class="people">
         {#each THANKS as p (p.name)}
+          <span class="person"><b>{p.name}</b>{#if roleOf(p)}<span class="role">{roleOf(p)}</span>{/if}</span>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if HONOR.length}
+    <section class="thanks honor">
+      <h4>🏅 {t("aboutHonorTitle")}</h4>
+      <p class="muted small-text">{t("aboutHonorHelp")}</p>
+      <div class="people">
+        {#each HONOR as p (p.name)}
           <span class="person"><b>{p.name}</b>{#if roleOf(p)}<span class="role">{roleOf(p)}</span>{/if}</span>
         {/each}
       </div>
@@ -152,6 +166,8 @@
     background: rgb(251 191 36 / 0.06); border: 1px solid rgb(251 191 36 / 0.25);
   }
   .thanks h4 { margin: 0; color: #fbbf24; }
+  .thanks.honor { background: rgb(56 189 248 / 0.06); border-color: rgb(56 189 248 / 0.25); }
+  .thanks.honor h4 { color: var(--accent); }
   .small-text { margin: 0; font-size: 12px; }
   .people { display: flex; flex-wrap: wrap; gap: 6px; }
   .person {
@@ -160,4 +176,5 @@
   }
   .role { color: var(--muted); font-size: 11px; line-height: 1.4; }
   .third { align-self: flex-start; padding: 3px 10px; font-size: 12px; }
+  .tagline { margin: 0 0 4px; font-style: italic; color: var(--accent); }
 </style>

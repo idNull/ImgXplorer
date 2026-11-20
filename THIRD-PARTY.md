@@ -1346,8 +1346,8 @@ Alliance for Open Media Patent License 1.0
 
 - LGPL-2.1-or-later / GPL-2.0-or-later · https://ffmpeg.org
 - FFmpeg developers
-- Crea los vídeos MP4. No va dentro de la app: se usa el que tengas instalado, como programa aparte.
-- Creates the MP4 videos. Not bundled: the one installed on your system is run as a separate program.
+- Crea los vídeos (MP4, WebM y GIF). No va dentro de la app: se usa el que tengas instalado, como programa aparte.
+- Creates the videos (MP4, WebM and GIF). Not bundled: the one installed on your system is run as a separate program.
 
 ### WebKitGTK · WebKit
 
@@ -1355,6 +1355,13 @@ Alliance for Open Media Patent License 1.0
 - The WebKit Open Source Project
 - Motor que dibuja la interfaz. Es el del sistema (WebKitGTK en Linux, WebKit en macOS).
 - Engine that renders the interface. The system one is used (WebKitGTK on Linux, WebKit on macOS).
+
+### ElevenLabs
+
+- Términos del servicio · Terms of service · https://elevenlabs.io/terms-of-use
+- ElevenLabs
+- Servicio externo y opcional para las voces, efectos y música con IA. No va dentro de la app: se usa con tu cuenta y bajo sus condiciones. Lo generado es tuyo, pero con el plan gratuito solo se permite uso no comercial; para usarlo en vídeos comerciales hace falta un plan de pago. La música tiene condiciones propias (https://elevenlabs.io/music-terms): con el plan gratuito hay que indicar que está hecha con Eleven Music. Los efectos de sonido no se pueden vender sueltos.
+- Optional external service for AI voices, sound effects and music. Not bundled: it is used with your account and under its terms. The output is yours, but the free plan only allows non-commercial use; commercial videos need a paid plan. Music has its own terms (https://elevenlabs.io/music-terms): on the free plan you must credit Eleven Music. Sound effects may not be sold on their own.
 
 ## Bibliotecas · Libraries
 
