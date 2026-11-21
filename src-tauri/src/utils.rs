@@ -111,12 +111,39 @@ pub async fn save_original(generation: u64, index: usize, path: String, state: S
     .map_err(|e| e.to_string())?
 }
 
+/// Abre en el gestor de archivos la carpeta de una ruta: la propia carpeta o, si es un archivo,
+/// la que lo contiene (en macOS, señalándolo).
+#[tauri::command]
+pub fn show_in_folder(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.is_absolute() || !p.exists() {
+        return Err(format!("no existe: {path}"));
+    }
+    let mut cmd = if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        if p.is_dir() { c.arg(p) } else { c.arg("-R").arg(p) };
+        c
+    } else {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(if p.is_dir() { p } else { p.parent().unwrap_or(p) });
+        c
+    };
+    let mut child = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
 /// Enseña la imagen en el gestor de archivos (en un comprimido, el comprimido).
 #[tauri::command]
 pub fn reveal_entry(generation: u64, index: usize, state: State<'_, AppState>) -> Result<(), String> {
     let (file, kind, root) = entry_file(&state, generation, index)?;
     let shown = if kind == SourceKind::Folder { file } else { root };
-    crate::covers::show_in_folder(shown.display().to_string())
+    show_in_folder(shown.display().to_string())
 }
 
 /// Mueve la imagen `index` a la papelera del sistema (se puede recuperar desde allí). Solo en

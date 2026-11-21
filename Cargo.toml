@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/imgx-core", "crates/imgx-media", "crates/imgx-audio", "crates/imgx-story", "crates/imgx-wasm", "src-tauri"]
+members = ["crates/imgx-core", "crates/imgx-media", "crates/imgx-audio", "crates/imgx-story", "crates/imgx-wasm", "crates/imgx-host", "src-tauri", "mobile/src-tauri"]
 
 [workspace.package]
 version = "1.0.0"
@@ -10,6 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 imgx-audio = { path = "crates/imgx-audio" }
 imgx-core = { path = "crates/imgx-core" }
+imgx-host = { path = "crates/imgx-host" }
 imgx-media = { path = "crates/imgx-media", default-features = false }
 imgx-story = { path = "crates/imgx-story" }
 serde = { version = "1", features = ["derive"] }

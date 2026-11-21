@@ -10,7 +10,7 @@
     "check": "svelte-check --tsconfig ui/tsconfig.json && node ui/scripts/check-i18n.mjs",
     "check:i18n": "node ui/scripts/check-i18n.mjs",
     "wasm": "wasm-pack build crates/imgx-wasm --target web --out-dir ../../ui/src/lib/wasm/pkg --out-name imgx",
-    "tauri": "tauri",
+    "tauri": "TAURI_APP_PATH=src-tauri TAURI_FRONTEND_PATH=. tauri",
     "third-party": "node packaging/licenses.mjs",
     "icons": "python3 packaging/iconos.py",
     "dist": "bash packaging/dist.sh all",

@@ -121,6 +121,7 @@ fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
     image::metadata::Orientation::from_exif(v as u8)
 }
 
+#[cfg(feature = "heif")]
 fn libheif() -> &'static libheif_rs::LibHeif {
     static LIB: OnceLock<libheif_rs::LibHeif> = OnceLock::new();
     LIB.get_or_init(libheif_rs::LibHeif::new)
@@ -128,6 +129,7 @@ fn libheif() -> &'static libheif_rs::LibHeif {
 
 /// Lo que puede abrir la libheif instalada: versión y si tiene decodificador HEVC (HEIC) y AV1
 /// (AVIF). Lo usa el instalador para avisar si falta algún complemento.
+#[cfg(feature = "heif")]
 pub fn heif_support() -> (String, bool, bool) {
     use libheif_rs::CompressionFormat;
     let lib = libheif();
@@ -136,6 +138,18 @@ pub fn heif_support() -> (String, bool, bool) {
     (format!("{a}.{b}.{c}"), has(CompressionFormat::Hevc), has(CompressionFormat::Av1))
 }
 
+/// Compilado sin libheif (visor móvil): no hay versión ni decodificadores.
+#[cfg(not(feature = "heif"))]
+pub fn heif_support() -> (String, bool, bool) {
+    ("no".into(), false, false)
+}
+
+#[cfg(not(feature = "heif"))]
+fn heif(_: &[u8], _: Option<u32>) -> Result<DynamicImage, MediaError> {
+    Err(MediaError::Unsupported("HEIC/HEIF/AVIF (esta versión se ha compilado sin libheif)".into()))
+}
+
+#[cfg(feature = "heif")]
 fn heif(bytes: &[u8], hint: Option<u32>) -> Result<DynamicImage, MediaError> {
     use libheif_rs::{ColorSpace, HeifContext, RgbChroma};
     let lib = libheif();
@@ -189,6 +203,14 @@ fn svg(bytes: &[u8], max_side: u32) -> Result<DynamicImage, MediaError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Sin libheif (visor móvil), un HEIC da «no admitido» en vez de fallar al enlazar.
+    #[cfg(not(feature = "heif"))]
+    #[test]
+    fn sin_libheif_el_heic_no_se_admite() {
+        assert!(matches!(decode("foto.heic", b"no importa"), Err(MediaError::Unsupported(_))));
+        assert_eq!(heif_support(), ("no".into(), false, false));
+    }
 
     #[test]
     fn svg_se_rasteriza_al_lado_maximo() {

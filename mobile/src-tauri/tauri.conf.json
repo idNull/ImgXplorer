@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "imgxplorer",
+  "version": "0.1.0",
+  "identifier": "com.imgxplorer.mobile",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1430",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "imgxplorer",
+        "width": 412,
+        "height": 860
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' imgx: http://imgx.localhost blob: data:; connect-src 'self' ipc: http://ipc.localhost imgx: http://imgx.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "icon": [
+      "../../src-tauri/icons/32x32.png",
+      "../../src-tauri/icons/128x128.png",
+      "../../src-tauri/icons/128x128@2x.png",
+      "../../src-tauri/icons/icon.icns",
+      "../../src-tauri/icons/icon.ico"
+    ],
+    "publisher": "Pedro López del Castillo",
+    "copyright": "© 2026 Pedro López del Castillo",
+    "license": "MIT",
+    "shortDescription": "Visor de cómics, imágenes e historias de imgxplorer",
+    "android": {
+      "minSdkVersion": 26
+    },
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    }
+  }
+}

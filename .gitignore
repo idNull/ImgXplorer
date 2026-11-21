@@ -11,3 +11,5 @@ node_modules/
 /packaging/aur/imgxplorer
 /packaging/aur/*.pkg.tar.*
 /dist
+/mobile/ui/dist
+/mobile/src-tauri/gen/schemas

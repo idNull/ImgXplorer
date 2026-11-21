@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Permisos de la ventana del visor",
+  "windows": ["main"],
+  "permissions": ["core:default", "log:default"]
+}

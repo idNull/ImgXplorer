@@ -1,0 +1,17 @@
+[package]
+name = "imgx-host"
+description = "Capa Tauri común a imgxplorer de escritorio y al visor móvil"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+imgx-audio.workspace = true
+imgx-core.workspace = true
+imgx-media.workspace = true
+imgx-story.workspace = true
+log = "0.4"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tauri = { version = "2", features = [] }

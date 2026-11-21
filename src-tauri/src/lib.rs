@@ -1,257 +1,23 @@
-//! Aplicación Tauri: fuentes abiertas, protocolo `imgx://` y puente de gestos.
+//! Aplicación Tauri de escritorio. Las fuentes abiertas, el protocolo `imgx://`, las portadas,
+//! los proyectos y el sonido están en `crates/imgx-host` (compartido con el visor móvil).
 
-mod audio;
 mod diagnostics;
 mod export;
 mod gestures;
 pub mod mcp;
 mod browse;
-mod covers;
 mod pack;
 mod prefs;
-mod project;
-mod serve;
 mod comic;
 mod story;
 mod utils;
 mod voices;
 
-use imgx_media::panels::PanelRect;
-use imgx_media::{Source, SourceKind};
-use serde::Serialize;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
-use tauri::{AppHandle, Manager, RunEvent, State};
-
-/// Fuente abierta.
-#[derive(Clone)]
-pub(crate) struct Current {
-    /// Cambia en cada apertura para invalidar cachés del webview.
-    generation: u64,
-    source: Arc<dyn Source>,
-    path: PathBuf,
-    kind: SourceKind,
-    fingerprint: String,
-}
-
-#[derive(Default)]
-pub(crate) struct AppState {
-    current: RwLock<Option<Current>>,
-    thumbs: serve::ThumbCache,
-    /// Viñetas detectadas por imagen de la fuente abierta.
-    panels: Mutex<HashMap<usize, Vec<PanelRect>>>,
-    /// Niveles («limpiar escaneo») por imagen de la fuente abierta.
-    levels: Mutex<HashMap<usize, imgx_media::levels::Levels>>,
-    /// Recuadro con contenido («✂ ajustar al contenido») por imagen de la fuente abierta.
-    boxes: Mutex<HashMap<usize, Option<PanelRect>>>,
-    /// Última generación usada; no se reinicia al cerrar para que las URL nunca se repitan.
-    last_generation: std::sync::atomic::AtomicU64,
-}
-
-impl AppState {
-    /// La fuente abierta, si sigue siendo la de esa generación.
-    pub(crate) fn current(&self, generation: u64) -> Option<Current> {
-        self.current.read().unwrap().as_ref().filter(|c| c.generation == generation).cloned()
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct EntryInfo {
-    name: String,
-    size: u64,
-    /// El webview no sabe mostrarla: se sirve como RGBA decodificado en Rust.
-    decoded: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SourceInfo {
-    generation: u64,
-    title: String,
-    path: String,
-    kind: &'static str,
-    /// Imagen en la que situarse al abrir (la pedida, si se abrió una imagen suelta).
-    start: usize,
-    /// Se abrió una imagen concreta: manda sobre la página recordada.
-    picked: bool,
-    entries: Vec<EntryInfo>,
-    fingerprint: String,
-    /// Animaciones guardadas de esta fuente.
-    project: project::Loaded,
-    /// Es una historia `.imgxstory`: su manifiesto (título, créditos, modo de lectura…).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    story: Option<imgx_story::Manifest>,
-    /// Es un cómic propio (una carpeta que crea y ordena imgxplorer): su título.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    comic: Option<imgx_media::comic::ComicInfo>,
-}
-
-#[tauri::command]
-async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -> Result<SourceInfo, String> {
-    // Ruta canónica: la misma fuente abierta de distintas formas se recuerda una sola vez.
-    let requested = std::fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
-    // Listar un comprimido grande puede tardar: fuera del hilo principal.
-    let (opened, story, comic) = tauri::async_runtime::spawn_blocking(move || {
-        // Una historia se comprueba entera antes de abrirla: manifiesto, proyecto y sonidos.
-        let story = if imgx_media::is_story_name(&requested.to_string_lossy()) { Some(imgx_story::read(&requested)?) } else { None };
-        let opened = imgx_media::open_path(&requested).map_err(|e| e.to_string())?;
-        // Un cómic propio cuyo último orden se cortó a medias: sus páginas vuelven a su nombre.
-        let comic = if opened.kind == SourceKind::Folder { imgx_media::comic::info(&opened.path) } else { None };
-        if comic.is_some()
-            && let Ok(n @ 1..) = imgx_media::comic::recover(&opened.path)
-        {
-            log::warn!("{n} páginas recuperadas de un orden cortado en {}", opened.path.display());
-            return Ok::<_, String>((imgx_media::open_path(&requested).map_err(|e| e.to_string())?, story, comic));
-        }
-        Ok::<_, String>((opened, story, comic))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .inspect_err(|e| log::warn!("no se pudo abrir {path}: {e}"))?;
-    let src = opened.source;
-    log::info!("abierta {} ({:?}, {} imágenes, inicio {})", opened.path.display(), opened.kind, src.entries().len(), opened.start);
-    let mut fingerprint = imgx_media::fingerprint(src.entries());
-    if story.is_some() {
-        // Distinta de la del cómic original (que puede tener las mismas páginas): sus cambios no
-        // se mezclan con los del cómic.
-        fingerprint = imgx_media::fingerprint(&[imgx_media::Entry { name: format!("imgxstory:{fingerprint}"), size: 0 }]);
-    }
-    let loaded = project::or_embedded(project::load(&app, &opened.path, opened.kind, &fingerprint), story.as_ref().map(|s| &s.project));
-    let mut guard = state.current.write().unwrap();
-    let generation = state.last_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-    let info = SourceInfo {
-        generation,
-        title: src.title().to_owned(),
-        path: opened.path.display().to_string(),
-        kind: match opened.kind {
-            SourceKind::Folder => "folder",
-            SourceKind::Archive => "archive",
-        },
-        start: opened.start,
-        picked: opened.picked,
-        entries: src
-            .entries()
-            .iter()
-            .map(|e| EntryInfo { name: e.name.clone(), size: e.size, decoded: imgx_media::needs_decode(&e.name) })
-            .collect(),
-        fingerprint: fingerprint.clone(),
-        project: loaded,
-        story: story.as_ref().map(|s| s.manifest.clone()),
-        comic,
-    };
-    covers::ensure_on_open(&app, &info.path, src.clone());
-    *guard = Some(Current { generation, source: src, path: opened.path, kind: opened.kind, fingerprint });
-    state.thumbs.clear();
-    state.panels.lock().unwrap().clear();
-    state.levels.lock().unwrap().clear();
-    state.boxes.lock().unwrap().clear();
-    let audio = app.state::<audio::Audio>();
-    match story {
-        Some(st) => {
-            // Lo ya calculado de cada página: no hace falta detectarlo otra vez.
-            let mut panels = state.panels.lock().unwrap();
-            let mut levels = state.levels.lock().unwrap();
-            let mut boxes = state.boxes.lock().unwrap();
-            for (i, e) in info.entries.iter().enumerate() {
-                if let Some(d) = st.computed.pages.get(&e.name) {
-                    if let Some(p) = &d.panels {
-                        panels.insert(i, p.clone());
-                    }
-                    if let Some(l) = d.levels {
-                        levels.insert(i, l);
-                    }
-                    if let Some(b) = d.content_box() {
-                        boxes.insert(i, b);
-                    }
-                }
-            }
-            audio.set_story(Some(audio::StorySounds { path: PathBuf::from(&info.path), list: st.sounds }));
-        }
-        None => audio.set_story(None),
-    }
-    Ok(info)
-}
-
-/// Cierra la fuente abierta (vuelve a la pantalla de inicio).
-#[tauri::command]
-fn close_source(app: AppHandle, state: State<'_, AppState>) {
-    if let Some(c) = state.current.write().unwrap().take() {
-        log::info!("cerrada {}", c.path.display());
-    }
-    app.state::<audio::Audio>().set_story(None);
-    state.thumbs.clear();
-    state.panels.lock().unwrap().clear();
-    state.levels.lock().unwrap().clear();
-    state.boxes.lock().unwrap().clear();
-}
-
-/// Viñetas de la imagen `index` (vacío si no se distinguen al menos dos).
-#[tauri::command]
-async fn detect_panels(generation: u64, index: usize, state: State<'_, AppState>) -> Result<Vec<PanelRect>, String> {
-    let cur = state.current(generation).ok_or("la fuente ya no está abierta")?;
-    if let Some(p) = state.panels.lock().unwrap().get(&index) {
-        return Ok(p.clone());
-    }
-    let src = cur.source.clone();
-    let found = tauri::async_runtime::spawn_blocking(move || {
-        let t0 = std::time::Instant::now();
-        let name = src.entries().get(index).ok_or("índice fuera de rango")?.name.clone();
-        let bytes = src.read(index).map_err(|e| e.to_string())?;
-        let found = imgx_media::panels::detect_panels(&name, &bytes).map_err(|e| e.to_string())?;
-        log::debug!("viñetas de {name}: {} en {} ms", found.len(), t0.elapsed().as_millis());
-        Ok::<_, String>(found)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    if state.current(generation).is_some() {
-        state.panels.lock().unwrap().insert(index, found.clone());
-    }
-    Ok(found)
-}
-
-/// Color del papel y de la tinta de la imagen `index`, para «limpiar escaneo».
-#[tauri::command]
-async fn image_levels(generation: u64, index: usize, state: State<'_, AppState>) -> Result<imgx_media::levels::Levels, String> {
-    let cur = state.current(generation).ok_or("la fuente ya no está abierta")?;
-    if let Some(l) = state.levels.lock().unwrap().get(&index) {
-        return Ok(*l);
-    }
-    let src = cur.source.clone();
-    let found = tauri::async_runtime::spawn_blocking(move || {
-        let name = src.entries().get(index).ok_or("índice fuera de rango")?.name.clone();
-        let bytes = src.read(index).map_err(|e| e.to_string())?;
-        imgx_media::levels::levels(&name, &bytes).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    if state.current(generation).is_some() {
-        state.levels.lock().unwrap().insert(index, found);
-    }
-    Ok(found)
-}
-
-/// Recuadro con contenido de la imagen `index` (`None` si apenas tiene márgenes).
-#[tauri::command]
-async fn content_box(generation: u64, index: usize, state: State<'_, AppState>) -> Result<Option<PanelRect>, String> {
-    let cur = state.current(generation).ok_or("la fuente ya no está abierta")?;
-    if let Some(b) = state.boxes.lock().unwrap().get(&index) {
-        return Ok(*b);
-    }
-    let src = cur.source.clone();
-    let found = tauri::async_runtime::spawn_blocking(move || {
-        let name = src.entries().get(index).ok_or("índice fuera de rango")?.name.clone();
-        let bytes = src.read(index).map_err(|e| e.to_string())?;
-        imgx_media::panels::content_box(&name, &bytes).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-    if state.current(generation).is_some() {
-        state.boxes.lock().unwrap().insert(index, found);
-    }
-    Ok(found)
-}
+// Lo común con el visor móvil vive en `crates/imgx-host`; se reexporta para que el resto del
+// escritorio siga usando las mismas rutas (`crate::AppState`, `crate::audio::Audio`…).
+pub(crate) use imgx_host::{AppState, Current, audio, covers, project, serve};
+use std::sync::Mutex;
+use tauri::{Manager, RunEvent};
 
 /// Archivo que macOS pidió abrir antes de que la interfaz estuviera lista (doble clic en Finder).
 static OPENED: Mutex<Option<String>> = Mutex::new(None);
@@ -341,15 +107,15 @@ pub fn run() {
             std::thread::spawn(move || responder.respond(serve::handle(&app, &path)));
         })
         .invoke_handler(tauri::generate_handler![
-            open_source,
-            close_source,
+            imgx_host::source::open_source,
+            imgx_host::source::close_source,
             initial_path,
-            detect_panels,
-            image_levels,
-            content_box,
+            imgx_host::source::detect_panels,
+            imgx_host::source::image_levels,
+            imgx_host::source::content_box,
             covers::cover,
             covers::forget_cover,
-            covers::show_in_folder,
+            utils::show_in_folder,
             utils::image_info,
             utils::copy_image,
             utils::save_image,

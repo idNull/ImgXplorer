@@ -77,7 +77,7 @@ pub fn or_embedded(loaded: Loaded, embedded: Option<&Project>) -> Loaded {
 }
 
 /// Escribe en un temporal y lo renombra: un corte a medias nunca deja el archivo roto.
-pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }

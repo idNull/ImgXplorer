@@ -132,6 +132,11 @@ pub fn fingerprint(entries: &[Entry]) -> String {
     format!("{h:016x}")
 }
 
+/// Se compiló con UnRAR (función `rar`): abre `.rar`/`.cbr`.
+pub const HAS_RAR: bool = cfg!(feature = "rar");
+/// Se compiló con libheif (función `heif`): abre HEIC/HEIF.
+pub const HAS_HEIF: bool = cfg!(feature = "heif");
+
 /// Una colección ordenada de imágenes (carpeta, comprimido o imagen suelta).
 pub trait Source: Send + Sync {
     fn title(&self) -> &str;

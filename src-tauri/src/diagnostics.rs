@@ -88,6 +88,7 @@ pub fn log_plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
         ])
         .level(LevelFilter::Info)
         .level_for("imgxplorer_lib", LevelFilter::Debug)
+        .level_for("imgx_host", LevelFilter::Debug)
         .level_for("imgx_media", LevelFilter::Debug)
         .level_for("imgx_core", LevelFilter::Debug)
         .max_file_size(2_000_000)

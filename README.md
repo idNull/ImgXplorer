@@ -570,6 +570,14 @@ El formato de animaciones está especificado en [docs/format.md](docs/format.md)
 
 La historia del proyecto, para todos los públicos, está en [docs/imgXplorer-la-historia.docx](docs/imgXplorer-la-historia.docx).
 
+## Versiones móviles
+
+En desarrollo: un **visor para Android y para iOS** que abre las imágenes del carrete, cómics (`cbz`, `cbr`, `cb7`) y las historias `.imgxstory` con su animación, sus efectos y su sonido. El editor y la exportación se quedan en el escritorio.
+
+- **Dónde está:** en [`mobile/`](mobile/README.md). Usa los mismos crates de Rust que el escritorio y una interfaz táctil propia.
+- **Android:** [mobile/README_Android.md](mobile/README_Android.md) explica qué hace, cómo está hecho, cómo prepararlo y probarlo, y lleva un registro de cada fase.
+- **Estado:** fase 0. La app arranca y la interfaz habla con Rust; todavía no abre cómics.
+
 ## Instalar
 
 **Descarga:** el instalador de Linux y el de macOS de cada versión están en [imgxplorer.app](https://imgxplorer.app) y en [GitHub Releases](https://github.com/idNull/ImgXplorer/releases/latest), los mismos archivos en los dos sitios. Junto a cada uno está su huella SHA-256 para comprobar la descarga (`sha256sum archivo` en Linux, `shasum -a 256 archivo` en macOS).
@@ -650,6 +658,8 @@ pnpm third-party
 pnpm tauri build -- --no-default-features
 ```
 
+**Sin libheif.** `imgx-media` tiene la función `heif` (activada por defecto) para abrir HEIC/HEIF con libheif. El escritorio la usa siempre. El visor móvil compila sin ella, y entonces un `.heic` da el aviso «no admitido» en lugar de abrirse. Para comprobarlo: `cargo test -p imgx-media --no-default-features`.
+
 Para probar la decodificación y la detección de viñetas con tus propios archivos (RAW, HEIC, cómics…) sin abrir la app (la ruta debe ser absoluta):
 
 ```bash
@@ -664,7 +674,9 @@ crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, minia
 crates/imgx-story   Historias .imgxstory: leer, comprobar y escribir el archivo para compartir (páginas, proyecto, sonidos y datos calculados), sin Tauri para poder usarlo en el móvil
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, historias .imgxstory, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
+crates/imgx-host    Capa Tauri común al escritorio y al visor móvil: fuente abierta, protocolo imgx://, portadas, archivos .imgx y biblioteca de sonidos con sus órdenes
+mobile              Visor para Android e iOS (Tauri 2): interfaz táctil (mobile/ui), crate imgxplorer-mobile (mobile/src-tauri); ver mobile/README_Android.md
+src-tauri           App Tauri 2 de escritorio (usa imgx-host): gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, historias .imgxstory, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
 ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), ajustes de imagen (ui/src/lib/adjust), lectura (ui/src/lib/reading), herramientas de la IA (ui/src/lib/mcp)
 docs                Especificación de los formatos .imgx e .imgxstory, y cómo crear los instaladores
 packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR, lanzador .desktop, generador de la lista de licencias (licenses.mjs) y de los iconos (iconos.py)

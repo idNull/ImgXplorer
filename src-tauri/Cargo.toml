@@ -16,7 +16,9 @@ tauri-build = { version = "2", features = [] }
 base64 = "0.22"
 imgx-audio.workspace = true
 imgx-core.workspace = true
-imgx-media.workspace = true
+imgx-host.workspace = true
+# El escritorio siempre abre HEIC/HEIF con libheif.
+imgx-media = { workspace = true, features = ["heif"] }
 imgx-story.workspace = true
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native"] }
 log = "0.4"

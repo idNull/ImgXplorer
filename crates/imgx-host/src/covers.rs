@@ -121,33 +121,6 @@ pub fn forget_cover(app: AppHandle, path: String) {
     }
 }
 
-/// Abre en el gestor de archivos la carpeta de una ruta: la propia carpeta o, si es un archivo,
-/// la que lo contiene (en macOS, señalándolo).
-#[tauri::command]
-pub fn show_in_folder(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    if !p.is_absolute() || !p.exists() {
-        return Err(format!("no existe: {path}"));
-    }
-    let mut cmd = if cfg!(target_os = "macos") {
-        let mut c = std::process::Command::new("open");
-        if p.is_dir() { c.arg(p) } else { c.arg("-R").arg(p) };
-        c
-    } else {
-        let mut c = std::process::Command::new("xdg-open");
-        c.arg(if p.is_dir() { p } else { p.parent().unwrap_or(p) });
-        c
-    };
-    let mut child = cmd
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    std::thread::spawn(move || child.wait());
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

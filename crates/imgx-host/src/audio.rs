@@ -63,7 +63,7 @@ impl From<&SoundEntry> for SoundInfo {
 }
 
 impl SoundKind {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             SoundKind::Imported => "imported",
             SoundKind::Recorded => "recorded",
@@ -88,19 +88,19 @@ impl From<&imgx_story::StorySound> for SoundInfo {
 
 /// Los sonidos de la historia `.imgxstory` abierta: se leen de dentro del zip, sin pasar a la
 /// biblioteca.
-pub(crate) struct StorySounds {
+pub struct StorySounds {
     pub path: PathBuf,
     pub list: Vec<imgx_story::StorySound>,
 }
 
 /// Dónde está el archivo de un sonido propio.
-pub(crate) enum SoundFile {
+pub enum SoundFile {
     Library(PathBuf),
     Story(PathBuf, imgx_story::StorySound),
 }
 
 impl SoundFile {
-    pub(crate) fn read(&self) -> Result<Vec<u8>, String> {
+    pub fn read(&self) -> Result<Vec<u8>, String> {
         match self {
             SoundFile::Library(p) => std::fs::read(p).map_err(|e| e.to_string()),
             SoundFile::Story(path, s) => imgx_story::read_sound(path, s),
@@ -164,7 +164,7 @@ pub struct Audio {
     /// Última escena pedida: una decodificación lenta no pisa una escena más nueva.
     scene_seq: AtomicU64,
     ambient_seq: AtomicU64,
-    pub(crate) recorder: Mutex<Option<imgx_audio::device::Recorder>>,
+    pub recorder: Mutex<Option<imgx_audio::device::Recorder>>,
     story: Mutex<Option<StorySounds>>,
 }
 
@@ -172,7 +172,7 @@ fn now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-pub(crate) fn dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("sounds"))
 }
 
@@ -224,7 +224,7 @@ impl Audio {
     }
 
     /// Cambia los sonidos de la historia abierta (`None` al abrir otra cosa o cerrar).
-    pub(crate) fn set_story(&self, story: Option<StorySounds>) {
+    pub fn set_story(&self, story: Option<StorySounds>) {
         *self.story.lock().unwrap() = story;
     }
 
@@ -236,7 +236,7 @@ impl Audio {
 
     /// Un sonido propio (de la biblioteca o de la historia abierta) listo para meterlo en una
     /// historia: sus datos y dónde está su archivo.
-    pub(crate) fn locate(&self, app: &AppHandle, id: &str) -> Result<Option<(imgx_story::StorySound, SoundFile)>, String> {
+    pub fn locate(&self, app: &AppHandle, id: &str) -> Result<Option<(imgx_story::StorySound, SoundFile)>, String> {
         let d = dir(app)?;
         let lib = self.with_index(app, |l| l.iter().find(|e| e.id == id).cloned())?;
         if let Some(e) = lib.filter(|e| d.join(&e.file).exists()) {
@@ -274,7 +274,7 @@ impl Audio {
     }
 
     /// Guarda un sonido en la biblioteca (si no estaba ya: el id sale del contenido).
-    pub(crate) fn import_bytes(&self, app: &AppHandle, bytes: &[u8], ext: &str, name: &str, kind: SoundKind) -> Result<SoundInfo, String> {
+    pub fn import_bytes(&self, app: &AppHandle, bytes: &[u8], ext: &str, name: &str, kind: SoundKind) -> Result<SoundInfo, String> {
         let id = content_id(bytes);
         if let Some(e) = self.with_index(app, |l| l.iter().find(|e| e.id == id).cloned())? {
             return Ok((&e).into());
@@ -303,14 +303,14 @@ impl Audio {
     }
 
     /// Un sonido de la biblioteca (si sigue en ella) o de la historia abierta.
-    pub(crate) fn info(&self, app: &AppHandle, id: &str) -> Option<SoundInfo> {
+    pub fn info(&self, app: &AppHandle, id: &str) -> Option<SoundInfo> {
         let d = dir(app).ok()?;
         let lib = self.with_index(app, |l| l.iter().find(|e| e.id == id && d.join(&e.file).exists()).map(SoundInfo::from)).ok()?;
         lib.or_else(|| self.story_sound(id).map(|(_, s)| SoundInfo::from(&s)))
     }
 
     /// Los sonidos propios (importados y grabados) con la ruta de su archivo.
-    pub(crate) fn user_sounds(&self, app: &AppHandle) -> Result<Vec<(SoundEntry, PathBuf)>, String> {
+    pub fn user_sounds(&self, app: &AppHandle) -> Result<Vec<(SoundEntry, PathBuf)>, String> {
         let d = dir(app)?;
         self.with_index(app, |l| l.iter().map(|e| (e.clone(), d.join(&e.file))).collect())
     }

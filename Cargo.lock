@@ -2549,6 +2549,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "imgx-host"
+version = "1.0.0"
+dependencies = [
+ "imgx-audio",
+ "imgx-core",
+ "imgx-media",
+ "imgx-story",
+ "log",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tauri",
+]
+
+[[package]]
 name = "imgx-media"
 version = "1.0.0"
 dependencies = [
@@ -2596,6 +2611,7 @@ dependencies = [
  "gtk",
  "imgx-audio",
  "imgx-core",
+ "imgx-host",
  "imgx-media",
  "imgx-story",
  "keyring",
@@ -2613,6 +2629,19 @@ dependencies = [
  "ureq",
  "webkit2gtk",
  "zip",
+]
+
+[[package]]
+name = "imgxplorer-mobile"
+version = "0.1.0"
+dependencies = [
+ "imgx-host",
+ "imgx-media",
+ "log",
+ "serde",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
 ]
 
 [[package]]
