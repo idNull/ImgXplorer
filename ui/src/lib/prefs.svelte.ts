@@ -39,8 +39,12 @@ export interface Settings {
   sound: { master: number; mute: boolean; input: string };
   /** Una IA puede manejar la app (servidor MCP). */
   aiControl: boolean;
-  /** Modo noche de lectura (🌙): colores invertidos suaves. No sale en el vídeo salvo que se pida. */
+  /** Modo noche de lectura (🌙). No sale en el vídeo. */
   night: boolean;
+  /** Estilo del modo noche: atenuado y cálido (de serie) o colores invertidos (texto, manga). */
+  nightStyle: "warm" | "invert";
+  /** Intensidad del modo noche atenuado (0..1). */
+  nightLevel: number;
   /** Barra fina de progreso de lectura abajo del visor (📖). */
   progressBar: boolean;
   /** Pantalla de inicio: estantería con portadas o la lista de siempre. */
@@ -158,6 +162,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: { master: 1, mute: false, input: "" },
   aiControl: false,
   night: false,
+  nightStyle: "warm",
+  nightLevel: 0.8,
   progressBar: true,
   startView: "covers",
   hideBars: true,
@@ -201,6 +207,8 @@ function clean(raw: unknown): Settings {
   if (typeof snd.input === "string") s.sound.input = snd.input.slice(0, 300);
   if (typeof r.aiControl === "boolean") s.aiControl = r.aiControl;
   if (typeof r.night === "boolean") s.night = r.night;
+  if (r.nightStyle === "warm" || r.nightStyle === "invert") s.nightStyle = r.nightStyle;
+  if (typeof r.nightLevel === "number" && Number.isFinite(r.nightLevel)) s.nightLevel = Math.min(1, Math.max(0.1, r.nightLevel));
   if (typeof r.progressBar === "boolean") s.progressBar = r.progressBar;
   if (r.startView === "covers" || r.startView === "list") s.startView = r.startView;
   if (typeof r.hideBars === "boolean") s.hideBars = r.hideBars;

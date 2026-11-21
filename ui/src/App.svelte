@@ -39,7 +39,7 @@
   import { startMcp } from "./lib/mcp/host.svelte";
   import McpBadge from "./lib/mcp/McpBadge.svelte";
   import AdjustPanel from "./lib/adjust/AdjustPanel.svelte";
-  import { adjustUniforms, normalize } from "./lib/adjust/adjust";
+  import { adjustUniforms, normalize, type Night } from "./lib/adjust/adjust";
   import { levels } from "./lib/adjust/levels.svelte";
   import ReadingMenu from "./lib/reading/ReadingMenu.svelte";
   import ProgressBar from "./lib/reading/ProgressBar.svelte";
@@ -584,7 +584,7 @@
     adjust: async (i) => {
       const adj = store.adjustFor(source!.entries[i].name);
       if (!adj) return null;
-      return adjustUniforms(adj, adj.clean ? await levels.wait(i) : null, false);
+      return adjustUniforms(adj, adj.clean ? await levels.wait(i) : null, null);
     },
     adjusted: () => !!store.data && (!!normalize(store.data.defaults.adjust) || store.data.items.some((it) => normalize(it.adjust))),
   };
@@ -674,7 +674,7 @@
     const s = source;
     const data = store.data;
     if (!s || !data) return null;
-    const night = prefs.settings.night;
+    const night: Night = prefs.settings.night ? { style: prefs.settings.nightStyle, level: prefs.settings.nightLevel } : null;
     void levels.rev;
     const own = new Map(data.items.filter((i) => i.adjust).map((i) => [i.entry, normalize($state.snapshot(i.adjust))]));
     const all = normalize($state.snapshot(data.defaults.adjust));

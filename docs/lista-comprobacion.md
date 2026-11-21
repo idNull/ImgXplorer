@@ -61,6 +61,7 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 |---|---|---|---|
 | 🎨 (`J`): Limpiar escaneo, Blanco y negro, Sepia y los deslizadores | ☐ | ☐ | ☐ |
 | Mantener `\` enseña el original; 🌙 Noche (`N`) | ☐ | ☐ | ☐ |
+| 🌙 Noche cálido: imagen en positivo, más tenue y cálida; la intensidad cambia al momento; 🌗 Invertido sigue disponible | ☐ | ☐ | ☐ |
 | 📖 Ajustar al ancho (`W`), al alto (`H`) y al contenido | ☐ | ☐ | ☐ |
 | Doble página (`2`) con «Portada sola»; sentido manga | ☐ | ☐ | ☐ |
 | Tira vertical (`V`) en un webtoon; aviso «¿Leer como webtoon?» | ☐ | ☐ | ☐ |

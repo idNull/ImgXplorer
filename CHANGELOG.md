@@ -17,6 +17,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). L
 ### Lectura
 
 - **Ajustes de imagen (🎨):** limpiar escaneo, blanco y negro, sepia, modo noche, brillo, contraste, nitidez… sin tocar el archivo.
+- **Modo noche (🌙):** de serie, **cálido**: la imagen más tenue y sin luz azul, con intensidad ajustable. Antes invertía los colores y un cómic parecía un negativo; ese modo sigue como **invertido**, para páginas de texto.
 - **Modos de lectura (📖):**
   - ajustar al ancho, al alto o al contenido;
   - doble página y sentido manga;

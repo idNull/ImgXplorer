@@ -32,7 +32,7 @@ export interface Layer {
 /**
  * Ajustes de imagen para el shader de capas, 16 valores: `[activo, negro(3), blanco(3), limpiar,
  * brillo, contraste, saturación, exposición, temperatura, nitidez, tono (0 nada, 1 gris, 2 sepia),
- * noche]`.
+ * noche]`. Noche: 0 apagado, 1 invertido, 2 + intensidad (2..3) atenuado y cálido.
  */
 export const ADJ_LEN = 16;
 const NO_ADJ = new Float32Array(ADJ_LEN);
@@ -122,8 +122,15 @@ void main() {
     } else if (u_adj[14] > 0.5) {
       c = vec3(luma(c));
     }
-    // Noche: luminosidad invertida conservando el color, sin negro ni blanco puros.
-    if (u_adj[15] > 0.5) {
+    if (u_adj[15] > 1.5) {
+      // Noche atenuada y cálida: la imagen sigue en positivo; el blanco baja, se quita luz azul y
+      // el color pierde algo de fuerza. Los negros no cambian, así el texto se sigue leyendo.
+      float k = clamp(u_adj[15] - 2.0, 0.0, 1.0);
+      c = mix(c, vec3(luma(c)), 0.15 * k);
+      c = pow(max(c, 0.0), vec3(1.0 + 0.15 * k)) * (1.0 - 0.45 * k) * vec3(1.0, 1.0 - 0.16 * k, 1.0 - 0.40 * k);
+    } else if (u_adj[15] > 0.5) {
+      // Noche invertida (para texto o manga): luminosidad invertida conservando el color, sin
+      // negro ni blanco puros.
       float l = luma(c);
       c = 0.09 + clamp(c + (1.0 - 2.0 * l), 0.0, 1.0) * 0.8;
     }

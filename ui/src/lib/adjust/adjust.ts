@@ -68,7 +68,10 @@ export function presetOf(a: Adjust | null | undefined): string | null {
  * Los 16 valores del shader de capas (`Layer.adj`), o `null` si no hay nada que hacer. Sin los
  * niveles de la página, «limpiar escaneo» se queda en espera (no se aplica a medias).
  */
-export function adjustUniforms(a: Adjust | null | undefined, levels: Levels | null, night: boolean): Float32Array | null {
+/** Modo noche de lectura: apagado, o su estilo e intensidad (0..1, solo cuenta en «warm»). */
+export type Night = null | { style: "warm" | "invert"; level: number };
+
+export function adjustUniforms(a: Adjust | null | undefined, levels: Levels | null, night: Night): Float32Array | null {
   const n = normalize(a);
   if (!n && !night) return null;
   const u = new Float32Array(ADJ_LEN);
@@ -84,6 +87,6 @@ export function adjustUniforms(a: Adjust | null | undefined, levels: Levels | nu
   u[12] = n?.temperature ?? 0;
   u[13] = n?.sharpen ?? 0;
   u[14] = n?.tone === "gray" ? 1 : n?.tone === "sepia" ? 2 : 0;
-  u[15] = night ? 1 : 0;
+  u[15] = !night ? 0 : night.style === "invert" ? 1 : 2 + Math.min(1, Math.max(0, night.level));
   return u;
 }

@@ -58,6 +58,10 @@
     prefs.settings.night = !prefs.settings.night;
     prefs.saveSettings();
   }
+  function nightStyle(style: "warm" | "invert") {
+    prefs.settings.nightStyle = style;
+    prefs.saveSettings();
+  }
 
   const pct = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}`;
 </script>
@@ -86,6 +90,24 @@
       <span class="ico">🌙</span>{t("adjNight")}
     </button>
   </div>
+  {#if prefs.settings.night}
+    <div class="night-opts">
+      <div class="seg" role="radiogroup" aria-label={t("adjNight")}>
+        <button class:on={prefs.settings.nightStyle === "warm"} onclick={() => nightStyle("warm")} title={t("adjNightWarmHelp")}>{t("adjNightWarm")}</button>
+        <button class:on={prefs.settings.nightStyle === "invert"} onclick={() => nightStyle("invert")} title={t("adjNightInvertHelp")}>{t("adjNightInvert")}</button>
+      </div>
+      {#if prefs.settings.nightStyle === "warm"}
+        <label class="param">
+          <span>{t("adjNightLevel")}</span>
+          <input type="range" min="0.1" max="1" step="0.05" value={prefs.settings.nightLevel}
+            oninput={(e) => (prefs.settings.nightLevel = Number(e.currentTarget.value))} onchange={() => prefs.saveSettings()} />
+          <output>{Math.round(prefs.settings.nightLevel * 100)}</output>
+        </label>
+      {:else}
+        <p class="note">{t("adjNightInvertNote")}</p>
+      {/if}
+    </div>
+  {/if}
   {#if analyzing}<p class="note">{t("adjAnalyzing")}</p>{/if}
 
   <button class="more" onclick={() => (more = !more)} aria-expanded={more}>{more ? "▾" : "▸"} {t("adjMore")}</button>
@@ -133,6 +155,8 @@
   .presets .ico { font-size: 16px; }
   .presets button.on { border-color: var(--accent); background: rgb(56 189 248 / 0.12); }
   .presets .night.on { border-color: #fbbf24; background: rgb(251 191 36 / 0.12); }
+  .night-opts { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-radius: 8px; background: rgb(251 191 36 / 0.07); border: 1px solid rgb(251 191 36 / 0.25); }
+  .night-opts .seg button.on { background: #fbbf24; border-color: #fbbf24; }
   .more { align-self: flex-start; padding: 2px 6px; font-size: 12px; background: none; border-color: transparent; color: var(--muted); }
   .more:hover { color: var(--text); }
   .sliders { display: flex; flex-direction: column; gap: 4px; }

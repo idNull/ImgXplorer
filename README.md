@@ -61,7 +61,9 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
 - **Tira de miniaturas** con carga perezosa, siempre centrada en la imagen actual, en tres tamaños.
 - **Ajustes de imagen (🎨, `J`)**: un panel flotante pequeño que no toca tus archivos.
   - Un clic: **Original**, **✨ Limpiar escaneo** (blanquea el papel amarillento y oscurece la tinta; la app analiza cada página), **Blanco y negro** y **Sepia**.
-  - **🌙 Noche** (`N`): colores invertidos suaves para leer de noche sin deslumbrar. Es solo para leer: no sale en el vídeo.
+  - **🌙 Noche** (`N`): para leer con poca luz sin deslumbrar. Es solo para leer: no sale en el vídeo.
+    - **🕯️ Cálido** (de serie): la imagen sigue tal cual, pero más tenue y cálida: el blanco del papel baja, se quita luz azul y el color pierde algo de fuerza; los negros no cambian, así el texto se lee igual. Con **intensidad** ajustable.
+    - **🌗 Invertido**: el papel pasa a oscuro y la tinta a clara. Para páginas de texto; en un dibujo a color parece un negativo.
   - **Más ajustes**: brillo, contraste, saturación, tonos medios, temperatura y nitidez (doble clic en un deslizador lo devuelve a 0).
   - Para **esta página** o para **todo el cómic**; una página con ajustes propios usa los suyos.
   - Mantén `\` pulsada para ver el original. Un punto en 🎨 avisa de que la imagen se ve retocada.

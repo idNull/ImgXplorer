@@ -653,6 +653,7 @@ export class McpTools {
       all: normalize(this.store.data?.defaults.adjust),
       uses: this.store.adjustFor(entry),
       nightMode: prefs.settings.night,
+      nightStyle: prefs.settings.nightStyle,
     });
   }
 
