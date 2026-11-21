@@ -14,6 +14,8 @@ export interface SoundInfo {
   seconds: number;
   /** Pensado para repetirse en bucle (ambientes de serie). */
   ambient: boolean;
+  /** Viene dentro de la historia `.imgxstory` abierta (no está en la biblioteca). */
+  story?: boolean;
 }
 
 /** Extensiones de audio que se pueden importar. */
@@ -58,6 +60,14 @@ class SoundStore {
   /** Añade una grabación recién guardada. */
   add(s: SoundInfo) {
     if (!this.get(s.id)) this.list.push(s);
+  }
+
+  /** Copia a la biblioteca un sonido que viene en la historia abierta. */
+  async keep(id: string) {
+    const s = await invoke<SoundInfo>("sound_keep", { id });
+    const i = this.list.findIndex((x) => x.id === id);
+    if (i >= 0) this.list[i] = s;
+    else this.list.push(s);
   }
 
   async rename(id: string, name: string) {

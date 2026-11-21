@@ -6,7 +6,7 @@
 //! (fondos oscuros, ilustraciones a sangre) no se corrige nada.
 
 use crate::{MediaError, decode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const ANALYSIS_SIDE: u32 = 512;
 /// Por debajo de esta luminosidad no hay «papel» que blanquear.
@@ -17,7 +17,7 @@ const MAX_INK: f32 = 0.4;
 const MIN_RANGE: f32 = 0.3;
 
 /// Puntos negro y blanco por canal (0..1). Sin corrección: negro 0 y blanco 1.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Levels {
     pub black: [f32; 3],
     pub white: [f32; 3],

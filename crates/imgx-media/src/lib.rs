@@ -2,6 +2,7 @@
 //! formatos, decodificación a RGBA y miniaturas.
 
 pub mod archive;
+pub mod comic;
 pub mod decode;
 pub mod folder;
 pub mod info;
@@ -51,8 +52,17 @@ pub const RAW: &[&str] = &[
     "3fr", "iiq", "mos", "erf", "kdc", "dcr", "mrw", "rwl", "raw",
 ];
 
-/// Comprimidos que se abren como fuente.
-pub const ARCHIVES: &[&str] = &["zip", "cbz", "7z", "cb7", "rar", "cbr"];
+/// Comprimidos que se abren como fuente (también las historias `.imgxstory`).
+pub const ARCHIVES: &[&str] = &["zip", "cbz", "7z", "cb7", "rar", "cbr", STORY_EXT];
+
+/// Extensión de las historias compartidas (un zip con las páginas en `pages/`).
+pub const STORY_EXT: &str = "imgxstory";
+/// Carpeta de las páginas dentro de una historia.
+pub const STORY_PAGES: &str = "pages/";
+
+pub fn is_story_name(name: &str) -> bool {
+    extension(name).as_deref() == Some(STORY_EXT)
+}
 
 pub fn extension(name: &str) -> Option<String> {
     Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase())
@@ -167,6 +177,7 @@ pub fn open_path(path: &Path) -> Result<Opened, MediaError> {
     if is_archive_name(&name) {
         let source: Arc<dyn Source> = match extension(&name).as_deref() {
             Some("zip" | "cbz") => Arc::new(ZipSource::open(path)?),
+            Some(STORY_EXT) => Arc::new(ZipSource::open_prefixed(path, STORY_PAGES)?),
             Some("7z" | "cb7") => Arc::new(SevenZSource::open(path)?),
             _ => open_rar(path)?,
         };
@@ -191,6 +202,7 @@ mod tests {
         assert!(is_image_name("x.heic") && needs_decode("x.heic"));
         assert!(is_image_name("x.CR3") && is_raw_name("x.CR3"));
         assert!(is_archive_name("Tomo 1.cbr") && !is_image_name("Tomo 1.cbr"));
+        assert!(is_archive_name("Tomo 1.imgxstory") && is_story_name("a/Tomo 1.IMGXSTORY") && !is_story_name("x.cbz"));
         assert!(!is_visible_path("__MACOSX/._a.jpg") && !is_visible_path("x/.thumb.jpg"));
         assert!(is_visible_path("cap 1/001.jpg"));
         let e = |n: &str, size| Entry { name: n.into(), size };

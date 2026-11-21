@@ -17,6 +17,7 @@ base64 = "0.22"
 imgx-audio.workspace = true
 imgx-core.workspace = true
 imgx-media.workspace = true
+imgx-story.workspace = true
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native"] }
 log = "0.4"
 serde.workspace = true

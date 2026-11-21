@@ -3,6 +3,7 @@
   // (crearla con Voice Design o elegir una de la cuenta). «Guion»: las frases de esta imagen, con
   // etiquetas de interpretación; «Revisar y generar» enseña el pedido antes de enviar nada.
   import { untrack } from "svelte";
+  import { errorText } from "../errors";
   import type { ProjectStore } from "../action/project.svelte";
   import { prefs } from "../prefs.svelte";
   import { t, label, type Key } from "../i18n.svelte";
@@ -82,14 +83,14 @@
       if (designing?.cast === c.id) designing = { ...designing, busy: false, previews };
     } catch (e) {
       designing = null;
-      onnotice(String(e));
+      onnotice(errorText(e));
     }
   }
   function togglePreview(id: string) {
     if (!designing) return;
     const stop = designing.playing === id;
     designing.playing = stop ? null : id;
-    playPreview(stop ? null : id).catch((e) => onnotice(String(e)));
+    playPreview(stop ? null : id).catch((e) => onnotice(errorText(e)));
   }
   async function pickPreview(c: CastMember, generatedId: string) {
     if (!designing) return;
@@ -102,7 +103,7 @@
       designing = null;
     } catch (e) {
       if (designing) designing.busy = false;
-      onnotice(String(e));
+      onnotice(errorText(e));
     }
   }
 
@@ -114,7 +115,7 @@
     try {
       voices = await listVoices();
     } catch (e) {
-      onnotice(String(e));
+      onnotice(errorText(e));
     } finally {
       loadingVoices = false;
     }
@@ -139,7 +140,7 @@
       if (s?.error) onnotice(s.error);
       else if (s?.sound) sounds.preview(s.sound.id);
     } catch (e) {
-      onnotice(String(e));
+      onnotice(errorText(e));
     } finally {
       testing = null;
     }
@@ -223,7 +224,7 @@
       else if (r.done) onnotice(t("voicesDone", { n: r.done, cached: r.cached }));
       else onnotice(t("voicesNothing"));
     } catch (e) {
-      onnotice(String(e));
+      onnotice(errorText(e));
     } finally {
       progress = null;
     }
@@ -273,7 +274,7 @@
       }
       onnotice(place ? t("voicesSoundPlaced") : t("voicesSoundInLibrary", { name: res.sound.name }));
     } catch (e) {
-      onnotice(String(e));
+      onnotice(errorText(e));
     } finally {
       progress = null;
     }

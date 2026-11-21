@@ -40,6 +40,26 @@ fn zip() {
     assert_eq!(open_path(&path).unwrap().source.entries().len(), 4);
 }
 
+/// Una historia `.imgxstory`: solo cuentan las imágenes de `pages/`, con el prefijo quitado.
+#[test]
+fn historia_solo_paginas() {
+    let path = tmp("t.imgxstory");
+    let mut w = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    for n in NAMES {
+        w.start_file(format!("pages/{n}"), zip::write::SimpleFileOptions::default()).unwrap();
+        w.write_all(&payload(n)).unwrap();
+    }
+    // Fuera de `pages/`: la portada y los sonidos no son páginas.
+    for extra in ["cover.jpg", "sounds/a.png", "manifest.json"] {
+        w.start_file(extra, zip::write::SimpleFileOptions::default()).unwrap();
+        w.write_all(b"x").unwrap();
+    }
+    w.finish().unwrap();
+    let opened = open_path(&path).unwrap();
+    assert_eq!(opened.kind, imgx_media::SourceKind::Archive);
+    check(opened.source.as_ref());
+}
+
 #[test]
 fn sevenz_solido() {
     let path = tmp("t.cb7");

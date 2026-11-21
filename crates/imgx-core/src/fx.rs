@@ -729,6 +729,7 @@ impl FxFrame {
         self.flash[3] > 1e-4
             || self.shock[4].abs() > 1e-4
             || self.chroma[0] > 1e-4
+            || self.chroma[1] > 1e-4
             || self.blur[2] > 1e-4
             || (self.lines[0] > 0.0 && self.lines[7] > 1e-4)
             || self.impact.iter().any(|v| *v > 1e-4)
@@ -1238,6 +1239,24 @@ mod tests {
                 assert!(info("text").unwrap().presets.iter().any(|p| p.id == t), "{} → {t}", s.id);
             }
         }
+    }
+
+    #[test]
+    fn la_aberracion_se_ve_con_cada_ajuste() {
+        let v = view();
+        for preset in ["soft", "glitch", "power"] {
+            let f = new_fx("c", "chroma", Some(preset), 0.0).unwrap();
+            let fr = frame(&[f], 0.3, &v);
+            assert!(fr.chroma[0] > 1.0, "{preset}: separación de más de 1 px");
+            assert!(fr.post(), "{preset}");
+        }
+        let g = frame(&[new_fx("c", "chroma", Some("glitch"), 0.0).unwrap()], 0.3, &v);
+        assert!(g.chroma[1] > 0.5, "el glitch rompe la imagen en franjas");
+        // Solo glitch, sin separación: también hace falta la pasada de efectos.
+        let mut only = new_fx("c", "chroma", Some("glitch"), 0.0).unwrap();
+        only.params.insert("amount".into(), Value::from(0.0));
+        let o = frame(&[only], 0.3, &v);
+        assert!(o.chroma[0] == 0.0 && o.post());
     }
 
     #[test]

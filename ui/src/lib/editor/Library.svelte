@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import { errorText } from "../errors";
   // Biblioteca: clips para arrastrar a la timeline y plantillas propias para aplicar.
   import { openFile, saveFile } from "../files/dialog.svelte";
   import { library, defaultDuration, type LibClip } from "./libstore.svelte";
@@ -62,12 +63,12 @@
       onnotice(r.errors.length ? t("soundImportError", { error: r.errors[0] }) : t("soundsImported", { n: r.added.length }));
     } catch (e) {
       log.warn("importar sonido:", e);
-      onnotice(t("soundImportError", { error: String(e) }));
+      onnotice(t("soundImportError", { error: errorText(e) }));
     }
   }
 
   function finishSoundRename(id: string, value: string) {
-    sounds.rename(id, value).catch((e) => onnotice(String(e)));
+    sounds.rename(id, value).catch((e) => onnotice(errorText(e)));
     renaming = null;
   }
   let renaming = $state<string | null>(null);
@@ -106,7 +107,7 @@
       onnotice(t("exported", { path, sounds: n }));
     } catch (e) {
       log.warn("exportar biblioteca:", e);
-      onnotice(t("packError", { error: String(e) }));
+      onnotice(t("packError", { error: errorText(e) }));
     }
   }
 
@@ -120,7 +121,7 @@
       onnotice(r.clips || r.templates || n ? t("imported", { clips: r.clips, templates: r.templates, sounds: n }) : t("importedNothing"));
     } catch (e) {
       log.warn("importar biblioteca:", e);
-      onnotice(t("packError", { error: String(e) }));
+      onnotice(t("packError", { error: errorText(e) }));
     }
   }
 
@@ -168,8 +169,9 @@
               <button class="small play" class:on={sounds.previewing === s.id} title={sounds.previewing === s.id ? t("soundStop") : t("soundPlay")} onclick={() => sounds.preview(s.id)}>
                 {sounds.previewing === s.id ? "■" : "▶"}
               </button>
-              <button class="item" title={onsounddrag ? t("soundDragHelp") : ""} onpointerdown={(e) => onsounddrag?.(s, e)} ondblclick={() => s.kind !== "builtin" && (renaming = s.id)}>
+              <button class="item" title={s.story ? t("soundFromStory") : onsounddrag ? t("soundDragHelp") : ""} onpointerdown={(e) => onsounddrag?.(s, e)} ondblclick={() => s.kind !== "builtin" && !s.story && (renaming = s.id)}>
                 <span class="icon">{SOUND_ICON[s.kind]}</span>
+                {#if s.story}<span class="icon" title={t("soundFromStory")}>📦</span>{/if}
                 {#if renaming === s.id}
                   <!-- svelte-ignore a11y_autofocus -->
                   <input value={s.name} autofocus onpointerdown={(e) => e.stopPropagation()}
@@ -182,7 +184,9 @@
                 <span class="dur">{fmtSeconds(s.seconds)}</span>
               </button>
               {#if onsoundadd}<button class="small" title={t("soundAdd")} onclick={() => onsoundadd(s)}>+</button>{/if}
-              {#if s.kind !== "builtin"}<button class="small x" title={t("soundForget")} onclick={() => sounds.remove(s.id).catch((e) => onnotice(String(e)))}>✕</button>{/if}
+              {#if s.story}
+                <button class="small" title={t("soundKeep")} onclick={() => sounds.keep(s.id).then(() => onnotice(t("soundKept"))).catch((e) => onnotice(errorText(e)))}>⤓</button>
+              {:else if s.kind !== "builtin"}<button class="small x" title={t("soundForget")} onclick={() => sounds.remove(s.id).catch((e) => onnotice(errorText(e)))}>✕</button>{/if}
             </li>
           {/each}
         {/if}

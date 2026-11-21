@@ -2560,9 +2560,22 @@ dependencies = [
  "psd",
  "resvg",
  "serde",
+ "serde_json",
  "sevenz-rust2",
  "thiserror 2.0.21",
  "unrar",
+ "zip",
+]
+
+[[package]]
+name = "imgx-story"
+version = "1.0.0"
+dependencies = [
+ "image",
+ "imgx-core",
+ "imgx-media",
+ "serde",
+ "serde_json",
  "zip",
 ]
 
@@ -2584,6 +2597,7 @@ dependencies = [
  "imgx-audio",
  "imgx-core",
  "imgx-media",
+ "imgx-story",
  "keyring",
  "libc",
  "log",

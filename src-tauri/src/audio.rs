@@ -51,12 +51,65 @@ pub struct SoundInfo {
     pub seconds: f64,
     /// Pensado para sonar en bucle (ambientes de serie).
     pub ambient: bool,
+    /// Viene dentro de la historia `.imgxstory` abierta (no está en la biblioteca).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub story: bool,
 }
 
 impl From<&SoundEntry> for SoundInfo {
     fn from(e: &SoundEntry) -> Self {
-        SoundInfo { id: e.id.clone(), name: e.name.clone(), kind: e.kind, seconds: e.seconds, ambient: false }
+        SoundInfo { id: e.id.clone(), name: e.name.clone(), kind: e.kind, seconds: e.seconds, ambient: false, story: false }
     }
+}
+
+impl SoundKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            SoundKind::Imported => "imported",
+            SoundKind::Recorded => "recorded",
+            SoundKind::Builtin => "builtin",
+            SoundKind::Generated => "generated",
+        }
+    }
+    fn parse(s: &str) -> SoundKind {
+        match s {
+            "recorded" => SoundKind::Recorded,
+            "generated" => SoundKind::Generated,
+            _ => SoundKind::Imported,
+        }
+    }
+}
+
+impl From<&imgx_story::StorySound> for SoundInfo {
+    fn from(s: &imgx_story::StorySound) -> Self {
+        SoundInfo { id: s.id.clone(), name: s.name.clone(), kind: SoundKind::parse(&s.kind), seconds: s.seconds, ambient: false, story: true }
+    }
+}
+
+/// Los sonidos de la historia `.imgxstory` abierta: se leen de dentro del zip, sin pasar a la
+/// biblioteca.
+pub(crate) struct StorySounds {
+    pub path: PathBuf,
+    pub list: Vec<imgx_story::StorySound>,
+}
+
+/// Dónde está el archivo de un sonido propio.
+pub(crate) enum SoundFile {
+    Library(PathBuf),
+    Story(PathBuf, imgx_story::StorySound),
+}
+
+impl SoundFile {
+    pub(crate) fn read(&self) -> Result<Vec<u8>, String> {
+        match self {
+            SoundFile::Library(p) => std::fs::read(p).map_err(|e| e.to_string()),
+            SoundFile::Story(path, s) => imgx_story::read_sound(path, s),
+        }
+    }
+}
+
+fn ext_of(file: &str) -> Option<&str> {
+    Path::new(file).extension().and_then(|e| e.to_str())
 }
 
 struct Cache {
@@ -112,6 +165,7 @@ pub struct Audio {
     scene_seq: AtomicU64,
     ambient_seq: AtomicU64,
     pub(crate) recorder: Mutex<Option<imgx_audio::device::Recorder>>,
+    story: Mutex<Option<StorySounds>>,
 }
 
 fn now() -> u64 {
@@ -157,13 +211,39 @@ impl Audio {
         }
         let pcm = if let Some(b) = id.strip_prefix(BUILTIN) {
             imgx_audio::synth::builtin(b).ok_or_else(|| format!("efecto de serie desconocido: {b}"))?
-        } else {
-            let file = self.with_index(app, |l| l.iter().find(|e| e.id == id).map(|e| e.file.clone()))?.ok_or_else(|| format!("el sonido {id} no está en la biblioteca"))?;
+        } else if let Some(file) = self.with_index(app, |l| l.iter().find(|e| e.id == id).map(|e| e.file.clone()))? {
             imgx_audio::decode_file(&dir(app)?.join(file)).map_err(|e| e.to_string())?
+        } else if let Some((path, s)) = self.story_sound(id) {
+            imgx_audio::decode_bytes(imgx_story::read_sound(&path, &s)?, ext_of(&s.file)).map_err(|e| e.to_string())?
+        } else {
+            return Err(format!("el sonido {id} no está en la biblioteca"));
         };
         let p = Arc::new(pcm);
         self.cache.lock().unwrap().put(id, p.clone());
         Ok(p)
+    }
+
+    /// Cambia los sonidos de la historia abierta (`None` al abrir otra cosa o cerrar).
+    pub(crate) fn set_story(&self, story: Option<StorySounds>) {
+        *self.story.lock().unwrap() = story;
+    }
+
+    fn story_sound(&self, id: &str) -> Option<(PathBuf, imgx_story::StorySound)> {
+        let g = self.story.lock().unwrap();
+        let st = g.as_ref()?;
+        st.list.iter().find(|s| s.id == id).map(|s| (st.path.clone(), s.clone()))
+    }
+
+    /// Un sonido propio (de la biblioteca o de la historia abierta) listo para meterlo en una
+    /// historia: sus datos y dónde está su archivo.
+    pub(crate) fn locate(&self, app: &AppHandle, id: &str) -> Result<Option<(imgx_story::StorySound, SoundFile)>, String> {
+        let d = dir(app)?;
+        let lib = self.with_index(app, |l| l.iter().find(|e| e.id == id).cloned())?;
+        if let Some(e) = lib.filter(|e| d.join(&e.file).exists()) {
+            let s = imgx_story::StorySound { id: e.id, name: e.name, file: e.file.clone(), kind: e.kind.as_str().into(), seconds: e.seconds };
+            return Ok(Some((s, SoundFile::Library(d.join(e.file)))));
+        }
+        Ok(self.story_sound(id).map(|(path, s)| (s.clone(), SoundFile::Story(path, s))))
     }
 
     /// La salida de sonido (la arranca la primera vez).
@@ -222,10 +302,11 @@ impl Audio {
         Ok(info)
     }
 
-    /// Un sonido de la biblioteca (si sigue en ella).
+    /// Un sonido de la biblioteca (si sigue en ella) o de la historia abierta.
     pub(crate) fn info(&self, app: &AppHandle, id: &str) -> Option<SoundInfo> {
         let d = dir(app).ok()?;
-        self.with_index(app, |l| l.iter().find(|e| e.id == id && d.join(&e.file).exists()).map(SoundInfo::from)).ok()?
+        let lib = self.with_index(app, |l| l.iter().find(|e| e.id == id && d.join(&e.file).exists()).map(SoundInfo::from)).ok()?;
+        lib.or_else(|| self.story_sound(id).map(|(_, s)| SoundInfo::from(&s)))
     }
 
     /// Los sonidos propios (importados y grabados) con la ruta de su archivo.
@@ -270,10 +351,30 @@ fn file_name(p: &Path) -> String {
 pub fn sound_list(app: AppHandle, audio: State<'_, Audio>) -> Result<Vec<SoundInfo>, String> {
     let mut out: Vec<SoundInfo> = imgx_audio::synth::BUILTINS
         .iter()
-        .map(|b| SoundInfo { id: format!("{BUILTIN}{}", b.id), name: String::new(), kind: SoundKind::Builtin, seconds: b.seconds, ambient: b.ambient })
+        .map(|b| SoundInfo { id: format!("{BUILTIN}{}", b.id), name: String::new(), kind: SoundKind::Builtin, seconds: b.seconds, ambient: b.ambient, story: false })
         .collect();
     out.extend(audio.with_index(&app, |l| l.iter().map(SoundInfo::from).collect::<Vec<_>>())?);
+    // Los de la historia abierta que no estén ya en la biblioteca.
+    let story: Vec<SoundInfo> = audio.story.lock().unwrap().as_ref().map(|st| st.list.iter().map(SoundInfo::from).collect()).unwrap_or_default();
+    for s in story {
+        if !out.iter().any(|o| o.id == s.id) {
+            out.push(s);
+        }
+    }
     Ok(out)
+}
+
+/// Copia a la biblioteca un sonido que viene en la historia abierta (para usarlo en otros cómics).
+#[tauri::command]
+pub async fn sound_keep(app: AppHandle, id: String) -> Result<SoundInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let audio = app.state::<Audio>();
+        let (path, s) = audio.story_sound(&id).ok_or("ese sonido no viene en la historia abierta")?;
+        let bytes = imgx_story::read_sound(&path, &s)?;
+        audio.import_bytes(&app, &bytes, ext_of(&s.file).unwrap_or("bin"), &s.name, SoundKind::parse(&s.kind))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Serialize)]

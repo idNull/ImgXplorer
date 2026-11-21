@@ -8,8 +8,10 @@
 
   interface Props {
     onopen: (path: string) => void;
+    /** «📦 Compartir historia…»: abrirlo y exportarlo como `.imgxstory`. */
+    onshare?: (path: string) => void;
   }
-  let { onopen }: Props = $props();
+  let { onopen, onshare }: Props = $props();
 
   type Sort = "recent" | "name" | "progress";
   let sort = $state<Sort>("recent");
@@ -156,6 +158,7 @@
     {#if !missing[menu.r.path]}
       <button onclick={() => { const p = menu!.r.path; menu = null; onopen(p); }}>{t("shelfOpen")}</button>
       <button onclick={() => folder(menu!.r)}>{t("shelfFolder")}</button>
+      {#if onshare}<button onclick={() => { const p = menu!.r.path; menu = null; onshare(p); }}>📦 {t("storyExport")}…</button>{/if}
     {/if}
     <button class="danger" onclick={() => forget(menu!.r)}>{t("shelfForget")}</button>
   </div>

@@ -12,6 +12,7 @@ import { log } from "../log";
 import { DEFAULT_LEVELS, type MixLevels } from "../audio/director";
 import type { Effect } from "../audio/effects";
 import { newTrackId, resolveTrack, withDefaults, type SoundBus, type Track } from "../audio/tracks";
+import { errorText } from "../errors";
 
 export type TransitionType = "cut" | "fade" | "slide" | "continuous-camera";
 export type Dir = "left" | "right" | "up" | "down";
@@ -646,7 +647,7 @@ export class ProjectStore {
       this.unsaved = Math.max(0, this.unsaved - n); // lo cambiado mientras se guardaba sigue pendiente
       return !this.pending;
     } catch (e) {
-      this.saveError = String(e);
+      this.saveError = errorText(e);
       log.warn("no se pudo guardar el proyecto:", e);
       return false;
     }

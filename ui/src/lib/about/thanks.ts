@@ -13,6 +13,20 @@ export interface Thanks {
 
 export const THANKS: Thanks[] = [
   {
+    name: "Aina",
+    role: {
+      es: "Mi hija, que me apoya en todos los proyectos que empiezo. ¡Gracias, Aina!",
+      en: "My daughter, who backs me in every project I start. Thank you, Aina!",
+    },
+  },
+  {
+    name: "Marilin",
+    role: {
+      es: "Mi pareja, que aunque no entiende lo que le explico, hizo el esfuerzo de ver el proyecto. 😄 ¡Gracias, Marilin!",
+      en: "My partner, who made the effort to look at the project even without understanding a word of my explanations. 😄 Thank you, Marilin!",
+    },
+  },
+  {
     name: "Alex",
     role: {
       es: "Mi mejor amigo y el primero en probarla en Linux. Me ayudó a corregir los fallos en Ubuntu y con tarjetas Nvidia. ¡Muchas gracias, Alex!",
@@ -41,22 +55,22 @@ export const HONOR: Thanks[] = [
   {
     name: "Julio César Fernández",
     role: {
-      es: "Programador y youtuber que me ha inspirado muchas veces a programar para Mac e iOS.",
-      en: "Developer and YouTuber who has inspired me many times to build apps for Mac and iOS.",
+      es: "Programador, formador y evangelista de Apple. Lo escuchas un rato y acabas abriendo Xcode aunque no tocara. Me ha inspirado muchas veces a programar para Mac e iOS. Good Apple Coding!",
+      en: "Developer, teacher and Apple evangelist. Listen to him for a while and you end up opening Xcode even when you shouldn't. He has inspired me many times to build apps for Mac and iOS. Good Apple Coding!",
     },
   },
   {
     name: "MoureDev",
     role: {
-      es: "Youtuber al que admiro por su historia y por su gran trabajo creando cursos y contenido para aprender a programar.",
-      en: "A YouTuber I admire for his story and his great work creating courses and content to learn programming.",
+      es: "Programador y divulgador de tecnología en YouTube. Sus cursos han ayudado a muchísima gente a dar sus primeros pasos programando. Lo admiro por su historia y su trabajo.",
+      en: "Developer and tech communicator on YouTube. His courses have helped a huge number of people take their first steps in programming. I admire his story and his work.",
     },
   },
   {
     name: "Midudev (Miguel Ángel Durán)",
     role: {
-      es: "Lo admiro por su gran trabajo en la programación y en la divulgación.",
-      en: "I admire him for his great work in programming and in sharing knowledge.",
+      es: "Programador web de los que ponen el listón alto y divulgador incansable. Sus directos, cursos y eventos han ayudado a miles de personas a dar el salto a la programación profesional. Lo admiro por su gran trabajo programando y, todavía más, por todo lo que enseña.",
+      en: "A web developer who sets the bar high and a tireless communicator. His streams, courses and events have helped thousands of people make the leap to professional programming. I admire his great work as a developer and, even more, everything he teaches.",
     },
   },
 ];

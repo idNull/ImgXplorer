@@ -2,6 +2,7 @@
   // Ajustes → Voces IA: la clave de ElevenLabs (al llavero del sistema), probar la conexión, el
   // modelo de fábrica y el control del gasto.
   import { prefs } from "../prefs.svelte";
+  import { errorText } from "../errors";
   import { t, label } from "../i18n.svelte";
   import { account, clearKey, keyStatus, setKey } from "./voices.svelte";
   import { MODELS, type AccountInfo } from "./types";
@@ -17,7 +18,7 @@
       status = await keyStatus();
     } catch (e) {
       status = { stored: false, backend: null };
-      msg = { text: String(e), ok: false };
+      msg = { text: errorText(e), ok: false };
     }
   }
   refresh();
@@ -34,7 +35,7 @@
       msg = { text: where === "keyring" ? t("voicesKeySavedKeyring") : t("voicesKeySavedFile"), ok: true };
       await refresh();
     } catch (e) {
-      msg = { text: String(e), ok: false };
+      msg = { text: errorText(e), ok: false };
     } finally {
       busy = false;
     }
@@ -59,7 +60,7 @@
     try {
       acct = await account();
     } catch (e) {
-      msg = { text: String(e), ok: false };
+      msg = { text: errorText(e), ok: false };
     } finally {
       busy = false;
     }

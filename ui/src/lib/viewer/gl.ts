@@ -185,10 +185,13 @@ out vec4 color;
 const float TAU = 6.2831853;
 float hash(float x) { return fract(sin(x * 12.9898 + 78.233) * 43758.5453); }
 vec3 samp(vec2 p) { return texture(u_src, vec2(p.x / u_vp.x, 1.0 - p.y / u_vp.y)).rgb; }
+// Separación de colores: el rojo y el azul se desplazan en horizontal en toda la imagen (como
+// una señal RGB desajustada) y un poco más hacia los bordes.
 vec3 chroma(vec2 q, float a) {
   if (a <= 0.0) return samp(q);
   vec2 d = (q - u_vp * 0.5) / (length(u_vp) * 0.5);
-  return vec3(samp(q + d * a).r, samp(q).g, samp(q - d * a).b);
+  vec2 o = vec2(0.7, 0.0) * a + d * a;
+  return vec3(samp(q + o).r, samp(q).g, samp(q - o).b);
 }
 float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 void main() {
@@ -207,11 +210,16 @@ void main() {
     float x = (r - u_f[13]) / max(u_f[14], 1.0);
     if (abs(x) < 1.0) p -= d / max(r, 1e-3) * sin(x * 3.14159) * (1.0 - x * x) * ss;
   }
-  // Glitch: franjas horizontales desplazadas.
+  // Glitch: franjas horizontales de alto variable, desplazadas y con los colores más separados.
   float g = u_f[17];
+  float split = u_f[16];
   if (g > 0.0) {
-    float row = floor(p.y / (u_vp.y / 24.0));
-    if (hash(row + u_f[18]) < g * 0.5) p.x += (hash(row * 1.7 + u_f[18]) - 0.5) * g * u_vp.x * 0.08;
+    float rows = 10.0 + floor(hash(u_f[18] * 0.37) * 26.0);
+    float row = floor(p.y / (u_vp.y / rows));
+    if (hash(row + u_f[18]) < g * 0.5) {
+      p.x += (hash(row * 1.7 + u_f[18]) - 0.5) * g * u_vp.x * 0.08;
+      split += g * u_vp.y * 0.012 * (0.5 + hash(row * 2.3 + u_f[18]));
+    }
   }
   // Desenfoque radial y aberración cromática.
   vec3 c;
@@ -219,10 +227,10 @@ void main() {
   if (ba > 0.0) {
     vec2 bc = vec2(u_f[19], u_f[20]);
     vec3 acc = vec3(0.0);
-    for (int i = 0; i < 12; i++) acc += chroma(bc + (p - bc) * (1.0 - ba * 0.25 * float(i) / 11.0), u_f[16]);
+    for (int i = 0; i < 12; i++) acc += chroma(bc + (p - bc) * (1.0 - ba * 0.25 * float(i) / 11.0), split);
     c = acc / 12.0;
   } else {
-    c = chroma(p, u_f[16]);
+    c = chroma(p, split);
   }
   // Líneas de concentración (1) o de velocidad (2).
   float kind = u_f[22];

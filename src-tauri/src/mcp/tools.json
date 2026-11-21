@@ -32,6 +32,91 @@
     }
   },
   {
+    "name": "create_comic",
+    "description": "Create the user's own comic: a new folder (default Pictures/imgxplorer/<title>) with the chosen images COPIED in order and numbered (0001 - name.png…); the originals are never touched. Then it is opened. Use it when the user has loose images (generated with an AI, scanned…) instead of a folder or archive. With fromOpen: true it makes an ordered copy of the open comic (any folder or archive) together with its animation. Afterwards arrange_pages can reorder, add or remove pages.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Name of the comic (also the folder name)."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Absolute paths of the images, in reading order."
+        },
+        "sortByName": {
+          "type": "boolean",
+          "description": "Sort the images by file name with numbers in natural order (2 before 10) instead of the given order."
+        },
+        "fromOpen": {
+          "type": "boolean",
+          "description": "Make the comic from the open source instead of images (its animation goes with it)."
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "With fromOpen: image indexes of the open source in the new order (default all, as they are). Images left out are not copied."
+        },
+        "dir": {
+          "type": "string",
+          "description": "Folder where the comic folder is created (default the user's comics folder)."
+        }
+      },
+      "required": [
+        "title"
+      ]
+    }
+  },
+  {
+    "name": "arrange_pages",
+    "description": "Reorder, add or remove pages of the open comic. Only for the user's own comics (made with create_comic or the app's Create comic); for anything else use create_comic with fromOpen. Files are renamed so the order sticks; the animation, effects and bookmarks follow their pages; removed pages go to the comic's hidden .quitadas folder (not deleted). The comic is reopened: image indexes change, so call list_images again.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Every current image index that stays, in the new order (default: current order without the removed ones)."
+        },
+        "add": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Absolute path of an image to copy in."
+              },
+              "after": {
+                "type": "integer",
+                "description": "Current index of the image it goes after (-1 = at the start; default at the end)."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "description": "Images from outside to copy into the comic."
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Current image indexes to take out of the comic."
+        }
+      }
+    }
+  },
+  {
     "name": "list_images",
     "description": "Images of the open source in order, with their index (used by every other tool), name, and what animation and sound each one has.",
     "inputSchema": {
@@ -1739,6 +1824,50 @@
         "sound": {
           "type": "boolean",
           "description": "Include sound (default true)."
+        },
+        "overwrite": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "export_story",
+    "description": "Save the open comic as a shareable .imgxstory story (runs in the background; poll export_status): one file with the pages, the animation, effects, texts and every sound and voice it uses. Whoever receives it opens it in imgxplorer (open_source) to watch or edit it. variant 'desktop' keeps the original page quality; 'mobile' shrinks pages to 2560 px at most (same format, much smaller). No ffmpeg needed. Does not overwrite an existing file unless overwrite=true.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Output path (.imgxstory). Default: next to the comic."
+        },
+        "variant": {
+          "type": "string",
+          "enum": [
+            "desktop",
+            "mobile"
+          ],
+          "description": "desktop (original quality, default) or mobile (smaller pages)."
+        },
+        "from": {
+          "type": "integer",
+          "description": "First image (default 0)."
+        },
+        "to": {
+          "type": "integer",
+          "description": "Last image (default the last)."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title shown when it is opened (default: the comic's name)."
+        },
+        "credits": {
+          "type": "string",
+          "description": "Optional free text: who made it, voices, music… Ask the user; never invent names."
+        },
+        "keepTakes": {
+          "type": "boolean",
+          "description": "Also include previous voice takes (default false: only the take that plays)."
         },
         "overwrite": {
           "type": "boolean"

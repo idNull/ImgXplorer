@@ -95,9 +95,19 @@ pub fn probe_seconds(path: &Path) -> Option<f64> {
 /// Decodifica un archivo completo.
 pub fn decode_file(path: &Path) -> Result<Pcm, AudioError> {
     let file = File::open(path)?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let ext = path.extension().and_then(|e| e.to_str());
+    decode_stream(MediaSourceStream::new(Box::new(file), Default::default()), ext, &path.display().to_string())
+}
+
+/// Decodifica un sonido que ya está en memoria (p. ej. dentro de una historia `.imgxstory`).
+/// `ext` es la extensión de su archivo, como pista del formato.
+pub fn decode_bytes(bytes: Vec<u8>, ext: Option<&str>) -> Result<Pcm, AudioError> {
+    decode_stream(MediaSourceStream::new(Box::new(std::io::Cursor::new(bytes)), Default::default()), ext, "memoria")
+}
+
+fn decode_stream(mss: MediaSourceStream, ext: Option<&str>, what: &str) -> Result<Pcm, AudioError> {
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = ext {
         hint.with_extension(&ext.to_lowercase());
     }
     let mut format = symphonia::default::get_probe()
@@ -144,7 +154,7 @@ pub fn decode_file(path: &Path) -> Result<Pcm, AudioError> {
                 audio.copy_to_slice_interleaved(&mut buf);
                 all.extend_from_slice(&buf);
             }
-            Err(SymError::DecodeError(e)) => log::debug!("paquete dañado en {}: {e}", path.display()),
+            Err(SymError::DecodeError(e)) => log::debug!("paquete dañado en {what}: {e}"),
             Err(e) => return Err(AudioError::Decode(e.to_string())),
         }
     }
@@ -157,6 +167,17 @@ pub fn decode_file(path: &Path) -> Result<Pcm, AudioError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desde_memoria_igual_que_desde_archivo() {
+        let path = std::env::temp_dir().join(format!("imgx-audio-mem-{}.wav", std::process::id()));
+        crate::wav::write(&path, &crate::synth::sine(330.0, 0.2, 22050)).unwrap();
+        let from_file = decode_file(&path).unwrap();
+        let from_mem = decode_bytes(std::fs::read(&path).unwrap(), Some("wav")).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(from_file, from_mem);
+        assert!(decode_bytes(b"no es audio".to_vec(), None).is_err());
+    }
 
     #[test]
     fn mono_a_estereo_y_picos() {

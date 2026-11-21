@@ -55,6 +55,7 @@ package() {
   cd "$_name"
   install -Dm755 target/release/imgxplorer "$pkgdir/usr/bin/imgxplorer"
   install -Dm644 packaging/linux/imgxplorer.desktop "$pkgdir/usr/share/applications/imgxplorer.desktop"
+  install -Dm644 packaging/linux/imgxplorer-mime.xml "$pkgdir/usr/share/mime/packages/imgxplorer.xml"
   local s
   for s in 32 64 128; do
     install -Dm644 "src-tauri/icons/${s}x${s}.png" "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/imgxplorer.png"

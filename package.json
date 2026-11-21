@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "vite --config ui/vite.config.ts",
     "build": "vite build --config ui/vite.config.ts",
-    "check": "svelte-check --tsconfig ui/tsconfig.json",
+    "check": "svelte-check --tsconfig ui/tsconfig.json && node ui/scripts/check-i18n.mjs",
+    "check:i18n": "node ui/scripts/check-i18n.mjs",
     "wasm": "wasm-pack build crates/imgx-wasm --target web --out-dir ../../ui/src/lib/wasm/pkg --out-name imgx",
     "tauri": "tauri",
     "third-party": "node packaging/licenses.mjs",
+    "icons": "python3 packaging/iconos.py",
     "dist": "bash packaging/dist.sh all",
     "dist:linux": "bash packaging/dist.sh linux",
     "dist:mac": "bash packaging/dist.sh mac"

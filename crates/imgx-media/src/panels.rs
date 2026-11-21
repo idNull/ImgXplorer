@@ -97,6 +97,12 @@ pub fn content_box(name: &str, bytes: &[u8]) -> Result<Option<PanelRect>, MediaE
     Ok(content(&decode::preview(name, bytes, ANALYSIS_SIDE)?.to_luma8()))
 }
 
+/// Viñetas y recuadro con contenido con una sola decodificación (al exportar una historia).
+pub fn analyze(name: &str, bytes: &[u8]) -> Result<(Vec<PanelRect>, Option<PanelRect>), MediaError> {
+    let gray = decode::preview(name, bytes, ANALYSIS_SIDE)?.to_luma8();
+    Ok((detect(&gray), content(&gray)))
+}
+
 /// Margen que se deja alrededor del contenido (fracción del lado).
 const CONTENT_PAD: f64 = 0.006;
 

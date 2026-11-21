@@ -1,6 +1,7 @@
 <script lang="ts">
   // Ajustes → IA: permitir que una IA maneje la app y conectarla con Claude Code, Codex o Gemini.
   import { invoke } from "@tauri-apps/api/core";
+  import { errorText } from "../errors";
   import { prefs } from "../prefs.svelte";
   import { t } from "../i18n.svelte";
   import { log } from "../log";
@@ -47,7 +48,7 @@
       message = { id: c.id, text, ok: true };
       if (action === "connect" && !prefs.settings.aiControl) setEnabled(true);
     } catch (e) {
-      message = { id: c.id, text: String(e), ok: false };
+      message = { id: c.id, text: errorText(e), ok: false };
     } finally {
       busy = null;
       refresh();

@@ -67,6 +67,15 @@ pub fn load(app: &AppHandle, path: &Path, kind: SourceKind, fingerprint: &str) -
     Loaded::default()
 }
 
+/// En una historia `.imgxstory`: si no hay cambios propios guardados al lado (ni un archivo
+/// estropeado, que no se debe pisar), se usa el proyecto que viene dentro.
+pub fn or_embedded(loaded: Loaded, embedded: Option<&Project>) -> Loaded {
+    match embedded {
+        Some(p) if loaded.json.is_none() && loaded.error.is_none() => Loaded { json: Some(p.to_json()), path: None, error: None },
+        _ => loaded,
+    }
+}
+
 /// Escribe en un temporal y lo renombra: un corte a medias nunca deja el archivo roto.
 pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
@@ -111,6 +120,21 @@ mod tests {
     fn rutas() {
         assert_eq!(sidecar(Path::new("/c/Tomo 1.cbz"), SourceKind::Archive), Path::new("/c/Tomo 1.cbz.imgx"));
         assert_eq!(sidecar(Path::new("/fotos"), SourceKind::Folder), Path::new("/fotos/.imgxplorer.imgx"));
+    }
+
+    #[test]
+    fn proyecto_de_dentro_de_la_historia() {
+        let inner = Project::new(imgx_core::schema::Source { kind: imgx_core::schema::SourceKind::Archive, name: "Dentro".into(), fingerprint: None });
+        let own = Loaded { json: Some("{}".into()), path: Some("/x.imgxstory.imgx".into()), error: None };
+        // Los cambios propios mandan.
+        assert_eq!(or_embedded(own, Some(&inner)).json.as_deref(), Some("{}"));
+        // Sin cambios: el de dentro.
+        assert!(or_embedded(Loaded::default(), Some(&inner)).json.unwrap().contains("Dentro"));
+        // Un archivo propio estropeado no se tapa (la interfaz no debe guardar encima).
+        let broken = Loaded { json: None, path: Some("/x".into()), error: Some("versión nueva".into()) };
+        assert!(or_embedded(broken, Some(&inner)).json.is_none());
+        // Fuera de una historia no cambia nada.
+        assert!(or_embedded(Loaded::default(), None).json.is_none());
     }
 
     #[test]

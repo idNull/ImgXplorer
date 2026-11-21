@@ -55,6 +55,26 @@
     "fileAssociations": [
       {
         "ext": [
+          "imgxstory"
+        ],
+        "name": "imgxplorer story",
+        "description": "Historia de imgxplorer: páginas, animación y sonidos",
+        "mimeType": "application/x-imgxstory",
+        "role": "Editor",
+        "rank": "Owner",
+        "contentTypes": [
+          "com.imgxplorer.story"
+        ],
+        "exportedType": {
+          "identifier": "com.imgxplorer.story",
+          "conformsTo": [
+            "public.zip-archive",
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
           "cbz"
         ],
         "name": "Comic Book (ZIP)",

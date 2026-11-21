@@ -1,0 +1,14 @@
+[package]
+name = "imgx-story"
+description = "Historias .imgxstory: un zip con las páginas, la animación y los sonidos, para compartir (sin Tauri: lo podrá usar también el reproductor móvil)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+imgx-core.workspace = true
+imgx-media.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zip = { version = "9", default-features = false, features = ["deflate"] }

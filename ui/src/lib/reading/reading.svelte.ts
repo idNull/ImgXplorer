@@ -88,6 +88,13 @@ class ReadingPrefs {
     this.#save();
   }
 
+  /** Las páginas de un cómic cambiaron de nombre (al ordenarlo): los marcadores las siguen. */
+  renameEntries(path: string, map: Record<string, string>) {
+    if (!this.has(path)) return;
+    const marks = this.of(path).marks;
+    if (marks.some((m) => m in map)) this.set(path, { marks: marks.map((m) => map[m] ?? m) });
+  }
+
   /** Marca o desmarca una página. Devuelve si queda marcada. */
   toggleMark(path: string, entry: string): boolean {
     const marks = this.of(path).marks;

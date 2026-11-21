@@ -25,7 +25,8 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | La app aparece en el menú o en Aplicaciones, con su icono | ☐ | ☐ | ☐ |
 | Abrir un `.cbz` con doble clic en el gestor de archivos abre imgxplorer | ☐ | ☐ | ☐ |
 | `imgxplorer <carpeta|cómic|imagen>` desde la terminal | ☐ | ☐ | ☐ |
-| La primera vez sale la visita guiada; «Saltar» la cierra y no vuelve a salir | ☐ | ☐ | ☐ |
+| La primera vez sale la visita guiada (7 pasos, cada uno señala su botón); «Saltar» la cierra y no vuelve a salir | ☐ | ☐ | ☐ |
+| Con la visita de una versión anterior ya vista: sale una vez el aviso de novedades | ☐ | ☐ | ☐ |
 
 ## Abrir y leer
 
@@ -41,6 +42,18 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | Retoma la página al volver a abrir un cómic | ☐ | ☐ | ☐ |
 | Estantería con portadas, «Continuar leyendo», buscador e interruptor a lista | ☐ | ☐ | ☐ |
 | Leer 300 páginas seguidas: la app no se vuelve lenta | ☐ | ☐ | ☐ |
+
+## Tus propios cómics
+
+| Comprobación | CachyOS | Ubuntu Nvidia | Mac M1 |
+|---|---|---|---|
+| «📂 Abrir ▾» → Crear cómic: elegir varias imágenes (Ctrl/Mayús+clic), nombre y «Crear»; se abre y sale en la estantería | ☐ | ☐ | ☐ |
+| La carpeta está en Imágenes/imgxplorer (o Pictures) con `0001 - nombre…` y las originales siguen en su sitio | ☐ | ☐ | ☐ |
+| Arrastrar una miniatura de la tira a otro sitio: se guarda al soltar y «Deshacer» lo devuelve | ☐ | ☐ | ☐ |
+| Mesa de luz ▦: añadir imágenes delante y detrás, ordenar por nombre, quitar, deshacer y «Guardar orden» | ☐ | ☐ | ☐ |
+| Un efecto y un marcador 🔖 puestos antes de ordenar siguen en su página | ☐ | ☐ | ☐ |
+| Soltar varias imágenes en la ventana pregunta si crear un cómic; con un cómic propio abierto, si añadirlas | ☐ | ☐ | ☐ |
+| En un `.cbz`: la mesa de luz crea una copia ordenada y el `.cbz` no cambia | ☐ | ☐ | ☐ |
 
 ## Ajustes de imagen y lectura
 
@@ -65,6 +78,7 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | Pantalla completa (`F11`): las barras se esconden y vuelven al acercar el ratón; `Esc` sale | ☐ | ☐ | ☐ |
 | Ventana estrecha: los botones pasan al menú «⋯» | ☐ | ☐ | ☐ |
 | Ajustes: idioma inglés y español, fondo, atajos cambiados | ☐ | ☐ | ☐ |
+| Cambiar el idioma con un diálogo abierto (mesa de luz, exportar): todo cambia al momento, sin textos en el otro idioma | ☐ | ☐ | ☐ |
 
 ## Modo Acción y editor
 
@@ -86,6 +100,8 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | Ambiente de varias imágenes; quitarlo solo de una; mezclador y efectos de audio | ☐ | ☐ | ☐ |
 | Situación «Explosión» con su sonido y su onomatopeya | ☐ | ☐ | ☐ |
 | Subtítulos y cartelas de narración | ☐ | ☐ | ☐ |
+| Texto: «✓ Aplicar» y `Ctrl+Intro`; al cambiar a Cartel o Narración el texto se queda y cambian tamaño y color | ☐ | ☐ | ☐ |
+| Aberración «Suave» y «Glitch»: se ve en toda la imagen, también en el centro | ☐ | ☐ | ☐ |
 
 ## Voces con IA (ElevenLabs)
 
@@ -107,6 +123,7 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | Pedirle que anime una página y ponga un ambiente: se ve en directo y se deshace | ☐ | ☐ | ☐ |
 | Pedirle voces: enseña el pedido y espera a «Generar» | ☐ | ☐ | ☐ |
 | «Detener la IA» corta la conexión | ☐ | ☐ | ☐ |
+| Pedirle que cree un cómic con unas imágenes sueltas y que mueva una página | ☐ | ☐ | ☐ |
 
 ## Exportar
 
@@ -116,6 +133,9 @@ Si algo falla, el registro está en `~/.local/share/com.imgxplorer.app/logs/` (L
 | WebM, GIF y «Para redes (9:16)» | ☐ | ☐ | ☐ |
 | `.srt` junto al vídeo cuando hay subtítulos | ☐ | ☐ | ☐ |
 | Cancelar a medias borra el archivo incompleto | ☐ | ☐ | ☐ |
+| 📦 Historia (escritorio y móvil): se crea, y al abrirla en otro equipo se ve y suena igual | ☐ | ☐ | ☐ |
+| Abrir una historia con doble clic (asociación de `.imgxstory`) | ☐ | ☐ | ☐ |
+| Retocar una historia abierta: el cambio va a `<historia>.imgxstory.imgx` y la historia no cambia | ☐ | ☐ | ☐ |
 
 ## Desinstalar
 

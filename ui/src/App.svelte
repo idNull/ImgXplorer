@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
+  import { errorText } from "./lib/errors";
   import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { openFile, openFolder, saveFile, fileDialog, dirOf } from "./lib/files/dialog.svelte";
+  import { openFile, openFiles, openFolder, saveFile, fileDialog, dirOf } from "./lib/files/dialog.svelte";
+  import { ARCHIVES, IMAGES, isImagePath } from "./lib/files/formats";
   import FileDialog from "./lib/files/FileDialog.svelte";
   import ExportDialog from "./lib/export/ExportDialog.svelte";
   import type { ExportSpec } from "./lib/export/exporter";
@@ -32,7 +34,7 @@
   import type { ViewerStatus } from "./lib/viewer/types";
   import type { PictureRef } from "./lib/viewer/picture";
   import { coreVersion, wasm, type Size } from "./lib/core";
-  import { label, t } from "./lib/i18n.svelte";
+  import { currentLang, label, t } from "./lib/i18n.svelte";
   import { log } from "./lib/log";
   import { startMcp } from "./lib/mcp/host.svelte";
   import McpBadge from "./lib/mcp/McpBadge.svelte";
@@ -53,8 +55,10 @@
   import KeysHelp from "./lib/help/KeysHelp.svelte";
   import Tour from "./lib/help/Tour.svelte";
   import OrderDialog from "./lib/voices/OrderDialog.svelte";
+  import ComicDialog from "./lib/comic/ComicDialog.svelte";
+  import type { ArrangePage } from "./lib/comic/comic.svelte";
   import { order } from "./lib/voices/voices.svelte";
-  import { tour } from "./lib/help/tourState.svelte";
+  import { tour, TOUR_VERSION } from "./lib/help/tourState.svelte";
 
   interface DiagnosticsInfo {
     logDir: string | null;
@@ -74,12 +78,12 @@
     entries: { name: string; size: number; decoded: boolean }[];
     fingerprint: string;
     project: LoadedProject;
+    /** Es una historia `.imgxstory`: su manifiesto. */
+    story?: { title: string; credits?: string; variant: "desktop" | "mobile"; reading: Partial<Reading> };
+    /** Es un cómic propio (una carpeta que crea y ordena imgxplorer). */
+    comic?: { title: string };
   }
 
-  const ARCHIVES = ["zip", "cbz", "7z", "cb7", "rar", "cbr"];
-  const IMAGES = ["jpg", "jpeg", "jfif", "png", "apng", "gif", "webp", "bmp", "avif", "svg", "svgz", "heic", "heif", "hif", "jxl", "psd",
-    "tif", "tiff", "tga", "ico", "qoi", "exr", "hdr", "pnm", "pbm", "pgm", "ppm", "pam", "dds",
-    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "orf", "rw2", "raf", "pef", "srw", "x3f", "3fr", "iiq", "mos", "erf", "kdc", "dcr", "mrw", "rwl", "raw"];
 
   let source = $state<SourceInfo | null>(null);
   let index = $state(0);
@@ -188,7 +192,11 @@
     gotoOpen = false;
     store.unload();
     clearSolo();
-    invoke("close_source").catch((e) => log.warn("cerrar fuente:", e));
+    invoke("close_source")
+      .then(() => {
+        if (sounds.list.some((x) => x.story)) void sounds.load();
+      })
+      .catch((e) => log.warn("cerrar fuente:", e));
     getCurrentWindow().setTitle("imgxplorer").catch((e) => log.warn("título:", e));
   }
 
@@ -217,6 +225,17 @@
       }
       index = Math.max(0, Math.min(start, s.entries.length - 1));
       openError = null;
+      if (s.story) {
+        // La primera vez, el modo de lectura con el que se pensó la historia.
+        if (!reading.has(s.path)) {
+          const r = s.story.reading;
+          reading.set(s.path, { fit: r.fit ?? "window", crop: !!r.crop, double: !!r.double, cover: r.cover !== false, strip: !!r.strip, rtl: !!r.rtl, asked: true });
+        }
+        const credits = s.story.credits?.trim();
+        say(credits ? t("storyOpenedCredits", { title: s.story.title || s.title, credits: credits.length > 120 ? `${credits.slice(0, 120)}…` : credits }) : t("storyOpened", { title: s.story.title || s.title }));
+      }
+      // Los sonidos que trae una historia (o los de la anterior, que ya no están).
+      if (s.story || sounds.list.some((x) => x.story)) void sounds.load();
       getCurrentWindow().setTitle(`${s.title} — imgxplorer`).catch((e) => log.warn("título:", e));
     } catch (e) {
       openError = String(e);
@@ -245,7 +264,7 @@
       say(r.errors.length ? t("soundImportError", { error: r.errors.join(" · ") }) : t("soundsImported", { n: r.added.length }));
     } catch (e) {
       log.warn("importar sonidos:", e);
-      say(t("soundImportError", { error: String(e) }));
+      say(t("soundImportError", { error: errorText(e) }));
     }
   }
 
@@ -263,10 +282,101 @@
         snd += r.sounds.length;
       } catch (e) {
         log.warn("importar paquete:", p, e);
-        return say(t("packError", { error: String(e) }));
+        return say(t("packError", { error: errorText(e) }));
       }
     }
     say(clips || templates || snd ? t("imported", { clips, templates, sounds: snd }) : t("importedNothing"));
+  }
+
+  // Cómics propios: crear uno con imágenes sueltas y ordenar sus páginas (mesa de luz).
+  let comicDialog = $state<{ mode: "create" | "arrange" | "copy"; files?: string[] } | null>(null);
+  let comicDlg = $state<ComicDialog>();
+  let openMenu = $state(false);
+
+  function createComic(files: string[] = []) {
+    openMenu = false;
+    comicDialog = { mode: "create", files };
+  }
+  function organize() {
+    openMenu = false;
+    if (!source?.entries.length) return createComic();
+    comicDialog = { mode: source.comic ? "arrange" : "copy" };
+  }
+
+  // Aviso con botones sobre el visor (deshacer, crear un cómic con lo soltado…).
+  let notice = $state<{ text: string; actions: { label: string; run: () => void; primary?: boolean }[] } | null>(null);
+  let noticeTimer = 0;
+  function notify(text: string, actions: { label: string; run: () => void; primary?: boolean }[], ms = 10000) {
+    notice = { text, actions };
+    clearTimeout(noticeTimer);
+    noticeTimer = window.setTimeout(() => (notice = null), ms);
+  }
+  function runNotice(run: () => void) {
+    notice = null;
+    clearTimeout(noticeTimer);
+    run();
+  }
+
+  async function openComic(path: string) {
+    if (!(await openPath(path))) say(t("comicCreated", { title: source?.title ?? "" }));
+  }
+
+  /**
+   * Ordena el cómic propio abierto: guarda la animación, ordena las páginas y lo vuelve a abrir
+   * en la misma página. Devuelve el nombre nuevo de cada página (o null si no se pudo).
+   */
+  async function arrangeComic(pages: ArrangePage[], removed: string[]): Promise<Record<string, string> | null> {
+    const s = source;
+    if (!s?.comic) return null;
+    if (!(await readyToLeave("open"))) return null;
+    const keep = s.entries[index]?.name;
+    try {
+      const map = await invoke<Record<string, string>>("comic_arrange", { generation: s.generation, pages, removed });
+      reading.renameEntries(s.path, map);
+      await openPath(s.path);
+      const target = keep ? (map[keep] ?? keep) : null;
+      const i = target && source ? source.entries.findIndex((e) => e.name === target) : -1;
+      if (i >= 0) index = i;
+      return map;
+    } catch (e) {
+      log.warn("ordenar cómic:", e);
+      say(t("comicArrangeError", { error: errorText(e) }));
+      return null;
+    }
+  }
+
+  /** Miniatura arrastrada a otro sitio de la tira. */
+  async function stripMove(from: number, to: number) {
+    const s = source;
+    if (!s) return;
+    if (!s.comic) return notify(t("comicNotOwn"), [{ label: t("comicNotOwnGo"), primary: true, run: organize }]);
+    const names = s.entries.map((e) => e.name);
+    const order = names.filter((_, i) => i !== from);
+    order.splice(to > from ? to - 1 : to, 0, names[from]);
+    const map = await arrangeComic(order.map((entry) => ({ entry })), []);
+    if (map) notify(t("comicSaved"), [{ label: `↶ ${t("comicUndo")}`, run: () => void arrangeComic(names.map((n) => ({ entry: map[n] ?? n })), []) }]);
+  }
+
+  /** Imágenes soltadas sobre la ventana. */
+  function droppedImages(paths: string[]) {
+    const s = source;
+    if (s?.comic) {
+      return notify(t("comicDropAdd", { n: paths.length, title: s.title }), [
+        { label: t("comicDropAddGo"), primary: true, run: () => {
+          const pages: ArrangePage[] = s.entries.map((e) => ({ entry: e.name }));
+          pages.splice(index + 1, 0, ...paths.map((path) => ({ path })));
+          void arrangeComic(pages, []);
+        } },
+        { label: t("comicDropOpenGo"), run: () => void openPath(paths[0]) },
+      ]);
+    }
+    if (paths.length > 1) {
+      return notify(t("comicDropMany", { n: paths.length }), [
+        { label: t("comicDropCreate"), primary: true, run: () => createComic(paths) },
+        { label: t("comicDropOpen"), run: () => void openPath(paths[0]) },
+      ]);
+    }
+    void openPath(paths[0]);
   }
 
   async function pickFolder() {
@@ -314,7 +424,7 @@
       say(t(selection ? "copiedZone" : "copiedImage"));
     } catch (e) {
       log.warn("copiar imagen:", e);
-      say(t("copyError", { error: String(e) }));
+      say(t("copyError", { error: errorText(e) }));
     }
   }
 
@@ -348,12 +458,12 @@
       say(t("savedImage", { path }));
     } catch (e) {
       log.warn("guardar imagen:", e);
-      say(t("saveImgError", { error: String(e) }));
+      say(t("saveImgError", { error: errorText(e) }));
     }
   }
 
   function reveal() {
-    if (source?.entries.length) invoke("reveal_entry", { generation: source.generation, index }).catch((e) => say(String(e)));
+    if (source?.entries.length) invoke("reveal_entry", { generation: source.generation, index }).catch((e) => say(errorText(e)));
   }
 
   /** Mover a la papelera del sistema (solo en carpetas), preguntando antes. */
@@ -380,7 +490,7 @@
       say(t("trashed", { name }));
     } catch (e) {
       log.warn("papelera:", e);
-      say(t("trashError", { error: String(e) }));
+      say(t("trashError", { error: errorText(e) }));
     }
   }
 
@@ -506,11 +616,16 @@
   }
 
   let exportOpen = $state(false);
-  function openExport() {
+  /** Pestaña de Exportar: vídeo o historia (.imgxstory). */
+  let exportMode = $state<"video" | "story">("video");
+  function openExport(mode: "video" | "story" = "video") {
     if (!source?.entries.length) return;
     if (playerInfo) viewer.stop();
+    exportMode = mode;
     exportOpen = true;
   }
+  /** Proyecto actual en JSON (con lo que aún no se haya guardado), para la historia. */
+  const projectJson = () => JSON.stringify($state.snapshot(store.data));
 
   function togglePlay() {
     if (playerInfo) viewer.stop();
@@ -908,6 +1023,8 @@
       ["open", [
         { label: `📄 ${t("openFile")}`, key: k("openFile"), run: pickFile },
         { label: `📁 ${t("open")}`, key: k("openFolder"), run: pickFolder },
+        { label: `➕ ${t("comicCreateMenu")}`, key: k("createComic"), run: () => createComic() },
+        { label: `▦ ${t("comicOrganize")}`, key: k("organize"), disabled: !source?.entries.length, run: organize },
       ]],
       ["zoom", [
         { label: `＋ ${label("kv.zoomIn")}`, key: k("zoomIn"), disabled: !source, run: zoomIn },
@@ -920,15 +1037,30 @@
       ["fullscreen", [{ label: `⛶ ${t("fullscreen")}${fullscreen ? " ✓" : ""}`, key: k("fullscreen"), run: toggleFullscreen }]],
       ["action", [{ label: `🎬 ${t("action")}${actionOpen ? " ✓" : ""}`, key: k("action"), disabled: !source, run: () => (actionOpen = !actionOpen) }]],
       ["editor", [{ label: `✎ ${t("editor")}${editorOpen ? " ✓" : ""}`, key: k("editor"), disabled: !source, run: () => (editorOpen = !editorOpen) }]],
-      ["export", [{ label: `🎞 ${t("exportVideo")}`, key: k("exportVideo"), disabled: !source?.entries.length, run: openExport }]],
+      ["export", [
+        { label: `🎞 ${t("exportVideo")}`, key: k("exportVideo"), disabled: !source?.entries.length, run: () => openExport("video") },
+        { label: `📦 ${t("storyExport")}`, key: k("exportStory"), disabled: !source?.entries.length, run: () => openExport("story") },
+      ]],
     ];
     // En el orden de la cabecera (de izquierda a derecha).
     return all.filter(([f]) => !shows(f)).flatMap(([, items]) => items);
   });
 
-  // Primer uso guiado: sale sola una vez, cuando ya se saben los ajustes.
+  // Primer uso guiado: sale sola una vez, cuando ya se saben los ajustes. Quien vio una visita
+  // anterior recibe un aviso de novedades (una vez).
   $effect(() => {
-    if (prefs.loaded && !prefs.settings.tourDone && tour.step < 0) untrack(() => tour.start());
+    if (!prefs.loaded || tour.step >= 0) return;
+    const v = prefs.settings.tourVersion;
+    untrack(() => {
+      if (v === 0 && !prefs.settings.tourDone) tour.start();
+      else if (v < TOUR_VERSION) {
+        tour.seen();
+        notify(t("tourNews"), [
+          { label: `🧭 ${t("tourNewsGo")}`, primary: true, run: () => tour.start() },
+          { label: t("tourNewsLater"), run: () => {} },
+        ], 20000);
+      }
+    });
   });
   $effect(() => {
     if (tour.step >= 0) untrack(() => {
@@ -938,7 +1070,7 @@
   });
 
   function onKey(e: KeyboardEvent) {
-    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone || helpOpen || tour.step >= 0 || order.rows) return; // los diálogos gestionan sus teclas
+    if (settingsOpen || fileDialog.request || exportOpen || confirmSpec || saveZone || helpOpen || tour.step >= 0 || order.rows || comicDialog) return; // los diálogos gestionan sus teclas
     if ((viewMenu || moreMenu) && e.key === "Escape") return; // lo cierra el propio menú
     const tgt = e.target;
     // En los campos de texto las teclas son para escribir. En listas, deslizadores y casillas
@@ -951,6 +1083,10 @@
     if ((tgt instanceof HTMLInputElement || tgt instanceof HTMLSelectElement) && !e.ctrlKey && !e.metaKey && !editorRemove) return;
     if (recentsOpen && e.key === "Escape") {
       recentsOpen = false;
+      return e.preventDefault();
+    }
+    if (openMenu && e.key === "Escape") {
+      openMenu = false;
       return e.preventDefault();
     }
     if (adjustOpen && e.key === "Escape" && !editorShown) {
@@ -1021,10 +1157,13 @@
       case "play": startPlay(); break;
       case "openFile": pickFile(); break;
       case "openFolder": pickFolder(); break;
+      case "createComic": createComic(); break;
+      case "organize": organize(); break;
       case "recents": recentsOpen = !recentsOpen; break;
       case "settings": settingsTab = "general"; settingsOpen = true; break;
       case "editor": if (source) editorOpen = !editorOpen; break;
-      case "exportVideo": openExport(); break;
+      case "exportVideo": openExport("video"); break;
+      case "exportStory": openExport("story"); break;
       case "closeSource": closeSource(); break;
       case "mute": toggleMute(); break;
       case "undo": store.undo(); break;
@@ -1076,6 +1215,12 @@
     openPath(path);
   }
 
+  /** Desde la estantería: abre el cómic y luego «Compartir historia». */
+  async function shareRecent(path: string) {
+    recentsOpen = false;
+    if ((await openPath(path)) === null) openExport("story");
+  }
+
   function dismissCrash() {
     if (diag) diag.previousCrash = null;
     invoke("dismiss_crash_notice");
@@ -1099,6 +1244,7 @@
       index: () => index,
       store,
       open: openPath,
+      arrange: arrangeComic,
       go,
       refAt: (i) => ref(source!, i),
       detectedPanels: panelsFor,
@@ -1137,8 +1283,11 @@
       if (ev.payload.type !== "drop" || !ev.payload.paths.length) return;
       const packs = ev.payload.paths.filter((p) => p.toLowerCase().endsWith(".imgxpack"));
       const audio = ev.payload.paths.filter(isAudioPath);
-      if (packs.length) importPacks(packs);
+      const images = ev.payload.paths.filter(isImagePath);
+      if (comicDialog) comicDlg?.addFiles(images);
+      else if (packs.length) importPacks(packs);
       else if (audio.length) importSounds(audio);
+      else if (images.length && images.length === ev.payload.paths.length) droppedImages(images);
       else openPath(ev.payload.paths[0]);
     });
     return () => {
@@ -1158,8 +1307,19 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <header bind:this={headerEl} onpointerenter={() => (overBars = true)} onpointerleave={() => { overBars = false; if (clean) wakeBars(); }}>
     {#if shows("open")}
-      <button data-tour="open" onclick={pickFile} title="{t('openFile')}{kt('openFile')}">{t("openFile")}</button>
-      <button data-tour="open" onclick={pickFolder} title="{t('open')}{kt('openFolder')}">{t("open")}</button>
+      <div class="menu">
+        <button data-tour="open" onclick={() => (openMenu = !openMenu)} class:on={openMenu} title={t("openMenuHelp")} aria-haspopup="menu">📂 {t("openMenu")} ▾</button>
+        {#if openMenu}
+          <div class="backdrop" role="presentation" onclick={() => (openMenu = false)}></div>
+          <div class="popup open-popup" role="menu">
+            <button role="menuitem" onclick={() => { openMenu = false; pickFile(); }}><span>📄 {t("openFile")}</span><kbd>{kt("openFile").trim().replace(/^\(|\)$/g, "")}</kbd></button>
+            <button role="menuitem" onclick={() => { openMenu = false; pickFolder(); }}><span>📁 {t("open")}</span><kbd>{kt("openFolder").trim().replace(/^\(|\)$/g, "")}</kbd></button>
+            <hr />
+            <button role="menuitem" class="accent" data-tour="create" onclick={() => createComic()}><span>➕ {t("comicCreateMenu")}</span><kbd>{kt("createComic").trim().replace(/^\(|\)$/g, "")}</kbd></button>
+            <button role="menuitem" disabled={!source?.entries.length} onclick={organize}><span>▦ {t("comicOrganize")}</span><kbd>{kt("organize").trim().replace(/^\(|\)$/g, "")}</kbd></button>
+          </div>
+        {/if}
+      </div>
     {/if}
     <div class="menu">
       <button data-tour="open" onclick={() => (recentsOpen = !recentsOpen)} class:on={recentsOpen} title="{t('recents')}{kt('recents')}">🕘 ▾</button>
@@ -1175,9 +1335,9 @@
       <button class="close-src" onclick={closeSource} disabled={opening} title="{t('closeSource')}{kt('closeSource')}">✕</button>
     {/if}
     <span class="spacer"></span>
-    <button onclick={() => pageStep(-1)} disabled={!source || spreadNow[0] === 0} title="{t('prev')}{kt('prev')}">◀</button>
-    <span class="counter">{source && source.entries.length ? `${spreadNow.map((i) => i + 1).join("–")} / ${source.entries.length}` : "–"}</span>
-    <button onclick={() => pageStep(1)} disabled={!source || spreadNow[spreadNow.length - 1] >= source.entries.length - 1} title="{t('next')}{kt('next')}">▶</button>
+    <button data-tour="nav" onclick={() => pageStep(-1)} disabled={!source || spreadNow[0] === 0} title="{t('prev')}{kt('prev')}">◀</button>
+    <span class="counter" data-tour="nav">{source && source.entries.length ? `${spreadNow.map((i) => i + 1).join("–")} / ${source.entries.length}` : "–"}</span>
+    <button onclick={() => pageStep(1)} disabled={!source || spreadNow[spreadNow.length - 1] >= source.entries.length - 1} title="{t('next')}{kt('next')}" data-tour="nav">▶</button>
     {#if shows("zoom")}
       <button onclick={zoomOut} title="{label('kv.zoomOut')}{kt('zoomOut')}">−</button>
       <span class="zoom">{status?.image ? `${status.zoomPercent}%` : ""}</span>
@@ -1207,7 +1367,7 @@
       <button data-tour="editor" onclick={() => (editorOpen = !editorOpen)} class:on={editorOpen} disabled={!source} title="{t('editor')}{kt('editor')}">✎ {t("editor")}</button>
     {/if}
     {#if shows("export")}
-      <button data-tour="export" onclick={openExport} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
+      <button data-tour="export" onclick={() => openExport("video")} disabled={!source?.entries.length} title="{t('exportVideo')}{kt('exportVideo')}">🎞 {t("exportVideoShort")}</button>
     {/if}
     <McpBadge onstop={stopAi} />
     {#if shows("fullscreen")}<button onclick={toggleFullscreen} class:on={fullscreen} title="{t('fullscreen')}{kt('fullscreen')}">⛶</button>{/if}
@@ -1272,6 +1432,15 @@
     {#if gotoOpen && source}
       <GoToPage count={source.entries.length} current={index} ongo={go} onclose={() => (gotoOpen = false)} />
     {/if}
+    {#if notice}
+      <div class="ask" role="alert">
+        <span>{notice.text}</span>
+        {#each notice.actions as a (a.label)}
+          <button class:primary={a.primary} onclick={() => runNotice(a.run)}>{a.label}</button>
+        {/each}
+        <button onclick={() => (notice = null)} title={t("close")}>✕</button>
+      </div>
+    {/if}
     {#if webtoonAsk}
       <div class="ask" role="alert">
         <span>{t("readWebtoonAsk")}</span>
@@ -1293,14 +1462,16 @@
     {#if opening}
       <div class="hint">{t("loading")}</div>
     {:else if openError}
-      <div class="hint">{openError}</div>
+      <div class="hint">{errorText(openError)}</div>
     {:else if !source}
       <div class="start" class:shelf-on={prefs.recents.length && prefs.settings.startView === "covers"}>
         <p>{t("openHint")}</p>
         <div class="start-open">
-          <button onclick={pickFile}>{t("openFile")}</button>
-          <button onclick={pickFolder}>{t("open")}</button>
+          <button class="card" onclick={pickFile}><span class="ic">📄</span><b>{t("openFile")}</b><small>{t("startCardFile")}</small></button>
+          <button class="card" onclick={pickFolder}><span class="ic">📁</span><b>{t("open")}</b><small>{t("startCardFolder")}</small></button>
+          <button class="card new" data-tour="create" onclick={() => createComic()}><span class="ic">➕</span><b>{t("comicCreate")}</b><small>{t("startCardCreate")}</small></button>
         </div>
+        <p class="start-drop">{t("startDrop")}</p>
         {#if prefs.recents.length}
           <div class="start-head">
             <h4>{t("recents")}</h4>
@@ -1310,7 +1481,7 @@
             </div>
           </div>
           {#if prefs.settings.startView === "covers"}
-            <div class="start-shelf"><Shelf onopen={openRecent} /></div>
+            <div class="start-shelf"><Shelf onopen={openRecent} onshare={shareRecent} /></div>
           {:else}
             <div class="start-list"><Recents onopen={openRecent} /></div>
           {/if}
@@ -1329,8 +1500,8 @@
         <div>FPS: {status?.fps ?? 0} · max tex: {status?.maxTexture ?? 0}</div>
         <div>img: {status?.image ? `${status.image.w}×${status.image.h}` : "–"} · dpr {window.devicePixelRatio}</div>
         <div>
-          {source?.entries[index]?.decoded ? "decodificada en Rust" : "nativa (webview)"} · {status?.loadMs ?? 0} ms
-          {#if (status?.tiles ?? 0) > 1}· {status?.tiles} teselas{/if}
+          {source?.entries[index]?.decoded ? t("diagDecoded") : t("diagNative")} · {status?.loadMs ?? 0} ms
+          {#if (status?.tiles ?? 0) > 1}· {t("diagTiles", { n: status?.tiles ?? 0 })}{/if}
         </div>
         <div>core {coreVersion()} · {diag?.os ?? ""} {diag?.sessionType ?? ""}</div>
         {#if diag?.logDir}<div class="name">log: {diag.logDir}</div>{/if}
@@ -1387,6 +1558,8 @@
       size={prefs.settings.thumbSize}
       marks={markSet}
       shown={spreadNow}
+      onmove={stripMove}
+      onorganize={organize}
     />
     </div>
   {/if}
@@ -1407,6 +1580,8 @@
     os={diag?.os ?? ""}
     mix={store.mix}
     onclose={() => (exportOpen = false)}
+    bind:mode={exportMode}
+    story={{ generation: source.generation, sourcePath: source.path, project: projectJson, reading: rd, lang: currentLang() }}
   />
 {/if}
 
@@ -1425,6 +1600,22 @@
 
 <Tour />
 <OrderDialog />
+{#if comicDialog}
+  <ComicDialog
+    bind:this={comicDlg}
+    mode={comicDialog.mode}
+    files={comicDialog.files}
+    generation={source?.generation}
+    entries={comicDialog.mode === "create" ? [] : (source?.entries ?? [])}
+    title={source?.title ?? ""}
+    thumb={thumbUrl}
+    current={index}
+    project={projectJson}
+    onarrange={async (pages, removed) => !!(await arrangeComic(pages, removed))}
+    onopen={openComic}
+    onclose={() => (comicDialog = null)}
+  />
+{/if}
 
 {#if saveZone && source?.entries[index]}
   <SaveImage original={(/\.([^.]+)$/.exec(source.entries[index].name)?.[1] ?? "").toUpperCase()} canVisible={!!visibleAtSave}
@@ -1443,6 +1634,22 @@
   main.bars-off .thumbs-wrap { transform: translateY(100%); opacity: 0; pointer-events: none; }
   main.idle, main.idle :global(*) { cursor: none !important; }
   .thumbs-wrap { flex: none; }
+  .start-open .card {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; width: 190px; padding: 14px 10px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--border);
+  }
+  .start-open .card:hover { border-color: var(--accent); }
+  .start-open .card .ic { font-size: 24px; }
+  .start-open .card b { font-size: 14px; }
+  .start-open .card small { color: var(--muted); font-size: 11.5px; }
+  .start-open .card.new { border: 2px solid var(--accent); }
+  .start-drop { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  .open-popup { width: 300px; }
+  .open-popup button { display: flex; width: 100%; justify-content: space-between; gap: 12px; background: none; border-color: transparent; text-align: left; }
+  .open-popup button:hover:not(:disabled) { background: var(--panel-2); }
+  .open-popup button.accent span { color: var(--accent); }
+  .open-popup kbd { color: var(--muted); font: inherit; font-size: 11px; }
+  .open-popup hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   .start-keys { margin-top: 10px; background: none; border-color: transparent; color: var(--muted); font-size: 12px; }
   .start-keys:hover { color: var(--text); }
   header {
@@ -1496,7 +1703,8 @@
     padding: 6px 10px; border-radius: 8px; background: var(--float); border: 1px solid var(--accent); font-size: 13px;
     box-shadow: var(--shadow);
   }
-  .ask button { padding: 2px 10px; font-size: 12px; }
+  .ask button { padding: 2px 10px; font-size: 12px; white-space: nowrap; flex: none; }
+  .ask { max-width: min(760px, 94vw); }
   .sel-bar {
     position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 6px;
     padding: 5px 8px; border-radius: 8px; background: var(--float); border: 1px solid #fbbf24; font-size: 12.5px;

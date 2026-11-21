@@ -49,6 +49,10 @@ export interface Settings {
   hideBars: boolean;
   /** Ya se vio (o se saltó) la visita guiada del primer uso. */
   tourDone: boolean;
+  /** Versión de la visita guiada que ya se vio (0 = ninguna). Con una nueva, se avisa una vez. */
+  tourVersion: number;
+  /** Carpeta donde se crean los cómics propios ("" = Imágenes/imgxplorer). */
+  comicsDir: string;
   /** Voces con IA: proveedor (`mock` = simulado, para probar sin gastar). */
   voicesProvider: "elevenlabs" | "mock";
   /** Modelo de voz de fábrica. */
@@ -158,6 +162,8 @@ export const DEFAULT_SETTINGS: Settings = {
   startView: "covers",
   hideBars: true,
   tourDone: false,
+  tourVersion: 0,
+  comicsDir: "",
   voicesProvider: "elevenlabs",
   voicesModel: "eleven_v3",
   voicesLimit: 5000,
@@ -199,6 +205,10 @@ function clean(raw: unknown): Settings {
   if (r.startView === "covers" || r.startView === "list") s.startView = r.startView;
   if (typeof r.hideBars === "boolean") s.hideBars = r.hideBars;
   if (typeof r.tourDone === "boolean") s.tourDone = r.tourDone;
+  if (typeof r.tourVersion === "number" && Number.isFinite(r.tourVersion)) s.tourVersion = Math.max(0, Math.round(r.tourVersion));
+  // Quien vio la visita antes de que tuviera versión vio la primera.
+  else if (s.tourDone) s.tourVersion = 1;
+  if (typeof r.comicsDir === "string") s.comicsDir = r.comicsDir.slice(0, 1000);
   if (r.voicesProvider === "elevenlabs" || r.voicesProvider === "mock") s.voicesProvider = r.voicesProvider;
   if (typeof r.voicesModel === "string" && /^[a-z0-9_]{3,60}$/.test(r.voicesModel)) s.voicesModel = r.voicesModel;
   const chars = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.round(Math.min(10_000_000, Math.max(0, v))) : d);

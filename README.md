@@ -1,5 +1,7 @@
 # imgxplorer
 
+<p align="center"><img src="src-tauri/icons/svg/icono.svg" width="160" alt="Icono de imgXplorer: una página de cómic con la cámara enfocando una viñeta"></p>
+
 **imgXplorer — tu cómic, viñeta a viñeta.**
 
 Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4.
@@ -18,10 +20,18 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
 
 - **Fuentes**
   - Carpetas, recorridas de forma recursiva.
-  - Cómics y comprimidos: `zip`/`cbz`, `7z`/`cb7`, `rar`/`cbr`.
+  - Cómics y comprimidos: `zip`/`cbz`, `7z`/`cb7`, `rar`/`cbr`, y las historias `.imgxstory` (ver «Compartir una historia»).
   - Imágenes sueltas: al abrirlas se abre su carpeta, situada en esa imagen.
 - **Orden natural** (`pagina 2` va antes que `pagina 10`). Se respetan las subcarpetas (capítulos) y se ignoran los archivos ocultos y `__MACOSX`.
-- Se abren desde el botón, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
+- Se abren desde el botón **📂 Abrir ▾** de la cabecera (un menú con *Abrir archivo*, *Abrir carpeta*, *Crear cómic con imágenes* y *Organizar páginas*), desde las tarjetas de la pantalla de inicio, arrastrando o desde la línea de comandos: `imgxplorer <carpeta|cómic|imagen>`.
+- **Tus propios cómics** (➕ *Crear cómic*, `Ctrl+N`): para quien tiene imágenes sueltas (hechas con una IA, escaneadas a su manera, fotos…) y no quiere preparar una carpeta o un zip con los nombres justos.
+  - Eliges las imágenes (varias a la vez, o arrastrándolas a la ventana), les pones un nombre y pulsas *Crear*. Se **copian** en una carpeta nueva, `Imágenes/imgxplorer/<nombre>` (`~/Pictures/imgxplorer` en el Mac; se cambia en Ajustes → General), y el cómic se abre y queda en la estantería. Las imágenes originales no se tocan.
+  - Las páginas se llaman `0001 - nombre original.png`: el número fija el orden y sigues reconociendo cada imagen. Es una carpeta normal: se puede mover, comprimir o abrir con cualquier visor.
+  - **Ordenar**: arrastra una miniatura de la tira a otro sitio (se guarda al soltar, con aviso *Deshacer*) o abre la **mesa de luz ▦** (`Ctrl+Mayús+G`, o el botón ▦ al final de la tira): todas las páginas en grande, arrastrar para ordenar (una línea marca dónde caen), elegir varias con `Ctrl`/`Mayús`, **añadir imágenes delante o detrás** de la elegida, *Ordenar por nombre* (2 antes que 10), quitar y deshacer o rehacer. Con el teclado: flechas para elegir, `Alt`+flechas para mover, `Supr` para quitar.
+  - Al ordenar, **la animación, los efectos, los sonidos y los marcadores siguen a su página**. Las páginas quitadas van a la carpeta oculta `.quitadas` del cómic (no se borran).
+  - Soltar varias imágenes sobre la ventana pregunta si crear un cómic con ellas; soltarlas con un cómic propio abierto, si añadirlas detrás de la página actual.
+  - Un CBZ, un CBR o una carpeta cualquiera **nunca se cambia**: en ellos, la mesa de luz termina con *Crear cómic con este orden*, que hace una copia ordenada con su animación.
+  - Detalles: [docs/format.md](docs/format.md#cómics-propios).
 - **Selector de archivos propio** para abrir y guardar: accesos a tus carpetas y unidades montadas, ruta editable, archivos ocultos y aviso antes de reemplazar. Se maneja con el teclado (flechas, `Intro` para entrar o aceptar, `Retroceso` para subir, letras para saltar, `Esc` para cancelar). Existe porque en algunos escritorios Linux (Hyprland/Omarchy…) el diálogo del sistema sale sin botón de Aceptar.
 - **Recientes**: lo último que has abierto aparece en la pantalla de inicio y en el menú 🕘 (`Ctrl+R`). Al volver a abrir un cómic o una carpeta, se va a la imagen en la que lo dejaste (salvo que abras una imagen concreta). Los que ya no existen salen tachados.
 - **Estantería** (pantalla de inicio): los mismos recientes con su **portada** y su progreso. El interruptor «▦ Portadas · ☰ Lista» vuelve a la lista de siempre y se recuerda.
@@ -34,7 +44,7 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
   - Siguen los botones para abrir y se puede arrastrar algo a la ventana, como siempre.
 - **Ayuda de atajos** (`?` o `F1`): una ventana con todos los atajos agrupados (moverse, zoom, lectura, la imagen, Modo Acción, archivos, reproducción, editor y ratón) y un buscador. Sale de la lista de atajos de la app, así que enseña los que hayas cambiado. «Cambiar atajos…» lleva a Ajustes → Atajos. También está en el menú del clic derecho y en la pantalla de inicio.
 - **Pantalla completa limpia** (`F11`): la cabecera y las miniaturas flotan sobre la imagen y se esconden a los 2 s sin mover el ratón; vuelven al acercarlo al borde de arriba o de abajo, y el puntero también se esconde. `Esc` sale de la pantalla completa. Con el editor abierto las barras se quedan. Se desactiva en Ajustes («Ocultar las barras en pantalla completa») para volver a lo de antes.
-- **Primer uso guiado**: la primera vez, cuatro pasos señalan los botones (abrir un cómic; 🎨 y 📖; Modo Acción; editor, vídeo e IA). Se puede saltar, moverse con las flechas y repetir desde Ajustes → Acerca de.
+- **Primer uso guiado**: la primera vez, siete pasos señalan dónde está cada cosa: abrir un cómic, crear y ordenar el tuyo, pasar las páginas, 🎨 y 📖, Modo Acción, el editor y exportar o compartir. Se puede saltar, moverse con las flechas y repetir desde Ajustes → Acerca de. Quien vio la visita de una versión anterior recibe una vez un aviso de novedades para verla otra vez.
 - **Cabecera adaptable**: con un tamaño de ventana normal se ven todos los botones. Si la ventana es tan estrecha que no caben, los que no caben pasan a un menú «⋯» con sus atajos (primero Exportar, Editor y Modo Acción), en vez de cortarse o partirse en dos líneas.
 - **Cerrar** (botón ✕ junto al título o `Ctrl+W`): cierra lo que estás viendo y vuelve a la pantalla de inicio con los recientes.
   - Las animaciones se guardan solas medio segundo después de cada cambio, así que normalmente cierra sin preguntar.
@@ -87,7 +97,7 @@ Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: ani
 
 Botón ⚙ o `Ctrl+,`. Todo se aplica y se guarda al momento.
 
-- **Idioma**: español, inglés o el del sistema. Cambia sin reiniciar.
+- **Idioma**: español, inglés o el del sistema. Cambia sin reiniciar: toda la app, también los diálogos abiertos y los mensajes de error que vienen del motor. `pnpm check` comprueba que los dos idiomas tienen los mismos textos.
 - **Fondo del visor**: oscuro, negro, gris, gris claro o cualquier color.
 - **Miniaturas**: mostrar u ocultar la tira y su tamaño.
 - **Zoom**: cuánto acerca cada paso con teclado y botones, y la velocidad de zoom con la rueda.
@@ -191,7 +201,7 @@ Temblores, destellos, ondas expansivas y recursos del manga colocados en la lín
   | ✨ Poder | Aberración que pulsa, onda y destello | — |
   | 💔 Daño | Destello rojo, temblor y glitch | Golpe |
 
-- **Efectos sueltos** (cada uno con ajustes predefinidos y sus mandos): 〰 temblor, 🔍 golpe de zoom, ⚡ destello, ◎ onda expansiva, 🌈 aberración / glitch, 💫 desenfoque radial, ✳ líneas de concentración, ≡ líneas de velocidad, ◐ fotograma de impacto, 🎨 color (sepia, gris, frío, cálido, tinte), ◯ viñeta y 🌊 ondulación.
+- **Efectos sueltos** (cada uno con ajustes predefinidos y sus mandos): 〰 temblor, 🔍 golpe de zoom, ⚡ destello, ◎ onda expansiva, 🌈 aberración / glitch (el rojo y el azul se separan en toda la imagen, más hacia los bordes; el glitch rompe la imagen en franjas de alto variable con los colores aún más separados), 💫 desenfoque radial, ✳ líneas de concentración, ≡ líneas de velocidad, ◐ fotograma de impacto, 🎨 color (sepia, gris, frío, cálido, tinte), ◯ viñeta y 🌊 ondulación.
 - **💥 Onomatopeyas animadas**: letras de cómic («¡KABOOM!», «¡ZAS!») sobre la imagen, con la fuente Bangers (incluida, licencia SIL OFL).
   - Texto, color, contorno, tamaño, giro y animación: **aparecer de golpe**, **temblar**, **crecer**, **con rebote** o **entrar de lado**. Se desvanecen al final.
   - Van pegadas a su punto (**⌖ Elegir**): se mueven con la cámara, tiemblan con el temblor y les afectan el destello, el color o el negativo, como al dibujo.
@@ -199,6 +209,7 @@ Temblores, destellos, ondas expansivas y recursos del manga colocados en la lín
 - **💬 Subtítulos y textos**: texto fijo en la pantalla que no tiembla, en tres estilos: **subtítulo** (abajo, con contorno, parte las líneas largas), **cartel** (grande en el centro: «Mientras tanto…») y **narración** (cartela amarilla arriba a la izquierda, como en los cómics). Entran y salen con un fundido.
   - Al exportar se pueden guardar también como **`.srt`**, junto al vídeo, para subirlos a YouTube.
   - Están en la misma fila *✨ Efectos*, así que se mueven, se estiran y se deshacen como los demás.
+  - El texto se escribe en el inspector y se aplica con **✓ Aplicar** (o `Ctrl+Intro`, o al salir del cuadro); mientras no se aplica, pone «Sin aplicar». Al cambiar de estilo (subtítulo, cartel o narración) o de ajuste, el texto se conserva y el tamaño y el color se adaptan al estilo. Igual en las onomatopeyas, salvo los ajustes que traen su propio texto («!?», «BRRRR»).
 - **Editar**: en la fila *✨ Efectos* se arrastran y se estiran por los bordes, con ajuste magnético a claves, sonidos y otros efectos. El inspector tiene ajuste, intensidad, inicio, duración y mandos. `Supr` o `Retroceso` borran el efecto seleccionado (también justo después de mover uno de sus mandos).
 - **Punto**: **⌖ Elegir** y un clic en la imagen marcan dónde ocurre (el centro de la explosión, el puño). Sigue a la imagen aunque la cámara se mueva.
 - **Seguridad**: destellos y negativos no parpadean más de 3 veces por segundo.
@@ -250,6 +261,31 @@ imágenes y las transiciones, con el color de fondo del visor.
 - Las plantillas se recalculan para la forma del vídeo. Para encuadrar a mano con esa forma, usa el marco *vídeo* del editor.
 - **Cómo funciona**: cada fotograma se pinta con el mismo motor WebGL de la vista previa (así sale idéntico), se convierte a YUV 4:2:0 en la GPU y se pasa por tubería a **ffmpeg** (H.264 en MP4 o VP9 en WebM, BT.709; el GIF sale del MP4 con `palettegen`). ffmpeg escribe en un archivo temporal que se renombra al terminar bien.
 - **ffmpeg** es necesario y no viene incluido: se busca en el sistema (en macOS también en Homebrew) o se indica su ruta en la propia ventana. Si falta, la ventana explica cómo instalarlo (`sudo pacman -S ffmpeg`, `sudo apt install ffmpeg`, `brew install ffmpeg`). Usa `libx264` si está; si no, `h264_videotoolbox` (macOS) u `libopenh264`.
+
+### Compartir una historia (.imgxstory)
+
+En la misma ventana de 🎞 Exportar, pestaña **📦 Historia** (o `Ctrl+Mayús+E`). Guarda el cómic con su animación en **un solo archivo** para compartirlo: quien lo reciba lo abre en imgxplorer y lo ve tal cual lo preparaste, sin pasarlo a vídeo.
+
+- **Qué lleva**:
+  - las páginas;
+  - la animación (cámara, transiciones, efectos, onomatopeyas y subtítulos);
+  - **todos los sonidos y voces** que usa: grabaciones, importados y los de ElevenLabs. Los de serie no hacen falta, porque los fabrica la app.
+- **Para qué**: dos variantes del **mismo formato**; las dos se abren en el escritorio y, en el futuro, en el móvil.
+  - **🖥 Escritorio**: páginas con su calidad original. Las que están en formatos que un móvil no sabe abrir (HEIC, RAW, PSD, TIFF…) se convierten sin pérdida.
+  - **📱 Móvil**: páginas de 2.560 px como mucho, así que pesa mucho menos.
+- **Qué exportar**: todo, la imagen actual o un rango (los ambientes se recortan a ese rango).
+- **Título y créditos** opcionales: quién la ha hecho, las voces, la música…
+- **«Incluir las tomas anteriores»** de las voces: solo hace falta si quien la recibe va a seguir editándolas.
+- **Avisos**:
+  - las páginas son del autor del cómic, así que compartir la historia es compartir el cómic;
+  - si lleva sonidos de ElevenLabs, con su plan gratuito solo valen para uso no comercial, y la música hecha con el plan gratuito hay que atribuirla a Eleven Music.
+- **Mientras se crea**: con barra de progreso y cancelable (no queda ningún archivo a medias). Al terminar dice cuántas páginas y sonidos lleva, cuánto pesa y si faltaba algún sonido.
+- **Abrirla**: como cualquier cómic (Abrir, arrastrar, doble clic o la estantería).
+  - Se usa el modo de lectura con el que se pensó (manga, doble página, webtoon…) la primera vez.
+  - Sus sonidos suenan desde dentro del archivo, sin copiarse a tu biblioteca. En el editor salen con 📦, y **⤓ Guardar en mi biblioteca** copia el que quieras.
+  - **Se puede retocar**: los cambios se guardan al lado (`<historia>.imgxstory.imgx`), y la historia original no cambia.
+- **También desde la estantería**: clic derecho → «📦 Compartir historia…».
+- **El formato** está explicado en [docs/imgxstory.md](docs/imgxstory.md), y es el que usará la futura versión para el móvil.
 
 ### Sonido
 
@@ -328,7 +364,8 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
 - **Permiso**: el control viene **apagado**; se enciende con *Permitir el control por IA* (o solo al conectar la primera IA). Apagado, ninguna IA puede tocar nada.
 - **Mientras trabaja**: en la cabecera aparece **🤖 IA** con lo que va haciendo y un botón **Detener la IA**. Ves cada cambio en directo y todo se deshace con `Ctrl+Z`. Si la app está cerrada, la IA la abre.
 - **Empezar**: abre una sesión nueva de tu IA y pídeselo con tus palabras, por ejemplo: «Usa imgxplorer para montar un vídeo de este cómic: ~/Cómics/capitulo1.cbz. Ritmo tranquilo, lluvia suave de fondo y efectos donde haya acción. Revisa y exporta en 1080p». En *Ajustes → IA* hay una frase de ejemplo para copiar.
-- **Qué puede hacer** (56 herramientas):
+- **Qué puede hacer** (59 herramientas):
+  - **Montar el cómic**: crear tu propio cómic con imágenes sueltas (por ejemplo, las que ha generado una IA de imágenes) y ordenar, añadir o quitar sus páginas (`create_comic`, `arrange_pages`).
   - **Ver**: la página con las viñetas numeradas en orden de lectura (occidental o manga), cada viñeta a alta resolución para leer el texto, y corregir viñetas mal detectadas.
   - **Animar**: «planos de director» (viñeta, zona o página entera + segundos quieta + tiempo y curva de llegada + acercamiento lento); la app calcula las poses exactas para la forma del vídeo y quedan como keyframes normales, editables. También keyframes sueltos, plantillas y transiciones.
   - **Sonido**: biblioteca, buscar audio en la carpeta que le digas e importarlo, pistas, voces y efectos en el instante de cada plano, ambientes y música entre imágenes, efectos de audio y mezcla.
@@ -336,7 +373,7 @@ Una IA puede montar el vídeo por ti: mira cada página y cada viñeta, les da e
   - **Voces con IA**: crear el reparto (una voz por personaje, descrita por su aspecto, o una de tu cuenta), escribir el guion de cada imagen con etiquetas de interpretación y su momento, estimar el coste y generar voces, gritos de fondo, efectos y música. Todo lo que gasta abre en la app el **resumen del pedido** y espera a que pulses Aceptar; si cancelas, no se envía nada.
   - **Ajustes de imagen**: limpiar escaneos, blanco y negro, sepia, brillo, contraste… para una página o para todo el cómic.
   - **Revisar**: hojas de miniaturas con los fotogramas exactos del vídeo, un resumen con avisos (planos demasiado cortos para leer, imágenes sin animar, sonidos que faltan, voces que se pisan) y un informe de la mezcla real (picos, limitador, silencios).
-  - **Terminar**: exportar en MP4, WebM o GIF (con el `.srt` de los subtítulos), seguir el progreso y revisar el vídeo final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo).
+  - **Terminar**: exportar en MP4, WebM o GIF (con el `.srt` de los subtítulos), seguir el progreso y revisar el vídeo final (ffprobe, nivel del sonido y fotogramas sacados del propio archivo). O guardarlo como historia `.imgxstory` para compartirlo (`export_story`).
 - **Límites**: la IA no oye ni ve el movimiento (revisa con fotogramas y medidas), así que te pedirá que lo reproduzcas y escuches tú. Las imágenes que mira se envían a su servicio (Anthropic, OpenAI o Google) con tu cuenta.
 - **Gemini CLI** solo activa los servidores MCP en carpetas de confianza: abre la IA en una carpeta en la que confíes.
 - **Cómo funciona**: [docs/mcp.md](docs/mcp.md).
@@ -370,6 +407,9 @@ Estos son los de fábrica; todos se pueden cambiar en los ajustes.
 | `A` | Panel del Modo Acción |
 | `E` | Editor de línea de tiempo |
 | `Ctrl+E` | Exportar vídeo |
+| `Ctrl+Mayús+E` | Compartir historia (`.imgxstory`) |
+| `Ctrl+N` | Crear cómic con imágenes |
+| `Ctrl+Mayús+G` | Organizar páginas (mesa de luz) |
 | `Ctrl+Z` / `Ctrl+Mayús+Z` · `Ctrl+Y` | Deshacer / rehacer |
 | `P` | Reproducir desde la imagen actual / parar |
 | `D` | Panel de diagnóstico |
@@ -501,6 +541,7 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [x] Ayuda de atajos (`?`), pantalla completa limpia, primer uso guiado y cabecera adaptable.
   - [x] Voces con IA (ElevenLabs): reparto, guion por imagen, resumen del pedido antes de gastar, efectos y música, clave en el llavero, caché, modo simulado y automatización por IA.
   - [x] Versión 1.0.0, [CHANGELOG.md](CHANGELOG.md), [lista de comprobación](docs/lista-comprobacion.md), medidas de rendimiento, infografía y GIF de demostración.
+  - [x] Historias `.imgxstory` para compartir el cómic animado completo (páginas, animación, sonidos y voces), en versión de escritorio o para móvil.
   - [ ] Pruebas en CachyOS, Ubuntu con Nvidia y Mac (con ElevenLabs de verdad).
   - [x] Documento [«imgXplorer, la historia detrás»](docs/imgXplorer-la-historia.docx) (Word, 17 páginas): el nombre, cómo empezó, qué hace, por qué Rust, cada tecnología, cómo funciona por dentro, programar con una IA, anécdotas, cifras y glosario.
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
@@ -520,10 +561,10 @@ El plan del primer lanzamiento, con todas las mejoras por fases, está en [docs/
   - Abrir en el móvil el cómic con la animación preparada en el ordenador y verla en vertical, a pantalla completa, sin pasarla a vídeo.
   - Con todo: cámara viñeta a viñeta, efectos, onomatopeyas, subtítulos, sonidos, música y voces.
   - A tu ritmo: tocar para pasar de viñeta, deslizar para cambiar de página, volver atrás, pausar o dejar que avance sola.
-  - Más ligero que un vídeo: lleva el cómic, la animación y los sonidos, y el móvil lo dibuja en directo. Desde el ordenador se prepararía un único archivo para pasarlo al móvil.
+  - Más ligero que un vídeo: lleva el cómic, la animación y los sonidos, y el móvil lo dibuja en directo. El archivo ya existe: la historia [`.imgxstory`](docs/imgxstory.md) en su variante para móvil.
   - Dos caminos en estudio: seguir con Tauri, que también funciona en iOS y Android, adaptando la interfaz al tacto; o hacerla nativa en cada plataforma (Swift y Kotlin). En los dos se podría reutilizar el motor en Rust.
 
-El formato de animaciones está especificado en [docs/format.md](docs/format.md).
+El formato de animaciones está especificado en [docs/format.md](docs/format.md), y el de las historias para compartir en [docs/imgxstory.md](docs/imgxstory.md).
 
 La historia del proyecto, para todos los públicos, está en [docs/imgXplorer-la-historia.docx](docs/imgXplorer-la-historia.docx).
 
@@ -576,6 +617,7 @@ pnpm tauri dev
 
 ```bash
 pnpm dist          # instaladores para repartir (Linux y macOS) en dist/; el de Linux necesita Docker
+pnpm icons         # iconos de la app (PNG, .ico y .icns) a partir de los SVG de src-tauri/icons/svg
 pnpm tauri build --bundles appimage,deb,rpm   # Linux: quedan en target/release/bundle/
 cd packaging/aur && IMGX_REPO="file://$(realpath ../..)" makepkg -si   # Arch: instalar desde el código
 ```
@@ -615,12 +657,13 @@ IMGX_SAMPLES=~/Imágenes cargo test -p imgx-media --release --test samples -- --
 ```
 crates/imgx-core    Cámara, easing, esquema .imgx, timeline, plantillas, planos de director, efectos especiales, orden de viñetas, transiciones y simplificación de grabaciones (Rust puro, nativo + WASM)
 crates/imgx-media   Fuentes (carpeta, zip, 7z, rar), decodificadores, RAW, miniaturas y detección de viñetas
+crates/imgx-story   Historias .imgxstory: leer, comprobar y escribir el archivo para compartir (páginas, proyecto, sonidos y datos calculados), sin Tauri para poder usarlo en el móvil
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
-src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
+src-tauri           App Tauri 2: protocolo imgx://, gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, historias .imgxstory, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
 ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), ajustes de imagen (ui/src/lib/adjust), lectura (ui/src/lib/reading), herramientas de la IA (ui/src/lib/mcp)
-docs                Especificación del formato .imgx y cómo crear los instaladores
-packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR, lanzador .desktop y generador de la lista de licencias (licenses.mjs)
+docs                Especificación de los formatos .imgx e .imgxstory, y cómo crear los instaladores
+packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), PKGBUILD de AUR, lanzador .desktop, generador de la lista de licencias (licenses.mjs) y de los iconos (iconos.py)
 ```
 
 ## Créditos
@@ -628,14 +671,16 @@ packaging           Instaladores de Linux y macOS, dist.sh (crea los paquetes), 
 Creado por **Pedro López del Castillo**, programado con **Claude Code** (Anthropic).
 
 **Agradecimientos especiales** (también en Ajustes → Acerca de):
+- **Aina**: mi hija, que me apoya en todos los proyectos que empiezo. ¡Gracias, Aina!
+- **Marilin**: mi pareja, que aunque no entiende lo que le explico, hizo el esfuerzo de ver el proyecto. 😄 ¡Gracias, Marilin!
 - **Alex**: mi mejor amigo y el primero en probarla en Linux. Me ayudó a corregir los fallos en Ubuntu y con tarjetas Nvidia. ¡Muchas gracias, Alex!
 - **Gerard**: mi primo, que la probará en cuanto la publique. ¡Gracias, Gerard!
 
 **Menciones de honor**: personas que admiro y que me han inspirado. No han participado en el proyecto; es mi pequeño homenaje.
 - **Steve Jobs**: un icono de la era moderna. Demostró que la tecnología, cuidada hasta el último detalle, puede cambiar la vida de la gente. Admiro todo lo que fue capaz de construir.
-- **Julio César Fernández**: programador y youtuber que me ha inspirado muchas veces a programar para Mac e iOS.
-- **MoureDev**: youtuber al que admiro por su historia y por su gran trabajo creando cursos y contenido para aprender a programar.
-- **Midudev (Miguel Ángel Durán)**: lo admiro por su gran trabajo en la programación y en la divulgación.
+- **Julio César Fernández**: programador, formador y evangelista de Apple. Lo escuchas un rato y acabas abriendo Xcode aunque no tocara. Me ha inspirado muchas veces a programar para Mac e iOS. Good Apple Coding!
+- **MoureDev**: programador y divulgador de tecnología en YouTube. Sus cursos han ayudado a muchísima gente a dar sus primeros pasos programando. Lo admiro por su historia y su trabajo.
+- **Midudev (Miguel Ángel Durán)**: programador web de los que ponen el listón alto y divulgador incansable. Sus directos, cursos y eventos han ayudado a miles de personas a dar el salto a la programación profesional. Lo admiro por su gran trabajo programando y, todavía más, por todo lo que enseña.
 
 imgxplorer existe gracias al trabajo de muchas personas y proyectos de código abierto: la lista completa, con sus licencias, está en [THIRD-PARTY.md](THIRD-PARTY.md) y en Ajustes → Acerca de → Licencias de terceros.
 

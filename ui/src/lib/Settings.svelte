@@ -4,6 +4,7 @@
   import { MAX_KEYS, actionsOf, assign, comboOf, display, keysFor, type ActionOf, type Group } from "./keys";
   import { t, label } from "./i18n.svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { openFolder } from "./files/dialog.svelte";
   import AiSettings from "./mcp/AiSettings.svelte";
   import VoicesSettings from "./voices/VoicesSettings.svelte";
   import About from "./About.svelte";
@@ -33,6 +34,14 @@
 
   const s = $derived(prefs.settings);
   const save = () => prefs.saveSettings();
+
+  // Carpeta de los cómics propios.
+  let defaultComicsDir = $state("");
+  invoke<string | null>("comic_default_dir").then((d) => (defaultComicsDir = d ?? "")).catch(() => {});
+  async function pickComicsDir() {
+    const d = await openFolder({ title: t("settingsComicsDir"), dir: s.comicsDir || defaultComicsDir || undefined });
+    if (d) set("comicsDir", d);
+  }
 
   function set<K extends keyof typeof prefs.settings>(k: K, v: (typeof prefs.settings)[K]) {
     prefs.settings[k] = v;
@@ -104,6 +113,7 @@
       sound: { ...DEFAULT_SETTINGS.sound, input: prefs.settings.sound.input },
       keys: $state.snapshot(prefs.settings.keys),
       tourDone: prefs.settings.tourDone,
+      tourVersion: prefs.settings.tourVersion,
       voicesConsent: prefs.settings.voicesConsent,
     };
     save();
@@ -192,6 +202,13 @@
           </select>
         </label>
         <p class="note">{t("fileDialogHelp")}</p>
+        <div class="row dir-row" title={t("settingsComicsDirHelp")}>
+          <span>{t("settingsComicsDir")}</span>
+          <input class="dir" readonly value={s.comicsDir || defaultComicsDir} title={s.comicsDir || defaultComicsDir} />
+          <button onclick={pickComicsDir}>{t("comicChange")}</button>
+          {#if s.comicsDir}<button onclick={() => set("comicsDir", "")}>{t("settingsComicsDirReset")}</button>{/if}
+        </div>
+        <p class="note">{t("settingsComicsDirHelp")}</p>
         <label class="row">
           <span>{t("masterVolume")}</span>
           <input type="range" min="0" max="150" step="5" value={Math.round(s.sound.master * 100)} oninput={(e) => setSound("master", Number(e.currentTarget.value) / 100)} />
@@ -275,6 +292,8 @@
   .content { overflow-y: auto; padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
   .row { display: grid; grid-template-columns: 1fr 180px 56px; align-items: center; gap: 10px; }
   .row > :nth-child(2):last-child { grid-column: 2 / 4; justify-self: start; }
+  .row.dir-row { grid-template-columns: 1fr minmax(0, 220px) auto auto; }
+  .row.dir-row .dir { min-width: 0; color: var(--muted); }
   .row output { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   select { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
   .seg { display: flex; }

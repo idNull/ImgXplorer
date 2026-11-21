@@ -90,6 +90,7 @@ if [ "$MODE" = uninstall ]; then
     while IFS= read -r f; do [ -n "$f" ] && in_prefix rm -f "$f" && note "borrado $f"; done < "$m"
     in_prefix rm -rf "$p/share/$APP"
     command -v update-desktop-database >/dev/null && in_prefix update-desktop-database -q "$p/share/applications" 2>/dev/null
+    [ -d "$p/share/mime/packages" ] && command -v update-mime-database >/dev/null && in_prefix update-mime-database "$p/share/mime" 2>/dev/null
     refresh_icons "$p"
     ok "Quitado de $p"
   done
@@ -343,6 +344,8 @@ tmp=$(mktemp)
 sed "s|^Exec=.*|Exec=$exec_line|" "$HERE/share/applications/$APP.desktop" > "$tmp"
 put "$tmp" "$PREFIX/share/applications/$APP.desktop" 644
 rm -f "$tmp"
+# Tipo de archivo de las historias (.imgxstory), para abrirlas con doble clic.
+[ -f "$HERE/share/mime/packages/$APP.xml" ] && put "$HERE/share/mime/packages/$APP.xml" "$PREFIX/share/mime/packages/$APP.xml" 644
 printf '%s\n' "${FILES[@]}" > "${tmp}.list"
 in_prefix install -Dm644 "${tmp}.list" "$MANIFEST"; rm -f "${tmp}.list"
 in_prefix install -Dm755 "$0" "$PREFIX/share/$APP/install.sh"
@@ -351,6 +354,7 @@ for f in LICENSE THIRD-PARTY.md; do
   if [ -f "$HERE/$f" ]; then in_prefix install -Dm644 "$HERE/$f" "$PREFIX/share/$APP/$f"; fi
 done
 command -v update-desktop-database >/dev/null && in_prefix update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null
+command -v update-mime-database >/dev/null && in_prefix update-mime-database "$PREFIX/share/mime" 2>/dev/null
 refresh_icons "$PREFIX"
 ok "Instalado en $PREFIX"
 

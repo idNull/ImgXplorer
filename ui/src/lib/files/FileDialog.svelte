@@ -36,6 +36,9 @@
   let hidden = $state(false);
   let filterIdx = $state(0);
   let selected = $state<string | null>(null);
+  /** Varios archivos elegidos (con `req.multiple`), en el orden de la lista. */
+  let chosen = $state<string[]>([]);
+  let anchor: string | null = null;
   let name = $state("");
   let pathText = $state("");
   let confirm = $state<string | null>(null);
@@ -64,6 +67,7 @@
     if (!listing) return false;
     if (req.mode === "save") return !!name.trim();
     if (req.mode === "folder") return true;
+    if (req.multiple && chosen.length) return true;
     return !!selected && !shown.find((e) => e.name === selected)?.dir;
   });
 
@@ -75,6 +79,8 @@
       error = null;
       confirm = null;
       selected = select;
+      chosen = [];
+      anchor = null;
       await tick();
       listEl?.scrollTo({ top: 0 });
       if (select) reveal();
@@ -90,9 +96,9 @@
     go(listing.parent, from);
   };
 
-  function done(path: string | null) {
+  function done(path: string | string[] | null) {
     if (path && listing) {
-      prefs.settings.lastDir = req.mode === "folder" ? dirOf(path) : listing.path;
+      prefs.settings.lastDir = req.mode === "folder" && typeof path === "string" ? dirOf(path) : listing.path;
       prefs.saveSettings();
     }
     fileDialog.finish(path);
@@ -102,6 +108,13 @@
     if (!listing) return;
     const dir = listing.path;
     const entry = selected ? shown.find((e) => e.name === selected) : undefined;
+    if (req.mode === "open" && req.multiple) {
+      if (entry?.dir && chosen.length <= 1) return go(joinPath(dir, entry.name));
+      const names = chosen.length ? chosen : entry && !entry.dir ? [entry.name] : [];
+      if (!names.length) return;
+      const order = new Map(shown.map((e, i) => [e.name, i]));
+      return done([...names].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)).map((n) => joinPath(dir, n)));
+    }
     if (req.mode === "open") {
       if (!entry) return;
       if (entry.dir) return go(joinPath(dir, entry.name));
@@ -129,7 +142,17 @@
     submit();
   }
 
-  function pick(e: Entry) {
+  function pick(e: Entry, ev?: MouseEvent | KeyboardEvent) {
+    if (req.multiple) {
+      if (e.dir) chosen = [];
+      else if (ev && (ev.ctrlKey || ev.metaKey)) chosen = chosen.includes(e.name) ? chosen.filter((n) => n !== e.name) : [...chosen, e.name];
+      else if (ev?.shiftKey && anchor) {
+        const files = shown.filter((x) => !x.dir).map((x) => x.name);
+        const [a, b] = [files.indexOf(anchor), files.indexOf(e.name)].sort((x, y) => x - y);
+        if (a >= 0) chosen = files.slice(a, b + 1);
+      } else chosen = [e.name];
+      if (!e.dir && !ev?.shiftKey) anchor = e.name;
+    }
     selected = e.name;
     confirm = null;
     if (req.mode === "save" && !e.dir) name = e.name;
@@ -182,6 +205,11 @@
         e.preventDefault();
         move(e.key === "ArrowDown" ? 1 : -1);
       }
+      return;
+    }
+    if (req.multiple && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      chosen = shown.filter((x) => !x.dir).map((x) => x.name);
       return;
     }
     const entry = selected ? shown.find((x) => x.name === selected) : undefined;
@@ -262,11 +290,12 @@
           <div
             class="row"
             class:sel={selected === e.name}
+            class:chosen={req.multiple && chosen.includes(e.name)}
             class:dir={e.dir}
             role="option"
             aria-selected={selected === e.name}
             tabindex="-1"
-            onclick={() => pick(e)}
+            onclick={(ev) => pick(e, ev)}
             ondblclick={() => activate(e)}
             onkeydown={() => {}}
           >
@@ -295,6 +324,7 @@
         <span class="filter">{filters[0].name} ({filters[0].extensions.map((x) => `*.${x}`).join(" ")})</span>
       {/if}
       <span class="spacer"></span>
+      {#if req.multiple}<span class="count">{chosen.length > 1 ? t("fdChosen", { n: chosen.length }) : t("fdMultiHint")}</span>{/if}
       {#if confirm}<span class="warn">{t("fdExists", { name: confirm.slice(confirm.lastIndexOf("/") + 1) })}</span>{/if}
       <button onclick={() => done(null)}>{t("fdCancel")}</button>
       <button class="primary" class:danger={!!confirm} onclick={submit} disabled={!canAccept}>{confirm ? t("fdReplace") : accept}</button>
@@ -324,7 +354,7 @@
   .list { flex: 1; min-width: 0; overflow-y: auto; padding: 4px 0; outline: none; }
   .row { display: flex; align-items: center; gap: 8px; padding: 3px 12px; cursor: default; user-select: none; }
   .row:hover { background: var(--panel-2); }
-  .row.sel { background: rgb(56 189 248 / 0.22); }
+  .row.sel, .row.chosen { background: rgb(56 189 248 / 0.22); }
   .list:focus .row.sel { box-shadow: inset 0 0 0 1px var(--accent); }
   .icon { width: 18px; text-align: center; }
   .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -340,6 +370,7 @@
   .filter { color: var(--muted); font-size: 12px; }
   .spacer { flex: 1; }
   .warn { color: #fbbf24; font-size: 12px; }
+  .count { color: var(--muted); font-size: 12px; }
   .primary { background: var(--accent); color: #04121b; border-color: var(--accent); font-weight: 600; }
   .primary.danger { background: #b45309; border-color: #f59e0b; color: #fff; }
   .primary:disabled { opacity: 0.5; }

@@ -11,6 +11,8 @@ mod pack;
 mod prefs;
 mod project;
 mod serve;
+mod comic;
+mod story;
 mod utils;
 mod voices;
 
@@ -78,6 +80,12 @@ struct SourceInfo {
     fingerprint: String,
     /// Animaciones guardadas de esta fuente.
     project: project::Loaded,
+    /// Es una historia `.imgxstory`: su manifiesto (título, créditos, modo de lectura…).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    story: Option<imgx_story::Manifest>,
+    /// Es un cómic propio (una carpeta que crea y ordena imgxplorer): su título.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comic: Option<imgx_media::comic::ComicInfo>,
 }
 
 #[tauri::command]
@@ -85,17 +93,32 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
     // Ruta canónica: la misma fuente abierta de distintas formas se recuerda una sola vez.
     let requested = std::fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
     // Listar un comprimido grande puede tardar: fuera del hilo principal.
-    let opened = tauri::async_runtime::spawn_blocking(move || imgx_media::open_path(&requested))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| {
-            log::warn!("no se pudo abrir {path}: {e}");
-            e.to_string()
-        })?;
+    let (opened, story, comic) = tauri::async_runtime::spawn_blocking(move || {
+        // Una historia se comprueba entera antes de abrirla: manifiesto, proyecto y sonidos.
+        let story = if imgx_media::is_story_name(&requested.to_string_lossy()) { Some(imgx_story::read(&requested)?) } else { None };
+        let opened = imgx_media::open_path(&requested).map_err(|e| e.to_string())?;
+        // Un cómic propio cuyo último orden se cortó a medias: sus páginas vuelven a su nombre.
+        let comic = if opened.kind == SourceKind::Folder { imgx_media::comic::info(&opened.path) } else { None };
+        if comic.is_some()
+            && let Ok(n @ 1..) = imgx_media::comic::recover(&opened.path)
+        {
+            log::warn!("{n} páginas recuperadas de un orden cortado en {}", opened.path.display());
+            return Ok::<_, String>((imgx_media::open_path(&requested).map_err(|e| e.to_string())?, story, comic));
+        }
+        Ok::<_, String>((opened, story, comic))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .inspect_err(|e| log::warn!("no se pudo abrir {path}: {e}"))?;
     let src = opened.source;
     log::info!("abierta {} ({:?}, {} imágenes, inicio {})", opened.path.display(), opened.kind, src.entries().len(), opened.start);
-    let fingerprint = imgx_media::fingerprint(src.entries());
-    let loaded = project::load(&app, &opened.path, opened.kind, &fingerprint);
+    let mut fingerprint = imgx_media::fingerprint(src.entries());
+    if story.is_some() {
+        // Distinta de la del cómic original (que puede tener las mismas páginas): sus cambios no
+        // se mezclan con los del cómic.
+        fingerprint = imgx_media::fingerprint(&[imgx_media::Entry { name: format!("imgxstory:{fingerprint}"), size: 0 }]);
+    }
+    let loaded = project::or_embedded(project::load(&app, &opened.path, opened.kind, &fingerprint), story.as_ref().map(|s| &s.project));
     let mut guard = state.current.write().unwrap();
     let generation = state.last_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let info = SourceInfo {
@@ -115,6 +138,8 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
             .collect(),
         fingerprint: fingerprint.clone(),
         project: loaded,
+        story: story.as_ref().map(|s| s.manifest.clone()),
+        comic,
     };
     covers::ensure_on_open(&app, &info.path, src.clone());
     *guard = Some(Current { generation, source: src, path: opened.path, kind: opened.kind, fingerprint });
@@ -122,15 +147,40 @@ async fn open_source(app: AppHandle, path: String, state: State<'_, AppState>) -
     state.panels.lock().unwrap().clear();
     state.levels.lock().unwrap().clear();
     state.boxes.lock().unwrap().clear();
+    let audio = app.state::<audio::Audio>();
+    match story {
+        Some(st) => {
+            // Lo ya calculado de cada página: no hace falta detectarlo otra vez.
+            let mut panels = state.panels.lock().unwrap();
+            let mut levels = state.levels.lock().unwrap();
+            let mut boxes = state.boxes.lock().unwrap();
+            for (i, e) in info.entries.iter().enumerate() {
+                if let Some(d) = st.computed.pages.get(&e.name) {
+                    if let Some(p) = &d.panels {
+                        panels.insert(i, p.clone());
+                    }
+                    if let Some(l) = d.levels {
+                        levels.insert(i, l);
+                    }
+                    if let Some(b) = d.content_box() {
+                        boxes.insert(i, b);
+                    }
+                }
+            }
+            audio.set_story(Some(audio::StorySounds { path: PathBuf::from(&info.path), list: st.sounds }));
+        }
+        None => audio.set_story(None),
+    }
     Ok(info)
 }
 
 /// Cierra la fuente abierta (vuelve a la pantalla de inicio).
 #[tauri::command]
-fn close_source(state: State<'_, AppState>) {
+fn close_source(app: AppHandle, state: State<'_, AppState>) {
     if let Some(c) = state.current.write().unwrap().take() {
         log::info!("cerrada {}", c.path.display());
     }
+    app.state::<audio::Audio>().set_story(None);
     state.thumbs.clear();
     state.panels.lock().unwrap().clear();
     state.levels.lock().unwrap().clear();
@@ -281,6 +331,7 @@ pub fn run() {
         .manage(diagnostics::Diagnostics::default())
         .manage(export::Exporter::default())
         .manage(audio::Audio::default())
+        .manage(story::StoryExport::default())
         .manage(voices::Voices::default())
         .manage(mcp::host::Host::default())
         .register_asynchronous_uri_scheme_protocol("imgx", |ctx, request, responder| {
@@ -311,6 +362,14 @@ pub fn run() {
             prefs::paths_exist,
             pack::export_pack,
             pack::import_pack,
+            story::story_export,
+            comic::comic_default_dir,
+            comic::comic_create,
+            comic::comic_from_source,
+            comic::comic_arrange,
+            comic::thumb_file,
+            story::story_cancel,
+            story::story_estimate,
             browse::list_dir,
             browse::places,
             export::ffmpeg_info,
@@ -322,6 +381,7 @@ pub fn run() {
             audio::sound_import,
             audio::sound_rename,
             audio::sound_delete,
+            audio::sound_keep,
             audio::sound_peaks,
             audio::sound_preview,
             audio::audio_scene,

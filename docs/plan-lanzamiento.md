@@ -415,6 +415,7 @@ Con la skill de documentos Word (docx), en `docs/imgXplorer-la-historia.docx`. N
 - Partículas (chispas, lluvia, nieve) y efectos en las transiciones.
 - Instrucciones de estilo para la IA (ya en «Propuestas de mejora»).
 - Idea para más adelante: que la IA lea los bocadillos (OCR) para subtitular o traducir.
+- **Historias `.imgxstory`** ✅ (adelantado a la 1.0): el cómic animado completo en un solo archivo para compartir, en variante de escritorio o para móvil. Especificación en [imgxstory.md](imgxstory.md).
 - **imgXplorer en el móvil** (en estudio): abrir el cómic con su animación y verlo en vertical, con sonido, voces y controles táctiles para avanzar a tu ritmo, sin pasarlo a vídeo. Por decidir: seguir con Tauri (iOS y Android) adaptando la interfaz, o hacerla nativa en cada plataforma; el motor en Rust sirve para los dos caminos.
 
 ## Archivos principales que se tocarán

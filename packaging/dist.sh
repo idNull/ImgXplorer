@@ -50,6 +50,7 @@ linux() {
   install -Dm644 LICENSE "$stage/LICENSE"
   install -Dm644 THIRD-PARTY.md "$stage/THIRD-PARTY.md"
   install -Dm644 packaging/linux/imgxplorer.desktop "$stage/share/applications/imgxplorer.desktop"
+  install -Dm644 packaging/linux/imgxplorer-mime.xml "$stage/share/mime/packages/imgxplorer.xml"
   for s in 32x32 64x64 128x128; do
     install -Dm644 "src-tauri/icons/$s.png" "$stage/share/icons/hicolor/$s/apps/imgxplorer.png"
   done

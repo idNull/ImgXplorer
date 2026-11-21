@@ -45,6 +45,7 @@ Los nombres y las descripciones están en inglés, que es lo que mejor entienden
 | Grupo | Herramientas |
 |---|---|
 | Estado | `get_guide`, `app_status`, `open_source`, `list_images`, `go_to`, `undo`, `redo` |
+| Cómics propios | `create_comic` (con imágenes sueltas, o una copia ordenada de lo abierto con `fromOpen`), `arrange_pages` (ordenar, añadir y quitar páginas) |
 | Ver | `view_image` (página con viñetas numeradas), `view_panel` (viñeta o zona a alta resolución), `get_panels`, `set_panels` |
 | Animar | `set_output`, `plan_shots`, `get_timeline`, `set_keyframes`, `apply_template`, `set_transition`, `set_hold_between` |
 | Sonido | `list_sounds`, `find_audio_files`, `import_sounds`, `list_tracks`, `add_track`, `edit_track`, `add_audio`, `edit_audio`, `remove_audio`, `add_ambient`, `edit_ambient`, `remove_ambient`, `set_mix`, `effects_catalog` |
@@ -52,7 +53,7 @@ Los nombres y las descripciones están en inglés, que es lo que mejor entienden
 | Efectos especiales | `fx_catalog`, `add_fx` (situación o efecto suelto, en segundos o en un plano de `plan_shots` con desfase, y con punto), `edit_fx`, `remove_fx` |
 | Voces con IA | `cast_get`, `cast_set`, `voice_list`, `voice_design`, `script_get`, `script_set`, `voices_estimate`, `voices_generate`, `sfx_generate`, `music_generate` |
 | Revisar | `summary`, `render_frames`, `sound_report`, `play` |
-| Terminar | `export_video`, `export_status`, `cancel_export`, `inspect_video` |
+| Terminar | `export_video`, `export_story` (historia `.imgxstory` para compartir), `export_status`, `cancel_export`, `inspect_video` |
 
 ### Planos de director (`plan_shots`)
 

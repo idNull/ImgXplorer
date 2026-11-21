@@ -33,6 +33,9 @@ result, open that file with your own image viewing tool (for example Codex `view
 11. **Export.** `export_video`, then poll `export_status` every few seconds until done.
 12. **Check the MP4.** `inspect_video` with the times of a few key moments: duration, sound present, frames look
     right. Tell the user where the file is and what you did.
+13. **Share as a story (optional).** If the user wants to share the animated comic itself (not a video),
+    `export_story` saves one `.imgxstory` file with the pages, the animation and every sound and voice. Use
+    `variant: "mobile"` for a much smaller file. Poll `export_status`. Ask before writing credits; never invent names.
 
 Work image by image and keep the user informed with short messages. For long comics, do the first page or two,
 show the user (`render_frames`, `play`) and agree on the style before doing the rest.
@@ -151,6 +154,23 @@ promise it is done before the tool returns. If they cancel, ask what to change; 
    Test a new voice with one short line first.
 7. **Review** with `render_frames` / `sound_report` and fix timing before exporting. Ask the user to
    listen: you cannot.
+
+## Your own comics (loose images)
+- When the user has loose images (made with an image AI, scanned, photos…), `create_comic` copies them in order
+  into a new folder (default Pictures/imgxplorer/<title>), numbered `0001 - name.png`…, and opens it. The
+  originals are never touched. Ask for the title; use `sortByName` when the file names already carry the order.
+- `arrange_pages` reorders, adds (`add` with `after`) or removes pages of the user's own comic; animation, effects
+  and bookmarks follow their pages, removed pages go to the hidden `.quitadas` folder. Indexes change afterwards:
+  call `list_images` again.
+- Any other source (a CBZ, a random folder) is never modified: `create_comic` with `fromOpen: true` and `order`
+  makes an ordered copy with its animation.
+
+## Stories (.imgxstory)
+- A story is a zip with the pages, `project.imgx`, the sounds it uses and precomputed panels. `open_source` opens one
+  like any comic; its sounds play from inside it (they are not copied to the user's library).
+- Edits to an open story are saved next to it (`<story>.imgxstory.imgx`); the story itself never changes.
+- The pages belong to the comic's author: remind the user that sharing a story shares the comic. If it uses
+  ElevenLabs sounds, their free plan is non-commercial only and free-plan music must credit Eleven Music.
 
 ## Limits
 

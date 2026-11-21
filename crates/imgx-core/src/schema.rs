@@ -501,6 +501,23 @@ impl Project {
     pub fn find_clip(&self, id: &str) -> Option<&Clip> {
         self.clips.iter().find(|c| c.id == id).map(|c| &c.clip)
     }
+
+    /// Cambia el nombre de las imágenes (`antiguo → nuevo`) allí donde se nombran: en cada imagen
+    /// y en el principio y el final de los ambientes. Lo que no está en `map` no cambia.
+    pub fn rename_entries(&mut self, map: &std::collections::BTreeMap<String, String>) {
+        let rename = |name: &mut String| {
+            if let Some(new) = map.get(name.as_str()) {
+                name.clone_from(new);
+            }
+        };
+        for it in &mut self.items {
+            rename(&mut it.entry);
+        }
+        for a in &mut self.ambient {
+            rename(&mut a.from);
+            rename(&mut a.to);
+        }
+    }
 }
 
 /// Migraciones encadenadas `vN → vN+1`. Hoy solo existe la v1.
@@ -512,6 +529,19 @@ fn migrate(value: &mut serde_json::Value, from: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renombrar_entradas() {
+        let json = r#"{"format":"imgx","version":1,"source":{"kind":"archive","name":"T"},
+            "items":[{"entry":"01.heic","size":[10,20]},{"entry":"02.jpg","size":[10,20]}],
+            "ambient":[{"id":"a","sound":"builtin:rain","from":"01.heic","to":"02.jpg"}]}"#;
+        let mut p = Project::from_json(json).unwrap();
+        let map = [("01.heic".to_owned(), "01.png".to_owned())].into_iter().collect();
+        p.rename_entries(&map);
+        assert_eq!(p.items[0].entry, "01.png");
+        assert_eq!(p.items[1].entry, "02.jpg");
+        assert_eq!((p.ambient[0].from.as_str(), p.ambient[0].to.as_str()), ("01.png", "02.jpg"));
+    }
 
     #[test]
     fn ida_y_vuelta() {

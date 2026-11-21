@@ -20,16 +20,22 @@ import { FrameRenderer, canvasOf, contactSheet, drawPanels, jpeg, mult4 } from "
 import { FxTrack, MIN_FX_DURATION, fxEnd, fxId, type Fx } from "../fx/fx";
 import { fxCatalog, fxInfo } from "../fx/catalog";
 import { joinPath, dirOf } from "../files/dialog.svelte";
-import { t } from "../i18n.svelte";
+import { currentLang, t } from "../i18n.svelte";
+import { reading } from "../reading/reading.svelte";
+import { listen } from "@tauri-apps/api/event";
+import { comicsDir, type ArrangePage } from "../comic/comic.svelte";
 import { SLIDERS, normalize, type Adjust } from "../adjust/adjust";
 import { CAST_COLORS, LINE_KINDS, newId, type CastMember, type Line, type LineKind } from "../voices/types";
 import { approveAndGenerate, designFor, estimate, generateMany, lineRows, listVoices, provider as voicesProvider, keyStatus } from "../voices/voices.svelte";
 
 export interface McpSource {
+  generation: number;
   title: string;
   path: string;
   kind: "folder" | "archive";
   entries: { name: string }[];
+  /** Es un cómic propio (lo crea y ordena imgxplorer). */
+  comic?: { title: string };
 }
 
 /** Lo que las herramientas necesitan de la app. */
@@ -39,6 +45,8 @@ export interface McpContext {
   store: ProjectStore;
   /** Abre una fuente; devuelve el error o null. */
   open(path: string): Promise<string | null>;
+  /** Ordena el cómic propio abierto (guarda, ordena y lo vuelve a abrir). Nombres nuevos, o null. */
+  arrange(pages: ArrangePage[], removed: string[]): Promise<Record<string, string> | null>;
   go(i: number): void;
   refAt(i: number): PictureRef;
   /** Viñetas detectadas (planas: x, y, w, h…). */
@@ -68,6 +76,8 @@ interface ExportJob {
   error?: string;
   started: number;
   abort: AbortController;
+  /** Lo que salió en una historia `.imgxstory`. */
+  story?: Record<string, unknown>;
 }
 
 /** Error para la IA (se le muestra tal cual). */
@@ -237,7 +247,7 @@ export class McpTools {
     const i = this.ctx.index();
     return json({
       open: !!s,
-      source: s ? { title: s.title, path: s.path, kind: s.kind, images: s.entries.length } : null,
+      source: s ? { title: s.title, path: s.path, kind: s.kind, images: s.entries.length, ownComic: !!s.comic || undefined } : null,
       project: s ? { file: this.store.path, readOnly: this.store.readOnly, canUndo: this.store.canUndo } : null,
       current: s?.entries[i] ? { image: i, entry: s.entries[i].name } : null,
       output: this.video(),
@@ -253,6 +263,82 @@ export class McpTools {
     const err = await this.ctx.open(path);
     if (err) fail(err);
     return this.t_app_status();
+  }
+
+  /** Lista de enteros (`order`, `remove`). */
+  private ints(a: Args, key: string): number[] | undefined {
+    const v = a[key];
+    if (v === undefined || v === null) return undefined;
+    if (!Array.isArray(v) || !v.every((x) => Number.isInteger(x))) fail(`${key} must be an array of integers`);
+    return v as number[];
+  }
+
+  async t_create_comic(a: Args): Promise<ToolResult> {
+    const title = str(a, "title")?.trim() || fail("title is required");
+    const dir = str(a, "dir") || (await comicsDir());
+    let path: string;
+    if (a.fromOpen === true) {
+      const s = this.src();
+      const order = this.ints(a, "order") ?? s.entries.map((_, i) => i);
+      for (const i of order) if (i < 0 || i >= s.entries.length) fail(`order: image ${i} out of range (0..${s.entries.length - 1})`);
+      if (new Set(order).size !== order.length) fail("order has repeated images");
+      const project = this.store.data ? JSON.stringify($state.snapshot(this.store.data)) : null;
+      path = await invoke<string>("comic_from_source", { generation: s.generation, title, dir, pages: order.map((index) => ({ index })), project }).catch((e) => fail(String(e)));
+    } else {
+      const images = a.images;
+      if (!Array.isArray(images) || !images.length || !images.every((x) => typeof x === "string")) fail("images must be a non-empty array of image paths (or use fromOpen: true)");
+      let list = images as string[];
+      if (a.sortByName === true) {
+        const c = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        list = [...list].sort((x, y) => c.compare(x.slice(x.lastIndexOf("/") + 1), y.slice(y.lastIndexOf("/") + 1)));
+      }
+      path = await invoke<string>("comic_create", { title, dir, files: list }).catch((e) => fail(String(e)));
+    }
+    const err = await this.ctx.open(path);
+    if (err) fail(err);
+    this.ctx.say(`🤖 ${t("mcpSayComic", { title })}`);
+    return json({ path, ...JSON.parse((await this.t_app_status()).text) });
+  }
+
+  async t_arrange_pages(a: Args): Promise<ToolResult> {
+    const s = this.src();
+    if (!s.comic) fail("The open source is not the user's own comic, so its files can't be reordered. Use create_comic with fromOpen: true (and order) to make an ordered copy.");
+    this.writable();
+    const n = s.entries.length;
+    const remove = this.ints(a, "remove") ?? [];
+    const gone = new Set(remove);
+    const order = this.ints(a, "order") ?? [...Array(n).keys()].filter((i) => !gone.has(i));
+    for (const i of [...order, ...remove]) if (i < 0 || i >= n) fail(`image ${i} out of range (0..${n - 1})`);
+    if (new Set([...order, ...remove]).size !== order.length + remove.length) fail("an image is repeated (in order or in both order and remove)");
+    const missing = [...Array(n).keys()].filter((i) => !order.includes(i) && !gone.has(i));
+    if (missing.length) fail(`order must list every image that isn't removed; missing: ${missing.join(", ")}`);
+    const pages: ArrangePage[] = order.map((i) => ({ entry: s.entries[i].name }));
+    // Imágenes de fuera: detrás de la imagen `after` (índice de antes de ordenar; -1 = al principio).
+    const add = a.add;
+    if (add !== undefined) {
+      if (!Array.isArray(add)) fail("add must be an array of { path, after }");
+      const placed = new Map<number, number>();
+      for (const x of add as Args[]) {
+        const path = str(x, "path") ?? fail("add: path is required");
+        const after = x.after === undefined ? n : int(x, "after");
+        let at: number;
+        if (after < 0) at = 0;
+        else if (after >= n) at = pages.length;
+        else {
+          const k = pages.findIndex((p) => "entry" in p && p.entry === s.entries[after].name);
+          if (k < 0) fail(`add: image ${after} is being removed`);
+          at = k + 1;
+        }
+        at += placed.get(after) ?? 0;
+        placed.set(after, (placed.get(after) ?? 0) + 1);
+        pages.splice(at, 0, { path });
+      }
+    }
+    const map = await this.ctx.arrange(pages, remove.map((i) => s.entries[i].name));
+    if (!map) fail("The pages couldn't be reordered (the app shows why).");
+    this.ctx.say(`🤖 ${t("mcpSayArrange")}`);
+    const now = this.ctx.source();
+    return json({ pages: now?.entries.length ?? 0, entries: now?.entries.slice(0, 200).map((e, i) => ({ image: i, entry: e.name })) });
   }
 
   async t_list_images(a: Args): Promise<ToolResult> {
@@ -1290,7 +1376,7 @@ export class McpTools {
     const job: ExportJob = { state: "running", path, fraction: 0, frames: 0, mixing: false, started: Date.now(), abort };
     this.exportJob = job;
     const crf = { high: 18, normal: 23, light: 28 }[v.quality];
-    this.ctx.say("🤖 Exportando vídeo…");
+    this.ctx.say(`🤖 ${t("mcpSayVideo")}`);
     exportVideo(
       { path, width: v.width, height: v.height, fps: v.fps, crf, ffmpeg: prefs.settings.video.ffmpeg, background: prefs.settings.background, from, to, sound: a.sound === false || format === "gif" ? null : JSON.parse(JSON.stringify(this.store.mix)), format, srt: a.srt !== false },
       this.ctx.sequence,
@@ -1306,7 +1392,7 @@ export class McpTools {
         job.state = "done";
         job.path = out;
         job.fraction = 1;
-        this.ctx.say("🤖 Vídeo exportado");
+        this.ctx.say(`🤖 ${t("mcpSayVideoDone")}`);
       },
       (e) => {
         job.state = e instanceof ExportCancelled ? "cancelled" : "error";
@@ -1316,10 +1402,65 @@ export class McpTools {
     return json({ started: true, path, format, from, to, output: v, note: "Poll export_status every few seconds." });
   }
 
+  async t_export_story(a: Args): Promise<ToolResult> {
+    const s = this.src();
+    if (this.exportJob?.state === "running") fail("an export is already running: use export_status or cancel_export");
+    const last = s.entries.length - 1;
+    const from = Math.max(0, Math.min(last, int(a, "from", 0)));
+    const to = Math.max(from, Math.min(last, int(a, "to", last)));
+    const variant = (oneOf(a, "variant", ["desktop", "mobile"]) ?? "desktop") as "desktop" | "mobile";
+    const dir = s.kind === "folder" ? s.path : dirOf(s.path);
+    const stem = s.title.replace(/\.(cbz|cbr|cb7|zip|7z|rar|imgxstory)$/i, "") || "story";
+    let path = str(a, "path") ?? joinPath(dir, `${stem}${variant === "mobile" ? "-movil" : ""}.imgxstory`);
+    if (!path.toLowerCase().endsWith(".imgxstory")) path += ".imgxstory";
+    if (path === s.path) fail("that is the story that is open: choose another path");
+    const [exists] = await invoke<boolean[]>("paths_exist", { paths: [path] });
+    if (exists && a.overwrite !== true) fail(`${path} already exists: pass overwrite: true or another path`);
+    const r = reading.of(s.path);
+    const abort = new AbortController();
+    const job: ExportJob = { state: "running", path, fraction: 0, frames: 0, mixing: false, started: Date.now(), abort };
+    this.exportJob = job;
+    abort.signal.addEventListener("abort", () => void invoke("story_cancel"));
+    const un = await listen<{ done: number; total: number }>("story-progress", (e) => (job.fraction = e.payload.done / Math.max(1, e.payload.total)));
+    this.ctx.say(`🤖 ${t("mcpSayStory")}`);
+    type Written = { path: string; pages: number; sounds: number; converted: number; bytes: number; missing: string[] };
+    invoke<Written>("story_export", {
+      generation: s.generation,
+      opts: {
+        path,
+        from,
+        to,
+        variant,
+        title: str(a, "title") ?? "",
+        credits: str(a, "credits") ?? "",
+        keepTakes: a.keepTakes === true,
+        reading: { fit: r.fit, crop: r.crop, double: r.double, cover: r.cover, strip: r.strip, rtl: r.rtl },
+        aspect: this.video().aspect,
+        lang: currentLang(),
+        project: JSON.stringify($state.snapshot(this.store.data)),
+      },
+    })
+      .then(
+        (w) => {
+          job.state = "done";
+          job.path = w.path;
+          job.fraction = 1;
+          job.story = { pages: w.pages, sounds: w.sounds, converted: w.converted, megabytes: r2(w.bytes / 1e6), missingSounds: w.missing.length ? w.missing : undefined };
+          this.ctx.say(`🤖 ${t("mcpSayStoryDone")}`);
+        },
+        (e) => {
+          job.state = String(e) === "cancelado" ? "cancelled" : "error";
+          job.error = String(e);
+        },
+      )
+      .finally(un);
+    return json({ started: true, path, variant, from, to, note: "Poll export_status every few seconds." });
+  }
+
   async t_export_status(): Promise<ToolResult> {
     const j = this.exportJob;
     if (!j) return json({ state: "idle" });
-    return json({ state: j.state, path: j.path, fraction: r2(j.fraction), frames: j.frames, mixingSound: j.mixing || undefined, seconds: Math.round((Date.now() - j.started) / 1000), error: j.error });
+    return json({ state: j.state, path: j.path, fraction: r2(j.fraction), frames: j.story ? undefined : j.frames, mixingSound: j.mixing || undefined, seconds: Math.round((Date.now() - j.started) / 1000), error: j.error, story: j.story });
   }
 
   async t_cancel_export(): Promise<ToolResult> {
@@ -1480,7 +1621,7 @@ export class McpTools {
     }
     const cur = this.store.cast.find((x) => x.id === c.id)!;
     if ((cur.description ?? "").length < 20) fail("the character needs a description of at least 20 characters (age, accent, tone, way of speaking)");
-    this.ctx.say(`🤖 ${cur.name}: voz nueva`);
+    this.ctx.say(`🤖 ${t("mcpSayVoice", { name: cur.name })}`);
     const v = await designFor($state.snapshot(cur) as CastMember, true, int(a, "pick", 1)).catch((e) => fail(String(e)));
     if (!v) fail("The user cancelled the request.");
     this.edit(() => {
@@ -1596,8 +1737,8 @@ export class McpTools {
     const ids = Array.isArray(a.lines) ? (a.lines as unknown[]).map(String) : null;
     const list = [];
     for (const { i, entry } of imgs) list.push({ ctx: { store: this.store, entry, size: await this.size(i) }, ids: a.all === true ? this.store.linesFor(entry).map((l) => l.id) : ids });
-    this.ctx.say("🤖 Voces: esperando tu aprobación del pedido");
-    const r = await generateMany(list, true, (d, n) => this.ctx.say(`🤖 Voces: ${d} de ${n}`)).catch((e) => fail(String(e)));
+    this.ctx.say(`🤖 ${t("mcpSayVoicesWait")}`);
+    const r = await generateMany(list, true, (d, n) => this.ctx.say(`🤖 ${t("mcpSayVoicesProgress", { done: d, total: n })}`)).catch((e) => fail(String(e)));
     if (!r) fail("The user cancelled the request: nothing was generated or spent.");
     if (imgs.length === 1) this.show(imgs[0].i);
     return json({ generated: r!.done, fromCache: r!.cached, errors: r!.errors.length ? r!.errors : undefined, next: "Check timing with script_get / summary and ask the user to listen." });

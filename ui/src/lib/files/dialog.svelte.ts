@@ -19,19 +19,23 @@ export interface PickRequest {
   defaultName?: string;
   /** Carpeta en la que empezar (si no, la última visitada). */
   dir?: string;
+  /** Abrir: se pueden elegir varios archivos (Ctrl/Mayús+clic, Ctrl+A). */
+  multiple?: boolean;
 }
 
 class FileDialogState {
   request = $state<PickRequest | null>(null);
-  #resolve: ((path: string | null) => void) | null = null;
+  #resolve: ((path: string | string[] | null) => void) | null = null;
 
-  pick(req: PickRequest): Promise<string | null> {
+  pick(req: PickRequest & { multiple: true }): Promise<string[] | null>;
+  pick(req: PickRequest): Promise<string | null>;
+  pick(req: PickRequest): Promise<string | string[] | null> {
     this.finish(null); // otra petición pendiente se cancela
     this.request = req;
     return new Promise((r) => (this.#resolve = r));
   }
 
-  finish(path: string | null) {
+  finish(path: string | string[] | null) {
     const r = this.#resolve;
     this.#resolve = null;
     this.request = null;
@@ -65,6 +69,17 @@ export async function openFile(o: { title?: string; filters?: Filter[]; dir?: st
     return typeof r === "string" ? r : null;
   }
   return fileDialog.pick({ mode: "open", ...o });
+}
+
+/** Elige uno o varios archivos para abrir. */
+export async function openFiles(o: { title?: string; filters?: Filter[]; dir?: string } = {}): Promise<string[] | null> {
+  if (useSystemDialog()) {
+    const r = await open({ multiple: true, filters: o.filters, title: o.title, defaultPath: o.dir });
+    if (!r) return null;
+    const list = Array.isArray(r) ? r : [r];
+    return list.length ? list : null;
+  }
+  return fileDialog.pick({ mode: "open", multiple: true, ...o });
 }
 
 /** Elige una carpeta. */

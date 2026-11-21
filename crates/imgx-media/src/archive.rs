@@ -80,13 +80,20 @@ pub struct ZipSource {
 
 impl ZipSource {
     pub fn open(path: &Path) -> Result<Self, MediaError> {
+        Self::open_prefixed(path, "")
+    }
+
+    /// Solo las imágenes bajo `prefix` (p. ej. `pages/` de una historia `.imgxstory`), con el
+    /// prefijo quitado del nombre: así las entradas se llaman igual que en el cómic original.
+    pub fn open_prefixed(path: &Path, prefix: &str) -> Result<Self, MediaError> {
         let mut zip = zip::ZipArchive::new(File::open(path)?).map_err(arc_err)?;
         let mut list = Vec::new();
         for i in 0..zip.len() {
             let f = zip.by_index_raw(i).map_err(arc_err)?;
-            let name = f.name().map_err(arc_err)?.replace('\\', "/");
-            if f.is_file() && wanted(&name) {
-                list.push((Entry { name, size: f.size() }, i));
+            let full = f.name().map_err(arc_err)?.replace('\\', "/");
+            let Some(name) = full.strip_prefix(prefix) else { continue };
+            if f.is_file() && wanted(name) {
+                list.push((Entry { name: name.to_owned(), size: f.size() }, i));
             }
         }
         let (entries, raw_index) = sorted(list);

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tipo de archivo de las historias de imgxplorer: un zip con las páginas, la animación y los sonidos. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-imgxstory">
+    <sub-class-of type="application/zip"/>
+    <comment>imgxplorer story</comment>
+    <comment xml:lang="es">Historia de imgxplorer</comment>
+    <icon name="imgxplorer"/>
+    <glob pattern="*.imgxstory"/>
+  </mime-type>
+</mime-info>

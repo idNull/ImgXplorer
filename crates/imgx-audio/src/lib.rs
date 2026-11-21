@@ -7,7 +7,7 @@ pub mod mixer;
 pub mod synth;
 pub mod wav;
 
-pub use decode::{EXTENSIONS, Pcm, decode_file};
+pub use decode::{EXTENSIONS, Pcm, decode_bytes, decode_file};
 pub use mixer::{Bus, Clip, Levels, TrackSpec};
 
 #[derive(Debug, thiserror::Error)]

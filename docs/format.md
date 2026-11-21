@@ -9,6 +9,27 @@ Lo define `crates/imgx-core/src/schema.rs`; este documento es un resumen.
 | Carpeta | `<carpeta>/.imgxplorer.imgx` |
 | Comprimido / imagen | `<archivo>.imgx` (al lado) |
 | Sin permiso de escritura | directorio de datos de la app, indexado por `source.fingerprint` |
+| Historia `.imgxstory` | `<historia>.imgxstory.imgx` (al lado) con tus cambios; si no hay, el `project.imgx` de dentro |
+
+Para compartir el cómic animado completo (páginas, proyecto y sonidos en un solo archivo) está el formato [`.imgxstory`](imgxstory.md).
+
+## Cómics propios
+
+Un **cómic propio** es una carpeta que crea imgxplorer con imágenes sueltas (➕ *Crear cómic*). Es una carpeta normal, así que su animación va en `<carpeta>/.imgxplorer.imgx`, como en cualquier otra.
+
+```
+Imágenes/imgxplorer/Mi cómic/
+  0001 - portada_ia.png
+  0002 - escaneo 7.jpg
+  .imgxplorer.imgx          la animación (este formato)
+  .imgxplorer-comic.json    {"format": "imgxcomic", "version": 1, "title": "Mi cómic", "created": 1795190000}
+  .quitadas/                páginas quitadas al ordenar (la app no las lee)
+```
+
+- **El marcador** `.imgxplorer-comic.json` dice que imgxplorer puede ordenar la carpeta. Sin él (una carpeta cualquiera, un CBZ), la app nunca renombra nada: ordenar crea una copia.
+- **Los nombres** son `NNNN - nombre original`: el número (4 cifras, o más si hay más de 9999 páginas) fija el orden natural; al reordenar solo cambia el número.
+- **Al ordenar** se renombra en dos pasos (primero a `.imgx-tmp-N-nombre`, ocultos) para que ninguna página pise a otra. Si se corta a medias, al abrir el cómic las páginas vuelven a su nombre.
+- **La animación sigue a sus páginas**: las entradas de `items[].entry` y `ambient.from/to` se renombran (lo mismo hace la exportación de historias). Los marcadores 🔖 y la página por la que ibas, también.
 
 ## Coordenadas de cámara
 `{ cx, cy, zoom, rot }`

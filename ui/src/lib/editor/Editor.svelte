@@ -18,6 +18,7 @@
   // Editor de timeline de la imagen actual: pista de cámara con clips y claves, cabezal,
   // captura de la vista (K), grabación del movimiento (G), biblioteca e inspector.
   import { onDestroy, untrack } from "svelte";
+  import { errorText } from "../errors";
   import { invoke } from "@tauri-apps/api/core";
   import { wasm } from "../core";
   import type { ProjectStore } from "../action/project.svelte";
@@ -398,7 +399,7 @@
       await invoke("record_start", { device: prefs.settings.sound.input || null });
     } catch (e) {
       log.warn("micrófono:", e);
-      return say(t("micError", { error: String(e) }));
+      return say(t("micError", { error: errorText(e) }));
     }
     const tok = ++voiceTok;
     voiceOn = true;
@@ -447,7 +448,7 @@
       }
     } catch (e) {
       log.warn("grabar voz:", e);
-      say(t("micError", { error: String(e) }));
+      say(t("micError", { error: errorText(e) }));
       seek(start);
     }
   }

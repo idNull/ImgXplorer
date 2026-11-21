@@ -19,8 +19,8 @@
     ["helpView", ["zoomIn", "zoomOut", "fit", "actual", "rotateCw", "rotateCcw", "loupe", "fullscreen", "thumbs"]],
     ["helpReading", ["reading", "fitWidth", "fitHeight", "double", "strip"]],
     ["helpImage", ["adjust", "night", "compare", "info", "copyImage", "saveImage", "reveal", "trash"]],
-    ["helpAction", ["action", "play", "editor", "exportVideo", "mute", "undo", "redo"]],
-    ["helpApp", ["openFile", "openFolder", "recents", "closeSource", "settings", "help", "diag"]],
+    ["helpAction", ["action", "play", "editor", "exportVideo", "exportStory", "mute", "undo", "redo"]],
+    ["helpApp", ["openFile", "openFolder", "createComic", "organize", "recents", "closeSource", "settings", "help", "diag"]],
   ];
   const PREFIX: Record<Group, string> = { viewer: "kv", player: "kp", editor: "ke" };
 

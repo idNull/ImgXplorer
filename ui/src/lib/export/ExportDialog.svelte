@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Ventana "Exportar vídeo": qué imágenes, tamaño, fotogramas por segundo, calidad y archivo.
-  // Durante la exportación muestra el progreso y permite cancelar.
+  // Ventana "Exportar": vídeo (qué imágenes, tamaño, fotogramas por segundo, calidad y archivo) o
+  // historia `.imgxstory` (pestaña «📦 Historia», en StoryExport). Durante la exportación muestra
+  // el progreso y permite cancelar.
   import { onMount, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { exportVideo, ExportCancelled, type ExportProgress, type ExportSpec } from "./exporter";
@@ -11,6 +12,8 @@
   import { t } from "../i18n.svelte";
   import type { MixLevels } from "../audio/director";
   import { log } from "../log";
+  import StoryExport from "./StoryExport.svelte";
+  import type { Reading } from "../reading/reading.svelte";
 
   interface Props {
     /** Nombre de la fuente (para el archivo propuesto). */
@@ -25,8 +28,14 @@
     /** Mezcla del proyecto (volumen de voz, efectos y ambiente). */
     mix: MixLevels;
     onclose: () => void;
+    /** Para la pestaña «Historia». */
+    story: { generation: number; sourcePath: string; project: () => string; reading: Reading; lang: string };
+    /** Pestaña con la que se abre. */
+    mode?: "video" | "story";
   }
-  let { title, dir, count, index, refAt, spec, os, mix, onclose }: Props = $props();
+  let { title, dir, count, index, refAt, spec, os, mix, onclose, story, mode = $bindable("video") }: Props = $props();
+  let storyView = $state<StoryExport | null>(null);
+  let storyRunning = $state(false);
 
   interface Ffmpeg {
     path: string;
@@ -51,6 +60,7 @@
   let now = $state(0);
   let result = $state("");
   let abort: AbortController | null = null;
+  const busy = $derived(phase === "running" || storyRunning);
 
   const px = $derived(videoPixels(prefs.settings.video));
   const span = $derived.by(() => {
@@ -187,6 +197,7 @@
 
   function close() {
     if (phase === "running") return abort?.abort();
+    if (storyRunning) return storyView?.cancel();
     onclose();
   }
 
@@ -203,10 +214,15 @@
     const tgt = e.target as HTMLElement;
     if (e.key === "Escape") {
       e.preventDefault();
-      if (phase !== "running") onclose();
-    } else if (e.key === "Enter" && phase === "setup" && !(tgt instanceof HTMLSelectElement)) {
-      e.preventDefault();
-      start();
+      if (!busy) onclose();
+    } else if (e.key === "Enter" && !(tgt instanceof HTMLSelectElement) && !(tgt instanceof HTMLTextAreaElement)) {
+      if (mode === "story") {
+        e.preventDefault();
+        storyView?.start();
+      } else if (phase === "setup") {
+        e.preventDefault();
+        start();
+      }
     }
   }
 
@@ -221,14 +237,21 @@
 
 <svelte:window onkeydowncapture={onKey} />
 
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && phase !== "running" && onclose()}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label={t("exportVideo")}>
+<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && !busy && onclose()}>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label={mode === "story" ? t("storyExport") : t("exportVideo")}>
     <header>
-      <b>🎞 {t("exportVideo")}</b>
-      <button class="close" onclick={close} title={phase === "running" ? t("cancel") : `${t("close")} (Esc)`}>✕</button>
+      <b>{mode === "story" ? `📦 ${t("storyExport")}` : `🎞 ${t("exportVideo")}`}</b>
+      <button class="close" onclick={close} title={busy ? t("cancel") : `${t("close")} (Esc)`}>✕</button>
     </header>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected={mode === "video"} class:on={mode === "video"} disabled={busy} onclick={() => (mode = "video")}>🎞 {t("exportTabVideo")}</button>
+      <button role="tab" aria-selected={mode === "story"} class:on={mode === "story"} disabled={busy} onclick={() => (mode = "story")} title={t("storyHelp")}>📦 {t("exportTabStory")}</button>
+    </div>
 
-    {#if phase === "setup"}
+    {#if mode === "story"}
+      <StoryExport bind:this={storyView} bind:running={storyRunning} generation={story.generation} {title} sourcePath={story.sourcePath} {dir} {count} {index}
+        project={story.project} aspect={px.w / px.h} reading={story.reading} lang={story.lang} {onclose} />
+    {:else if phase === "setup"}
       <div class="content">
         <div class="ff" class:bad={!checking && !ff?.encoder}>
           {#if checking}
@@ -386,6 +409,9 @@
   }
   header { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
   header b { flex: 1; }
+  .tabs { display: flex; gap: 2px; padding: 6px 12px 0; border-bottom: 1px solid var(--border); }
+  .tabs button { border-radius: 6px 6px 0 0; border-bottom: none; padding: 3px 12px; background: none; color: var(--muted); }
+  .tabs button.on { background: var(--panel-2); color: var(--text); border-color: var(--border); }
   .close { background: none; border-color: transparent; }
   .content { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
   .row { display: grid; grid-template-columns: 140px 1fr; gap: 10px; align-items: start; }
