@@ -6,7 +6,7 @@
 
 Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4.
 
-> Estado: **versión 1.0.0 en pruebas**, todavía sin publicar. Lo que trae está en [CHANGELOG.md](CHANGELOG.md) y lo que falta comprobar en los tres equipos, en [docs/lista-comprobacion.md](docs/lista-comprobacion.md). Este README se actualiza con cada cambio.
+> Estado: **versión 1.0.0 publicada** el 21 de noviembre de 2026. Se descarga en [imgxplorer.app](https://imgxplorer.app) y en [GitHub Releases](https://github.com/idNull/ImgXplorer/releases/latest). Lo que trae está en [CHANGELOG.md](CHANGELOG.md) y lo que falta comprobar en los tres equipos, en [docs/lista-comprobacion.md](docs/lista-comprobacion.md). Este README se actualiza con cada cambio.
 
 ![Qué hace imgXplorer](docs/img/infografia.svg)
 
@@ -571,6 +571,8 @@ El formato de animaciones está especificado en [docs/format.md](docs/format.md)
 La historia del proyecto, para todos los públicos, está en [docs/imgXplorer-la-historia.docx](docs/imgXplorer-la-historia.docx).
 
 ## Instalar
+
+**Descarga:** el instalador de Linux y el de macOS de cada versión están en [imgxplorer.app](https://imgxplorer.app) y en [GitHub Releases](https://github.com/idNull/ImgXplorer/releases/latest), los mismos archivos en los dos sitios. Junto a cada uno está su huella SHA-256 para comprobar la descarga (`sha256sum archivo` en Linux, `shasum -a 256 archivo` en macOS).
 
 Los paquetes para repartir se crean con `pnpm dist` y quedan en `dist/` (detalles en [docs/packaging.md](docs/packaging.md)). Los dos instaladores primero comprueban el sistema, enseñan qué van a hacer y no cambian nada hasta que respondes que sí.
 

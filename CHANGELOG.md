@@ -2,7 +2,7 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). La versión sigue [Semantic Versioning](https://semver.org/lang/es/).
 
-## [1.0.0] — en pruebas, sin publicar
+## [1.0.0] — 2026-11-21
 
 *imgXplorer — tu cómic, viñeta a viñeta.* La primera versión completa: un visor rápido de cómics e imágenes para Linux y macOS que, si quieres, convierte un cómic en un vídeo animado viñeta a viñeta, con sonido, efectos y voces.
 
