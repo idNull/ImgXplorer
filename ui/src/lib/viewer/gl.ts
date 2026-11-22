@@ -440,9 +440,10 @@ export class GlViewer {
     return tex;
   }
 
-  /** Ajusta el canvas al tamaño CSS × devicePixelRatio. Devuelve el viewport en px CSS. */
-  resize(): Size {
-    const dpr = window.devicePixelRatio || 1;
+  /** Ajusta el canvas al tamaño CSS × devicePixelRatio (como mucho `maxDpr`: el móvil lo baja al
+   *  reproducir para que los efectos no calienten). Devuelve el viewport en px CSS. */
+  resize(maxDpr = Infinity): Size {
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     const { clientWidth: w, clientHeight: h } = this.canvas as HTMLCanvasElement;
     const pw = Math.max(1, Math.round(w * dpr));
     const ph = Math.max(1, Math.round(h * dpr));

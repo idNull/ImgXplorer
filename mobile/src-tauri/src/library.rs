@@ -172,9 +172,20 @@ impl Library {
         let pages = count_pages(&dest).inspect_err(|_| {
             let _ = std::fs::remove_dir_all(&dir);
         })?;
+        // Una historia se comprueba entera al entrar (manifiesto, proyecto y sonidos) y se llama
+        // por su título, no por el nombre del archivo.
+        let title = match kind {
+            Kind::Story => {
+                let story = imgx_story::read(&dest).inspect_err(|_| {
+                    let _ = std::fs::remove_dir_all(&dir);
+                })?;
+                Some(story.manifest.title.trim().to_owned()).filter(|t| !t.is_empty())
+            }
+            _ => None,
+        };
         let item = Item {
             id,
-            title: title_of(&inc.name),
+            title: title.unwrap_or_else(|| title_of(&inc.name)),
             kind,
             path: dest.display().to_string(),
             pages,
@@ -270,6 +281,33 @@ mod tests {
             std::io::Write::write_all(&mut w, &PNG).unwrap();
         }
         w.finish().unwrap();
+    }
+
+    #[test]
+    fn una_historia_entra_con_su_titulo() {
+        let root = tmp("story-root");
+        let inbox = tmp("story-inbox");
+        let lib = Library::new(root.clone());
+        let source = imgx_core::schema::Source { kind: imgx_core::schema::SourceKind::Archive, name: "x".into(), fingerprint: None };
+        let input = imgx_story::ExportInput {
+            pages: vec!["01.png".into()],
+            read_page: &|_| Ok((PNG.to_vec(), imgx_story::PageData::default())),
+            project: imgx_core::Project::new(source),
+            sounds: vec![],
+            read_sound: &|_| Err("sin sonidos".into()),
+            manifest: imgx_story::Manifest { title: "La gran aventura".into(), ..Default::default() },
+        };
+        imgx_story::write(&inbox.join("aventura.imgxstory"), input, &mut |_, _| true).unwrap();
+        // Un cómic con la extensión de una historia no pasa: le falta el manifiesto.
+        cbz(&inbox.join("falsa.imgxstory"), 2);
+        let inc = |n: &str| Incoming { path: inbox.join(n), name: n.into() };
+        let r = lib.import(vec![inc("aventura.imgxstory"), inc("falsa.imgxstory")], "Fotos");
+        assert_eq!(r.items.len(), 1, "{:?}", r.failed);
+        assert_eq!((r.items[0].kind, r.items[0].title.as_str(), r.items[0].pages), (Kind::Story, "La gran aventura", 1));
+        assert_eq!(r.failed.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), ["falsa.imgxstory"]);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2, "una carpeta y library.json");
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(inbox).unwrap();
     }
 
     #[test]

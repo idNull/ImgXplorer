@@ -2635,8 +2635,10 @@ dependencies = [
 name = "imgxplorer-mobile"
 version = "0.1.0"
 dependencies = [
+ "imgx-core",
  "imgx-host",
  "imgx-media",
+ "imgx-story",
  "log",
  "serde",
  "serde_json",

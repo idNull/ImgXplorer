@@ -2,12 +2,23 @@
   // Lector táctil: el visor WebGL del escritorio (Viewer.svelte, con teselas, tira vertical y
   // encuadre) a pantalla completa. Tocar a los lados o deslizar pasa de página; tocar en el centro
   // enseña u oculta los controles; pellizcar hace zoom y el doble toque amplía.
-  import { onDestroy, onMount } from "svelte";
+  //
+  // Reproducir (▶) usa el reproductor del Modo Acción del escritorio: la cámara, las transiciones y
+  // los efectos de una historia `.imgxstory` (o, en un cómic, la cámara automática). Con la
+  // historia se abre una portada con su título y sus créditos.
+  import { onDestroy, onMount, tick } from "svelte";
   import Viewer from "$imgx/viewer/Viewer.svelte";
   import type { Framing, ReadLayout } from "$imgx/reading/layout";
-  import { closeSource, library, openSource, pictureRef, type Item, type SourceInfo } from "./lib/api";
+  import type { PlayerInfo } from "$imgx/action/player";
+  import { ProjectStore } from "$imgx/action/project.svelte";
+  import { projectSequence } from "$imgx/action/sequence.svelte";
+  import { adjustUniforms, normalize } from "$imgx/adjust/adjust";
+  import { levels } from "$imgx/adjust/levels.svelte";
+  import { log } from "$imgx/log";
+  import PlayBar from "./PlayBar.svelte";
+  import { closeSource, detectPanels, library, openSource, pictureRef, type Item, type SourceInfo } from "./lib/api";
   import { t } from "./lib/i18n";
-  import { reading, saveReading, type Mode } from "./lib/reading";
+  import { reading, saveReading, type Mode, type Quality, type StoryFit } from "./lib/reading";
 
   let { item, onclose }: { item: Item; onclose: () => void } = $props();
 
@@ -18,16 +29,41 @@
   let viewer = $state<Viewer>();
   let mode = $state<Mode>(reading.mode);
   let rtl = $state(reading.rtl);
+  let storyFit = $state<StoryFit>(reading.storyFit);
+  let quality = $state<Quality>(reading.quality);
+  /** Portada de la historia (título, créditos, ▶). */
+  let intro = $state(false);
+  /** Se está reproduciendo (desde que se pulsa ▶ hasta que se para). */
+  let playing = $state(false);
+  let playerInfo = $state<PlayerInfo | null>(null);
+  const store = new ProjectStore();
 
   const count = $derived(source?.entries.length ?? 0);
+  const story = $derived(source?.story ?? null);
   const current = $derived(source && count ? pictureRef(source, index) : null);
   const neighbours = $derived(
     source ? [index + 1, index - 1, index + 2].filter((i) => i >= 0 && i < count).map((i) => pictureRef(source!, i)) : [],
   );
   const layout = $derived<ReadLayout | null>(
-    source && mode === "strip" ? { kind: "strip", id: String(source.generation), count, at: index } : null,
+    source && mode === "strip" && !playing ? { kind: "strip", id: String(source.generation), count, at: index } : null,
   );
   const framing = $derived<Framing>({ fit: mode === "width" ? "width" : "window", rtl, box: null });
+
+  // Ajustes de imagen (🎨) que trae el proyecto, como en el escritorio (sin el modo noche).
+  const adjustAt = $derived.by(() => {
+    const s = source;
+    const data = store.data;
+    if (!s || !data) return null;
+    void levels.rev;
+    const own = new Map(data.items.filter((i) => i.adjust).map((i) => [i.entry, normalize($state.snapshot(i.adjust))]));
+    const all = normalize($state.snapshot(data.defaults.adjust));
+    if (!own.size && !all) return null;
+    return (i: number) => {
+      const name = s.entries[i]?.name;
+      const adj = (name !== undefined ? own.get(name) : null) ?? all;
+      return adjustUniforms(adj, adj?.clean ? levels.get(i) : null, null);
+    };
+  });
 
   let hideTimer = 0;
   function showBars(ms = 2500) {
@@ -39,9 +75,20 @@
   onMount(async () => {
     try {
       const s = await openSource(item.path);
+      await store.load(s.generation, { kind: s.kind, title: s.title, fingerprint: s.fingerprint }, s.project);
+      levels.reset(s.generation);
       index = Math.min(item.page, Math.max(0, s.entries.length - 1));
+      // La primera vez, una historia se lee como se pensó (sin cambiar la preferencia de los cómics).
+      if (s.story && !item.opened) {
+        const r = s.story.reading;
+        mode = r.strip ? "strip" : r.fit === "width" ? "width" : "page";
+        rtl = !!r.rtl;
+      }
       source = s;
-      showBars();
+      if (s.story) {
+        intro = true;
+        bars = false;
+      } else showBars();
     } catch (e) {
       error = String(e);
     }
@@ -49,7 +96,9 @@
   onDestroy(() => {
     clearTimeout(hideTimer);
     clearTimeout(saveTimer);
+    releaseWake();
     if (source) library.progress(item.id, index);
+    store.unload();
     closeSource();
   });
 
@@ -64,15 +113,18 @@
 
   function go(i: number) {
     if (!count) return;
-    index = Math.max(0, Math.min(count - 1, i));
+    const to = Math.max(0, Math.min(count - 1, i));
+    const p = viewer?.playback();
+    if (p) p.goTo(to);
+    else index = to;
   }
   /** Página siguiente en el sentido de lectura (`dir` 1) o la anterior (−1). */
   const step = (dir: 1 | -1) => go(index + dir);
 
   function tap(x: number) {
     const w = window.innerWidth;
-    if (mode !== "strip" && x < w * 0.3) return step(rtl ? 1 : -1);
-    if (mode !== "strip" && x > w * 0.7) return step(rtl ? -1 : 1);
+    if ((playing || mode !== "strip") && x < w * 0.3) return step(rtl ? 1 : -1);
+    if ((playing || mode !== "strip") && x > w * 0.7) return step(rtl ? -1 : 1);
     if (bars) {
       bars = false;
       clearTimeout(hideTimer);
@@ -80,9 +132,9 @@
   }
 
   function swipe(dx: number, dy: number): boolean {
-    if (mode === "strip") return false;
+    if (mode === "strip" && !playing) return false;
     // Con zoom (pellizco) el dedo mueve la imagen; ajustada al ancho, el desplazamiento es vertical.
-    if (mode === "page" && viewer?.isZoomedIn()) return false;
+    if (!playing && mode === "page" && viewer?.isZoomedIn()) return false;
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return false;
     const forward = dx < 0 !== rtl;
     step(forward ? 1 : -1);
@@ -101,7 +153,127 @@
     saveReading({ mode, rtl });
     showBars();
   }
+
+  // ── Reproducción ──
+  /** Proporción para la que se pensó la cámara (solo si la historia la trae). */
+  const authored = $derived(story?.authoredAspect && story.authoredAspect > 0 ? story.authoredAspect : null);
+  let winW = $state(window.innerWidth);
+  let winH = $state(window.innerHeight);
+  /** Al reproducir «como se pensó», el visor se estrecha a esa proporción (con bandas negras). */
+  const frame = $derived.by(() => {
+    if (!playing || !authored || storyFit !== "authored" || !winW || !winH) return null;
+    let w = winW;
+    let h = Math.round(winW / authored);
+    if (h > winH) {
+      h = winH;
+      w = Math.round(winH * authored);
+    }
+    return { x: Math.round((winW - w) / 2), y: Math.round((winH - h) / 2), w, h };
+  });
+
+  /** Resolución al reproducir: la de la pantalla (alta), 1,25 (ahorro) o automática. */
+  let autoRatio = $state(Math.min(window.devicePixelRatio || 1, 2));
+  const pixelRatio = $derived(quality === "high" ? Infinity : quality === "saver" ? 1.25 : autoRatio);
+  let slow = 0;
+  /** En automático, si va a menos de 40 fps durante un segundo y medio, se baja la resolución. */
+  function watchFps(fps: number) {
+    if (!playing || quality !== "auto" || !fps || playerInfo?.state !== "playing") return;
+    slow = fps < 40 ? slow + 1 : 0;
+    if (slow >= 3 && autoRatio > 1) {
+      autoRatio = Math.max(1, autoRatio - 0.5);
+      slow = 0;
+      log.info(`reproducción a ${fps} fps: resolución ×${autoRatio}`);
+    }
+  }
+
+  const sequence = $derived(source ? projectSequence(store, source.entries.map((e) => e.name), (i) => detectPanels(source!.generation, i)) : null);
+
+  /** Empieza a reproducir desde la imagen `from` (por defecto, la actual). */
+  async function play(from = index) {
+    if (!source || !sequence || !count) return;
+    intro = false;
+    playing = true;
+    // El visor cambia de tamaño (encuadre «como se pensó») antes de que el reproductor mire su proporción.
+    await tick();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if (!viewer || !playing) return;
+    viewer.play({ ...sequence, start: from, count, onIndex: (i) => (index = i) });
+    bars = false;
+    void holdWake();
+  }
+
+  function stopPlay() {
+    viewer?.stop();
+    playing = false;
+    playerInfo = null;
+    releaseWake();
+    showBars();
+  }
+
+  function onPlayer(p: PlayerInfo | null) {
+    const was = playerInfo?.state;
+    playerInfo = p;
+    if (!p) return;
+    // Al acabar o al pausar, los controles a la vista; la pantalla puede volver a apagarse.
+    if (p.state !== was && (p.state === "ended" || p.state === "paused")) {
+      bars = true;
+      clearTimeout(hideTimer);
+      releaseWake();
+    } else if (p.state !== was && p.state === "playing") void holdWake();
+  }
+
+  /** Cambiar el encuadre o la calidad mientras se reproduce: se vuelve a empezar la imagen actual. */
+  async function restart() {
+    if (!playing) return;
+    const paused = playerInfo?.state === "paused";
+    viewer?.stop();
+    await play(index);
+    if (paused) viewer?.playback()?.toggle();
+  }
+  async function replay() {
+    viewer?.stop();
+    await play(0);
+  }
+  function toggleFit() {
+    storyFit = storyFit === "authored" ? "screen" : "authored";
+    saveReading({ storyFit });
+    void restart();
+  }
+  const QUALITIES: Quality[] = ["auto", "high", "saver"];
+  function nextQuality() {
+    quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
+    saveReading({ quality });
+  }
+
+  // La pantalla no se apaga mientras se reproduce.
+  let wake: WakeLockSentinel | null = null;
+  async function holdWake() {
+    if (wake || document.visibilityState !== "visible") return;
+    try {
+      wake = (await navigator.wakeLock?.request("screen")) ?? null;
+      wake?.addEventListener("release", () => (wake = null));
+    } catch (e) {
+      log.info("sin bloqueo de pantalla:", e);
+    }
+  }
+  function releaseWake() {
+    void wake?.release().catch(() => {});
+    wake = null;
+  }
+
+  // Al salir de la app (otra app, bloquear el móvil), la historia se pausa.
+  onMount(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "hidden" && playerInfo && !["paused", "ended"].includes(playerInfo.state)) {
+        viewer?.playback()?.toggle();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  });
 </script>
+
+<svelte:window bind:innerWidth={winW} bind:innerHeight={winH} />
 
 <div class="reader">
   {#if error}
@@ -110,50 +282,92 @@
       <button onclick={onclose}>{t("close")}</button>
     </div>
   {:else if source}
-    <Viewer
-      bind:this={viewer}
-      item={current}
-      prefetch={neighbours}
-      refAt={(i) => pictureRef(source!, i)}
-      background="#000000"
-      {layout}
-      {framing}
-      onindex={(i) => (index = i)}
-      ontap={(x) => tap(x)}
-      onswipe={(dx, dy) => swipe(dx, dy)}
-    />
+    <div
+      class="stage"
+      style:left={frame ? `${frame.x}px` : null}
+      style:top={frame ? `${frame.y}px` : null}
+      style:width={frame ? `${frame.w}px` : null}
+      style:height={frame ? `${frame.h}px` : null}
+    >
+      <Viewer
+        bind:this={viewer}
+        item={current}
+        prefetch={neighbours}
+        refAt={(i) => pictureRef(source!, i)}
+        background="#000000"
+        {layout}
+        {framing}
+        adjust={adjustAt}
+        playPixelRatio={pixelRatio}
+        onindex={(i) => (index = i)}
+        onplayer={onPlayer}
+        onstatus={(s) => watchFps(s.fps)}
+        ontap={(x) => tap(x)}
+        onswipe={(dx, dy) => swipe(dx, dy)}
+      />
+    </div>
   {/if}
 
-  {#if bars && source}
+  {#if intro && source && story}
+    <div class="intro">
+      <div class="card">
+        <small>🎬 {t("story")}</small>
+        <h2>{story.title || source.title}</h2>
+        {#if story.credits?.trim()}<p class="credits">{story.credits.trim()}</p>{/if}
+        <button class="primary" onclick={() => play()}>▶ {index > 0 ? t("storyResume", { page: index + 1 }) : t("storyPlay")}</button>
+        {#if index > 0}<button onclick={() => play(0)}>↻ {t("replay")}</button>{/if}
+        <button onclick={() => { intro = false; showBars(); }}>📖 {t("storyRead")}</button>
+        <p class="note">🔇 {t("noSound")}</p>
+      </div>
+    </div>
+  {/if}
+
+  {#if bars && source && !intro}
     <div class="top">
       <button class="back" onclick={onclose} aria-label={t("back")}>←</button>
-      <span class="title">{item.title}</span>
+      <span class="title">{story?.title || item.title}</span>
       <span class="num">{index + 1} / {count}</span>
     </div>
     <div class="bottom">
-      {#if count > 1}
-        <input
-          type="range"
-          min="0"
-          max={count - 1}
-          value={index}
-          dir={rtl ? "rtl" : "ltr"}
-          oninput={(e) => {
-            go(+(e.currentTarget as HTMLInputElement).value);
-            showBars(4000);
-          }}
+      {#if playing && playerInfo}
+        <PlayBar
+          info={playerInfo}
+          {count}
+          player={() => viewer?.playback() ?? null}
+          fit={authored ? storyFit : null}
+          {quality}
+          onstop={stopPlay}
+          onfit={toggleFit}
+          onquality={nextQuality}
+          onreplay={replay}
         />
+      {:else}
+        {#if count > 1}
+          <input
+            type="range"
+            min="0"
+            max={count - 1}
+            value={index}
+            dir={rtl ? "rtl" : "ltr"}
+            oninput={(e) => {
+              go(+(e.currentTarget as HTMLInputElement).value);
+              showBars(4000);
+            }}
+          />
+        {/if}
+        <div class="row">
+          <button class="play" onclick={() => play()} title={t("playHint")}>▶ {t("play")}</button>
+          <button onclick={nextMode} title={t("modeHint")}>{modeLabel[mode]()}</button>
+          <button class:on={rtl} onclick={toggleRtl} title={t("mangaHint")}>⇄ {t("manga")}</button>
+        </div>
       {/if}
-      <div class="row">
-        <button onclick={nextMode} title={t("modeHint")}>{modeLabel[mode]()}</button>
-        <button class:on={rtl} onclick={toggleRtl} title={t("mangaHint")}>⇄ {t("manga")}</button>
-      </div>
     </div>
   {/if}
 </div>
 
 <style>
   .reader { position: fixed; inset: 0; background: #000; }
+  .stage { position: absolute; inset: 0; }
   .top, .bottom {
     position: absolute; left: 0; right: 0; z-index: 2;
     background: rgb(15 18 23 / 0.88); backdrop-filter: blur(8px);
@@ -167,12 +381,27 @@
   .num { color: var(--muted); font-variant-numeric: tabular-nums; }
   .bottom { bottom: 0; padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px); }
   input[type="range"] { width: 100%; accent-color: var(--accent); }
-  .row { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
+  .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
   .row button {
-    border: 0; border-radius: 999px; padding: 9px 16px; font: inherit; font-size: 15px;
+    border: 0; border-radius: 999px; padding: 9px 14px; font: inherit; font-size: 15px;
     background: #2a313b; color: var(--text);
   }
-  .row button.on { background: var(--accent); color: white; }
+  .row button.on, .row button.play { background: var(--accent); color: white; }
+  .intro {
+    position: absolute; inset: 0; z-index: 3; display: flex; align-items: flex-end; justify-content: center;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.92) 30%, rgb(0 0 0 / 0.35));
+    padding: 24px 18px calc(env(safe-area-inset-bottom) + 24px);
+  }
+  .card { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 10px; }
+  .card small { color: var(--accent); font-weight: 600; }
+  .card h2 { margin: 0; font-size: 24px; }
+  .credits { margin: 0; color: var(--muted); white-space: pre-line; max-height: 30vh; overflow-y: auto; }
+  .card button {
+    border: 0; border-radius: 14px; padding: 14px; font: inherit; font-size: 16px; font-weight: 600;
+    background: #2a313b; color: var(--text);
+  }
+  .card button.primary { background: var(--accent); color: white; font-size: 18px; }
+  .note { margin: 4px 0 0; color: var(--muted); font-size: 13px; text-align: center; }
   .error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
   .error button { border: 0; border-radius: 12px; padding: 12px 22px; background: var(--panel); color: var(--text); font: inherit; }
 </style>

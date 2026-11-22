@@ -1,6 +1,7 @@
 // Llamadas a Rust del visor móvil: la biblioteca (mobile/src-tauri/src/library.rs) y la fuente
 // abierta (crates/imgx-host, las mismas órdenes que el escritorio).
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { LoadedProject } from "$imgx/action/project.svelte";
 import type { PictureRef } from "$imgx/viewer/picture";
 import { lang, t } from "./i18n";
 
@@ -22,6 +23,17 @@ export interface Imported {
   failed: [string, string][];
 }
 
+/** El manifiesto de una historia `.imgxstory` (crates/imgx-story). */
+export interface StoryManifest {
+  title: string;
+  credits?: string;
+  variant: "desktop" | "mobile";
+  pages: number;
+  reading: Partial<{ fit: "window" | "width" | "height"; strip: boolean; rtl: boolean }>;
+  /** Ancho / alto del vídeo para el que se pensó la cámara. */
+  authoredAspect?: number;
+}
+
 export interface SourceInfo {
   generation: number;
   title: string;
@@ -29,6 +41,10 @@ export interface SourceInfo {
   kind: "folder" | "archive";
   start: number;
   entries: { name: string; size: number; decoded: boolean }[];
+  fingerprint: string;
+  /** Animaciones: las de la historia o las guardadas junto al cómic. */
+  project: LoadedProject;
+  story?: StoryManifest;
 }
 
 /** `imgx://localhost/` (o `http://imgx.localhost/` en Android). */
@@ -64,3 +80,7 @@ export async function coverUrl(path: string): Promise<string | null> {
 
 export const openSource = (path: string) => invoke<SourceInfo>("open_source", { path });
 export const closeSource = () => invoke("close_source");
+
+/** Viñetas de la imagen i, `[x, y, w, h, …]` (en una historia ya vienen calculadas). */
+export const detectPanels = (generation: number, index: number) =>
+  invoke<number[][]>("detect_panels", { generation, index }).then((r) => r.flat());

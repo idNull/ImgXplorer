@@ -2,7 +2,7 @@
 
 Todo lo del visor de Android: qué hace, cómo está hecho, cómo prepararlo y probarlo, y lo que se ha ido creando en cada fase. Este documento se actualiza con cada cambio.
 
-> **Estado:** fase 1 hecha y probada en el móvil. La app tiene estantería y lector: abre fotos del carrete y cómics `cbz`, `cbr` y `cb7`, con gestos táctiles. Lo siguiente es la fase 2 (historias `.imgxstory`). Todo lo que trae está en el [registro](#registro-de-lo-creado).
+> **Estado:** fase 2 hecha y probada en el móvil. Además de las fotos del carrete y los cómics `cbz`, `cbr` y `cb7` (fase 1), la app reproduce las historias `.imgxstory` con su cámara, sus transiciones, sus efectos y sus textos, todavía sin sonido. Lo siguiente es la fase 3 (sonido). Todo lo que trae está en el [registro](#registro-de-lo-creado).
 
 ## Qué es
 
@@ -12,7 +12,7 @@ Una app de imgxplorer para el móvil que, de momento, **solo es un visor**. El e
 |---|---|---|
 | 0 | Preparar el terreno: código compartido con el escritorio, esqueleto de la app y herramientas | hecha |
 | 1 | Visor de imágenes del carrete y de cómics `cbz`, `cbr` y `cb7` | hecha |
-| 2 | Historias `.imgxstory` con su animación, sus efectos y sus textos | pendiente |
+| 2 | Historias `.imgxstory` con su animación, sus efectos y sus textos | hecha |
 | 3 | Sonido de las historias (voces, efectos y ambientes) | pendiente |
 | 4 | Lo mismo en iOS (con su propio `README_iOS.md`) | pendiente |
 | 5 | Publicar: APK firmado, Google Play y descarga desde imgxplorer.app | pendiente |
@@ -26,9 +26,9 @@ Una app de imgxplorer para el móvil que, de momento, **solo es un visor**. El e
   |---|---|
   | `crates/imgx-host` | Fuente abierta, protocolo `imgx://` para servir las páginas, portadas, proyectos `.imgx` y sonido, con las mismas órdenes y los mismos nombres que en el escritorio |
   | `crates/imgx-media` | Abrir carpetas y comprimidos y decodificar imágenes, sin libheif (ver [Formatos](#formatos-y-límites)) |
-  | `crates/imgx-story` | Leer las historias `.imgxstory` (fase 2) |
+  | `crates/imgx-story` | Leer las historias `.imgxstory`: manifiesto, proyecto y lo ya calculado de cada página (viñetas, niveles) |
   | `crates/imgx-audio` | Motor de sonido, con salida por AAudio en Android (fase 3) |
-  | `crates/imgx-core` | Cámara, línea de tiempo y efectos, en WebAssembly dentro de la interfaz (fase 2) |
+  | `crates/imgx-core` | Cámara, línea de tiempo, plantillas y efectos, en WebAssembly dentro de la interfaz |
 
 - **La interfaz es nueva y táctil** (`mobile/ui`), pero reutiliza los módulos del escritorio sin copiarlos: el alias `$imgx` apunta a `ui/src/lib`. Así, el visor WebGL, los efectos y el reproductor son los mismos y un arreglo sirve para las dos apps.
 - **Lo que exige código propio de Android** (el carrete, abrir archivos de otras apps) irá en un complemento de Tauri en Kotlin: `mobile/plugin/android/`, desde la fase 1.
@@ -168,7 +168,16 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 | Protocolo `imgx://` | Servir las páginas a la interfaz sin pasar por JSON, con miniaturas en caché | `imgx_host::serve`, el mismo que el escritorio | Fase 0 (se usa desde la fase 1) |
 | Abrir una fuente y analizar sus páginas | Abrir un cómic y saber sus viñetas, niveles y márgenes | `imgx_host::source` (`open_source`, `detect_panels`, `image_levels`, `content_box`) | Fase 0 (se usa desde la fase 1) |
 | Portadas | Portadas de la estantería | `imgx_host::covers` | Fase 0 (se usa desde la fase 1) |
+| Historias `.imgxstory` | Al abrir una, una portada con su título, sus créditos y ▶ Ver historia (o «Seguir en la página n»), ↻ desde el principio y 📖 Leer las páginas. La primera vez se lee con el modo con que se pensó (tira, ancho, manga) | `Reader.svelte`; `open_source` devuelve el manifiesto y el proyecto que trae dentro | Fase 2 |
+| ▶ Reproducir | La cámara animada del Modo Acción: plantillas (cómic, viñeta a viñeta…), cámara propia, transiciones (fundido, deslizar, cámara continua) y efectos (temblor, destello, onda, aberración, glitch, líneas, onomatopeyas, subtítulos y cartelas). También en cómics y álbumes, con la cámara automática | `Viewer.play` y `player.ts` del escritorio; `ui/src/lib/action/sequence.svelte.ts` (compartido) saca de su proyecto la timeline, la transición y los efectos de cada imagen | Fase 2 |
+| Controles al reproducir | ⏮ ⏸/▶ ⏭, avance de la imagen, velocidad (0,5× a 2×) y ⏹. Tocar a los lados o deslizar salta de imagen; tocar en el centro, los controles; pellizcar o arrastrar mueve la cámara a mano y al soltar vuelve sola | `PlayBar.svelte`; los gestos del visor compartido | Fase 2 |
+| 🎬 Encuadre | «Como se pensó»: el visor toma la proporción del vídeo para el que se hizo la cámara (`authoredAspect`), con bandas negras. «Pantalla completa»: las plantillas se recalculan para la pantalla del móvil | `Reader.svelte` estrecha el visor antes de empezar; se recuerda | Fase 2 |
+| Calidad | ⚙ Automática (hasta 2× y baja sola si va a menos de 40 fps), ✦ Alta (la resolución de la pantalla, 2,81× en el A52s) y 🔋 Ahorro (1,25×). Solo al reproducir; leer siempre va a la resolución de la pantalla | `playPixelRatio` del visor y `resize(maxDpr)` de `gl.ts` (sin él, el escritorio sigue igual) | Fase 2 |
+| Ajustes de imagen | Los ajustes 🎨 que trae la historia (brillo, contraste, «limpiar escaneo»…) | `adjustUniforms` y `levels` del escritorio | Fase 2 |
+| Pantalla encendida y pausa | Mientras se reproduce la pantalla no se apaga; al salir de la app o bloquear el móvil, la historia se pausa | Screen Wake Lock del WebView y `visibilitychange` | Fase 2 |
 | Sonido | Reproducir el sonido de las historias | `imgx_host::audio` e `imgx-audio` | Fase 0 (se usa en la fase 3) |
+
+**Para probar las historias:** en el escritorio, 🎞 Exportar → 📦 Historia, variante móvil. La de la fase 2 se hizo con las viñetas de `muestras/` y un generador temporal que ya no está en el repositorio.
 
 **Permisos de Android:** ninguno de fotos ni de almacenamiento. El carrete se abre con el selector de fotos de Android y los archivos con el de documentos: el usuario elige y la app solo recibe eso. Google Play restringe el permiso de acceso a todas las fotos, y una app que no lo pide es más fácil de publicar y da más confianza. Solo está el de internet (`INTERNET`), que pone Tauri para el modo de desarrollo (la interfaz se carga desde el ordenador); el visor no se conecta a nada.
 
@@ -218,6 +227,16 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - **«Abrir con» / «Compartir»** declarados en `AndroidManifest.xml`.
 - **CBR en Android** (UnRAR con el NDK) y un APK de depuración de 48 MB.
 
+**Fase 2 (hecha, probada el 22 nov 2026 en el A52s)**
+- **Reproductor de historias** en `Reader.svelte`: portada de la historia, ▶ en cualquier cómic, `PlayBar.svelte` con los controles y los gestos al reproducir.
+- **`ui/src/lib/action/sequence.svelte.ts` (compartido):** cómo se recorre una fuente al reproducir, sacado de su `ProjectStore`. El escritorio hace lo mismo en `App.svelte` y no cambia.
+- **Visor compartido:** `playPixelRatio` (Viewer) y `resize(maxDpr)` (gl.ts) para bajar la resolución al reproducir. El escritorio no los usa y dibuja igual que antes.
+- **Encuadre «como se pensó» / «pantalla completa»** y **calidad automática, alta o ahorro**, que se recuerdan (`reading.ts`).
+- **Historia de prueba:** «Viñetas en el móvil», con las cinco páginas de `muestras/vinetas.cbz`, plantilla de cómic, deslizar y cámara continua, temblor, destello, onomatopeya, onda, aberración, líneas de velocidad, viñeta oscura, título, subtítulo y cartela; variante móvil y 16:9.
+- **Estantería:** una historia entra con el título de su manifiesto y se comprueba entera al copiarla. Si está rota, se rechaza sin dejar restos (prueba `una_historia_entra_con_su_titulo`).
+- **Botones del reproductor** como símbolos de texto (`U+FE0E`): Android pintaba ⏹ como un emoji azul.
+- **Sin sonido todavía** (fase 3): las imágenes duran lo que su voz, pero no suena nada, y la portada lo avisa.
+
 ## Lista de comprobación en el móvil
 
 **Móvil de pruebas:** Samsung Galaxy A52s 5G (SM-A528B), Android 14 (One UI 6.1), ARM de 64 bits, pantalla de 1080×2400 (384×854 a 2,81×), WebView 157.
@@ -237,3 +256,14 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - [x] El botón «atrás» vuelve a la estantería.
 - [x] Mantener pulsado y quitar.
 - [x] «Abrir con imgxplorer» desde Archivos y «Compartir» desde la galería.
+
+**Fase 2**
+- [x] Abrir `imgx-prueba-historia.imgxstory`: sale la portada con el título y los créditos.
+- [x] ▶ Ver historia: la cámara recorre las viñetas, con las transiciones y los efectos (temblor, ¡BOOM!, destello, onda, aberración, líneas, títulos y subtítulos).
+- [x] Controles: pausa, anterior, siguiente, velocidad, ⏹, y tocar o deslizar para saltar de imagen.
+- [x] Pellizcar o arrastrar durante la reproducción: la cámara a mano, y al soltar vuelve sola.
+- [x] 🎬 Como se pensó (bandas, 16:9) y 📱 Pantalla completa; en vertical y en horizontal.
+- [x] Calidad: va fluido; ✦ Alta y 🔋 Ahorro se notan.
+- [x] La pantalla no se apaga al reproducir; al salir de la app se pausa.
+- [x] ▶ Reproducir en un cómic normal (cámara automática).
+- [x] Una historia exportada desde el escritorio (variante móvil).

@@ -52,11 +52,13 @@
     ontap?: (x: number, y: number) => void;
     /** Pantalla táctil: deslizar un dedo y soltar; `true` si se encargó (pasar de página). */
     onswipe?: (dx: number, dy: number, ms: number) => boolean;
+    /** Al reproducir, píxeles del canvas por píxel CSS como mucho (el móvil lo baja para ahorrar). */
+    playPixelRatio?: number;
   }
 
   let {
     item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null, adjust = null,
-    layout = null, framing = null, onsize, onindex, onselect, oncontext, ontap, onswipe,
+    layout = null, framing = null, onsize, onindex, onselect, oncontext, ontap, onswipe, playPixelRatio = Infinity,
   }: Props = $props();
 
   interface Slot {
@@ -1003,7 +1005,7 @@
         dirty = true;
       }
       if (player) {
-        vp = gl.resize();
+        vp = gl.resize(playPixelRatio);
         drawScene(player.frame(now, pose, vp));
         const info = player.info();
         if (info.state !== lastPlayerState || now - playerInfoAt > 100) {
