@@ -1,21 +1,24 @@
 <script lang="ts">
   // Controles de la reproducción en el móvil: anterior, pausa, siguiente, el avance de la imagen
-  // actual, la velocidad y parar. Debajo, el encuadre (si la historia lo trae) y la calidad.
+  // actual, la velocidad y parar. Debajo, el silencio, el encuadre (si la historia lo trae) y la
+  // calidad.
   import { SPEEDS, type Player, type PlayerInfo } from "$imgx/action/player";
   import { t } from "./lib/i18n";
   import type { Quality, StoryFit } from "./lib/reading";
 
-  let { info, count, player, fit, quality, onstop, onfit, onquality, onreplay }: {
+  let { info, count, player, fit, quality, muted, onstop, onfit, onquality, onreplay, onmute }: {
     info: PlayerInfo;
     count: number;
     player: () => Player | null;
     /** `null`: la historia no dice para qué proporción se pensó (no hay nada que elegir). */
     fit: StoryFit | null;
     quality: Quality;
+    muted: boolean;
     onstop: () => void;
     onfit: () => void;
     onquality: () => void;
     onreplay: () => void;
+    onmute: () => void;
   } = $props();
 
   const progress = $derived(info.duration > 0 ? Math.min(1, info.t / info.duration) : 0);
@@ -30,6 +33,7 @@
     if (info.speed < SPEEDS[SPEEDS.length - 1]) return p.changeSpeed(1);
     for (let i = 1; i < SPEEDS.length; i++) p.changeSpeed(-1);
   }
+  const fitLabel = { auto: () => `🔄 ${t("fitAuto")}`, authored: () => `🎬 ${t("fitAuthored")}`, screen: () => `📱 ${t("fitScreen")}` };
   const qualityLabel = { auto: () => `⚙ ${t("qualityAuto")}`, high: () => `✦ ${t("qualityHigh")}`, saver: () => `🔋 ${t("qualitySaver")}` };
 </script>
 
@@ -49,8 +53,9 @@
   <div class="row extra">
     {#if chip}<span class="chip">{chip}</span>{/if}
     {#if info.state === "ended" && info.index >= count - 1}<span class="chip end">{t("ended")}</span>{/if}
+    <button class="pill" class:off={muted} onclick={onmute} aria-label={muted ? t("unmute") : t("mute")}>{muted ? "🔇" : "🔊"}</button>
     {#if fit}
-      <button class="pill" onclick={onfit} title={t("fitHint")}>{fit === "authored" ? `🎬 ${t("fitAuthored")}` : `📱 ${t("fitScreen")}`}</button>
+      <button class="pill" onclick={onfit} title={t("fitHint")}>{fitLabel[fit]()}</button>
     {/if}
     <button class="pill" onclick={onquality} title={t("qualityHint")}>{qualityLabel[quality]()}</button>
   </div>
@@ -72,6 +77,7 @@
     border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px;
     background: #2a313b; color: var(--text);
   }
+  .pill.off { background: #4a2a2e; }
   .chip { font-size: 13px; color: var(--muted); padding: 4px 8px; }
   .chip.end { color: var(--accent); font-weight: 600; }
 </style>

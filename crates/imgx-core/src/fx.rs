@@ -840,13 +840,30 @@ pub struct View {
     pub pose: Camera,
     /// Tamaño del viewport en píxeles.
     pub vp: (f64, f64),
+    /// Proporción (ancho / alto) para la que se pensaron los tamaños. Si la pantalla es más alta
+    /// que eso (un móvil en vertical), los porcentajes no se miden sobre su altura, porque las
+    /// onomatopeyas no cabrían de lado a lado; ver [`units`]. `None`: siempre la altura del
+    /// viewport (el escritorio y los vídeos).
+    pub fit: Option<f64>,
+}
+
+/// Píxeles de un 1 % para los efectos y para los subtítulos. Normalmente, el 1 % de la altura del
+/// viewport. En una pantalla más alta que `fit`: los efectos (onomatopeyas, temblor, líneas…)
+/// miden sobre el alto del encuadre pensado puesto a lo ancho, así guardan su tamaño respecto al
+/// ancho; los subtítulos y cartelas, sobre el ancho, para que se lean sin ocupar media pantalla.
+pub fn units(w: f64, h: f64, fit: Option<f64>) -> (f64, f64) {
+    match fit {
+        Some(a) if a > 0.0 && h > w / a => (w / a / 100.0, h.min(w) / 100.0),
+        _ => (h / 100.0, h / 100.0),
+    }
 }
 
 /// Efectos activos en `t` (segundos de la imagen) combinados en un fotograma.
 pub fn frame(list: &[Fx], t: f64, view: &View) -> FxFrame {
     let mut out = FxFrame::default();
     let (w, h) = view.vp;
-    let unit = h / 100.0; // los porcentajes son de la altura del viewport
+    // Los porcentajes son de la altura del viewport (salvo en una pantalla más alta que `fit`).
+    let (unit, caption_unit) = units(w, h, view.fit);
     let m = view.pose.to_viewport(view.img, view.vp);
     let center = (w / 2.0, h / 2.0);
     let mut cam = IDENTITY;
@@ -1055,7 +1072,7 @@ pub fn frame(list: &[Fx], t: f64, view: &View) -> FxFrame {
                 if p.text("text").trim().is_empty() {
                     continue;
                 }
-                let line = p.num("height") * unit;
+                let line = p.num("height") * caption_unit;
                 let alpha = sustained * k.min(1.0);
                 let (x, y, ax, ay, wrap) = match p.choice("style") {
                     "title" => (w / 2.0, h / 2.0, 0.5, 0.5, w * 0.86),
@@ -1132,7 +1149,7 @@ mod tests {
     use super::*;
 
     fn view() -> View {
-        View { img: (1000.0, 1500.0), pose: Camera::FIT, vp: (1280.0, 720.0) }
+        View { img: (1000.0, 1500.0), pose: Camera::FIT, vp: (1280.0, 720.0), fit: None }
     }
 
     fn fx(kind: &str, start: f64, dur: f64) -> Fx {
@@ -1210,6 +1227,31 @@ mod tests {
         let both = [list[0].clone(), shake];
         let c = frame(&both, 1.3, &v).texts;
         assert!((c[0].x - b[0].x).abs() + (c[0].y - b[0].y).abs() > 1e-3);
+    }
+
+    #[test]
+    fn en_un_movil_en_vertical_la_onomatopeya_cabe() {
+        let boom = new_fx("t1", "text", Some("boom"), 0.0).unwrap();
+        let mut sub = new_fx("c1", "caption", None, 0.0).unwrap();
+        sub.params.insert("text".into(), Value::from("Hola"));
+        let list = [boom, sub];
+        let line = |v: &View| {
+            let t = frame(&list, 0.5, v).texts;
+            (t[0].line, t[1].line)
+        };
+        // Pantalla de 384×854 (móvil en vertical) con una historia pensada para 16:9.
+        let phone = |fit| View { img: (1000.0, 1500.0), pose: Camera::FIT, vp: (384.0, 854.0), fit };
+        // Sin `fit` (escritorio, vídeo): el 24 % del alto, más que el ancho de la pantalla para
+        // «¡BOOM!».
+        assert!((line(&phone(None)).0 - 854.0 * 0.24).abs() < 1e-6);
+        // Con `fit`: el mismo tamaño respecto al ancho que en 16:9 (384 × 9/16 = 216 de alto).
+        let (text, caption) = line(&phone(Some(16.0 / 9.0)));
+        assert!((text - 216.0 * 0.24).abs() < 1e-6, "{text}");
+        // Los subtítulos se miden sobre el ancho: legibles sin ocupar media pantalla.
+        assert!((caption - 384.0 * 0.045).abs() < 1e-6, "{caption}");
+        // En horizontal (o en el escritorio) `fit` no cambia nada.
+        let wide = View { vp: (1280.0, 720.0), fit: Some(16.0 / 9.0), ..phone(None) };
+        assert_eq!(line(&wide), line(&View { fit: None, ..wide }));
     }
 
     #[test]

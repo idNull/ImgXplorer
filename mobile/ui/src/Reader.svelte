@@ -4,8 +4,9 @@
   // enseña u oculta los controles; pellizcar hace zoom y el doble toque amplía.
   //
   // Reproducir (▶) usa el reproductor del Modo Acción del escritorio: la cámara, las transiciones y
-  // los efectos de una historia `.imgxstory` (o, en un cómic, la cámara automática). Con la
-  // historia se abre una portada con su título y sus créditos.
+  // los efectos de una historia `.imgxstory` (o, en un cómic, la cámara automática), con su sonido
+  // por el motor de Rust (el mismo director que en el escritorio). Con la historia se abre una
+  // portada con su título y sus créditos.
   import { onDestroy, onMount, tick } from "svelte";
   import Viewer from "$imgx/viewer/Viewer.svelte";
   import type { Framing, ReadLayout } from "$imgx/reading/layout";
@@ -15,8 +16,10 @@
   import { adjustUniforms, normalize } from "$imgx/adjust/adjust";
   import { levels } from "$imgx/adjust/levels.svelte";
   import { log } from "$imgx/log";
+  import { director } from "$imgx/audio/director";
+  import { trackSpecs } from "$imgx/audio/tracks";
   import PlayBar from "./PlayBar.svelte";
-  import { closeSource, detectPanels, library, openSource, pictureRef, type Item, type SourceInfo } from "./lib/api";
+  import { audioFocus, audioPause, closeSource, detectPanels, library, onInterrupt, openSource, pictureRef, type Item, type SourceInfo } from "./lib/api";
   import { t } from "./lib/i18n";
   import { reading, saveReading, type Mode, type Quality, type StoryFit } from "./lib/reading";
 
@@ -31,6 +34,7 @@
   let rtl = $state(reading.rtl);
   let storyFit = $state<StoryFit>(reading.storyFit);
   let quality = $state<Quality>(reading.quality);
+  let muted = $state(reading.muted);
   /** Portada de la historia (título, créditos, ▶). */
   let intro = $state(false);
   /** Se está reproduciendo (desde que se pulsa ▶ hasta que se para). */
@@ -96,7 +100,9 @@
   onDestroy(() => {
     clearTimeout(hideTimer);
     clearTimeout(saveTimer);
+    clearTimeout(rotateTimer);
     releaseWake();
+    void audioFocus(false);
     if (source) library.progress(item.id, index);
     store.unload();
     closeSource();
@@ -159,9 +165,14 @@
   const authored = $derived(story?.authoredAspect && story.authoredAspect > 0 ? story.authoredAspect : null);
   let winW = $state(window.innerWidth);
   let winH = $state(window.innerHeight);
+  /** El móvil está en horizontal. */
+  const landscape = $derived(winW > winH);
+  /** «Como se pensó» de verdad: elegido, o automático con el móvil en horizontal. En vertical, la
+   *  banda sería muy pequeña: toda la pantalla, y la cámara de la plantilla se acerca a la viñeta. */
+  const asAuthored = $derived(storyFit === "authored" || (storyFit === "auto" && landscape));
   /** Al reproducir «como se pensó», el visor se estrecha a esa proporción (con bandas negras). */
   const frame = $derived.by(() => {
-    if (!playing || !authored || storyFit !== "authored" || !winW || !winH) return null;
+    if (!playing || !authored || !asAuthored || !winW || !winH) return null;
     let w = winW;
     let h = Math.round(winW / authored);
     if (h > winH) {
@@ -197,9 +208,20 @@
     await tick();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (!viewer || !playing) return;
-    viewer.play({ ...sequence, start: from, count, onIndex: (i) => (index = i) });
+    // Volúmenes y pistas del proyecto antes del primer sonido (el silencio es del móvil).
+    director.levels($state.snapshot(store.mix), 1, muted);
+    director.tracks(trackSpecs($state.snapshot(store.tracks)), []);
+    // Los tamaños de las onomatopeyas y los subtítulos se pensaron para la proporción de la historia
+    // (16:9 si no la dice): en vertical se miden sobre ella para que quepan.
+    viewer.play({ ...sequence, start: from, count, onIndex: (i) => (index = i), sound: director, fxFit: authored ?? 16 / 9 });
     bars = false;
     void holdWake();
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    saveReading({ muted });
+    director.levels($state.snapshot(store.mix), 1, muted);
   }
 
   function stopPlay() {
@@ -207,6 +229,7 @@
     playing = false;
     playerInfo = null;
     releaseWake();
+    void audioFocus(false);
     showBars();
   }
 
@@ -214,12 +237,27 @@
     const was = playerInfo?.state;
     playerInfo = p;
     if (!p) return;
-    // Al acabar o al pausar, los controles a la vista; la pantalla puede volver a apagarse.
+    // Al acabar o al pausar, los controles a la vista; la pantalla puede volver a apagarse y el
+    // sonido de otras apps, volver a sonar.
     if (p.state !== was && (p.state === "ended" || p.state === "paused")) {
       bars = true;
       clearTimeout(hideTimer);
       releaseWake();
-    } else if (p.state !== was && p.state === "playing") void holdWake();
+      void audioFocus(false);
+    } else if (p.state !== was && p.state === "playing") {
+      void holdWake();
+      void audioFocus(true);
+    }
+  }
+
+  /** Pausa lo que suena (al salir de la app, una llamada, auriculares fuera). */
+  function pauseNow() {
+    const p = viewer?.playback();
+    const info = playerInfo;
+    if (!p || !info || ["paused", "ended"].includes(info.state)) return;
+    p.toggle();
+    // Sin fotogramas (la app en segundo plano) el reproductor no llegaría a decírselo al sonido.
+    void audioPause(info.t, info.speed);
   }
 
   /** Cambiar el encuadre o la calidad mientras se reproduce: se vuelve a empezar la imagen actual. */
@@ -230,12 +268,28 @@
     await play(index);
     if (paused) viewer?.playback()?.toggle();
   }
+  // Al girar el móvil mientras se reproduce, la cámara se rehace para la pantalla nueva (las
+  // plantillas dependen de la proporción y el encuadre automático cambia). Se espera un poco: al
+  // girar, el ancho y el alto no llegan a la vez.
+  let lastLandscape = window.innerWidth > window.innerHeight;
+  let rotateTimer = 0;
+  $effect(() => {
+    const l = landscape;
+    if (l === lastLandscape) return;
+    lastLandscape = l;
+    clearTimeout(rotateTimer);
+    rotateTimer = window.setTimeout(() => {
+      if (playing && playerInfo?.state !== "ended") void restart();
+    }, 300);
+  });
+
   async function replay() {
     viewer?.stop();
     await play(0);
   }
   function toggleFit() {
-    storyFit = storyFit === "authored" ? "screen" : "authored";
+    const all: StoryFit[] = ["auto", "authored", "screen"];
+    storyFit = all[(all.indexOf(storyFit) + 1) % all.length];
     saveReading({ storyFit });
     void restart();
   }
@@ -261,15 +315,22 @@
     wake = null;
   }
 
-  // Al salir de la app (otra app, bloquear el móvil), la historia se pausa.
+  // Al salir de la app (otra app, bloquear el móvil), con una llamada, cuando otra app empieza a
+  // sonar o al desconectar los auriculares, la historia se pausa.
   onMount(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "hidden" && playerInfo && !["paused", "ended"].includes(playerInfo.state)) {
-        viewer?.playback()?.toggle();
-      }
-    };
+    const onVisible = () => document.visibilityState === "hidden" && pauseNow();
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    let stopListening = () => {};
+    let gone = false;
+    void onInterrupt((reason) => {
+      log.info(`sonido interrumpido (${reason})`);
+      pauseNow();
+    }).then((f) => (gone ? f() : (stopListening = f)));
+    return () => {
+      gone = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      stopListening();
+    };
   });
 </script>
 
@@ -317,7 +378,6 @@
         <button class="primary" onclick={() => play()}>▶ {index > 0 ? t("storyResume", { page: index + 1 }) : t("storyPlay")}</button>
         {#if index > 0}<button onclick={() => play(0)}>↻ {t("replay")}</button>{/if}
         <button onclick={() => { intro = false; showBars(); }}>📖 {t("storyRead")}</button>
-        <p class="note">🔇 {t("noSound")}</p>
       </div>
     </div>
   {/if}
@@ -336,6 +396,8 @@
           player={() => viewer?.playback() ?? null}
           fit={authored ? storyFit : null}
           {quality}
+          {muted}
+          onmute={toggleMute}
           onstop={stopPlay}
           onfit={toggleFit}
           onquality={nextQuality}
@@ -401,7 +463,6 @@
     background: #2a313b; color: var(--text);
   }
   .card button.primary { background: var(--accent); color: white; font-size: 18px; }
-  .note { margin: 4px 0 0; color: var(--muted); font-size: 13px; text-align: center; }
   .error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
   .error button { border: 0; border-radius: 12px; padding: 12px 22px; background: var(--panel); color: var(--text); font: inherit; }
 </style>

@@ -1,6 +1,6 @@
 // Llamadas a Rust del visor móvil: la biblioteca (mobile/src-tauri/src/library.rs) y la fuente
 // abierta (crates/imgx-host, las mismas órdenes que el escritorio).
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { addPluginListener, convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { LoadedProject } from "$imgx/action/project.svelte";
 import type { PictureRef } from "$imgx/viewer/picture";
 import { lang, t } from "./i18n";
@@ -84,3 +84,23 @@ export const closeSource = () => invoke("close_source");
 /** Viñetas de la imagen i, `[x, y, w, h, …]` (en una historia ya vienen calculadas). */
 export const detectPanels = (generation: number, index: number) =>
   invoke<number[][]>("detect_panels", { generation, index }).then((r) => r.flat());
+
+/** Pide (`true`) o suelta el foco de sonido de Android mientras suena una historia. */
+export const audioFocus = (on: boolean) => invoke("audio_focus", { on }).catch(() => {});
+
+/** Pausa el reloj del sonido ya (al salir de la app no llega otro fotograma que lo diga). */
+export const audioPause = (t: number, rate: number) =>
+  invoke("audio_transport", { t, playing: false, running: false, rate, seek: false }).catch(() => {});
+
+/**
+ * Android pide parar el sonido: una llamada, otra app que suena o los auriculares que se
+ * desconectan. Devuelve cómo dejar de escuchar (en el ordenador no hay avisos).
+ */
+export async function onInterrupt(cb: (reason: string) => void): Promise<() => void> {
+  try {
+    const l = await addPluginListener<{ reason: string }>("imgx-mobile", "interrupt", (p) => cb(p.reason));
+    return () => void l.unregister().catch(() => {});
+  } catch {
+    return () => {};
+  }
+}

@@ -2,7 +2,7 @@
 
 Todo lo del visor de Android: qué hace, cómo está hecho, cómo prepararlo y probarlo, y lo que se ha ido creando en cada fase. Este documento se actualiza con cada cambio.
 
-> **Estado:** fase 2 hecha y probada en el móvil. Además de las fotos del carrete y los cómics `cbz`, `cbr` y `cb7` (fase 1), la app reproduce las historias `.imgxstory` con su cámara, sus transiciones, sus efectos y sus textos, todavía sin sonido. Lo siguiente es la fase 3 (sonido). Todo lo que trae está en el [registro](#registro-de-lo-creado).
+> **Estado:** fase 3 en marcha. La app abre fotos del carrete y cómics `cbz`, `cbr` y `cb7` (fase 1) y reproduce las historias `.imgxstory` con su cámara, sus transiciones, sus efectos y sus textos (fase 2). Ahora también con su sonido, el encuadre automático según la posición del móvil y los textos a su tamaño en vertical, ya probados en el móvil. Faltan por probar el silencio y las pausas automáticas (llamadas, otra app, auriculares). Todo lo que trae está en el [registro](#registro-de-lo-creado).
 
 ## Qué es
 
@@ -13,7 +13,7 @@ Una app de imgxplorer para el móvil que, de momento, **solo es un visor**. El e
 | 0 | Preparar el terreno: código compartido con el escritorio, esqueleto de la app y herramientas | hecha |
 | 1 | Visor de imágenes del carrete y de cómics `cbz`, `cbr` y `cb7` | hecha |
 | 2 | Historias `.imgxstory` con su animación, sus efectos y sus textos | hecha |
-| 3 | Sonido de las historias (voces, efectos y ambientes) | pendiente |
+| 3 | Sonido de las historias (voces, efectos y ambientes) | en marcha |
 | 4 | Lo mismo en iOS (con su propio `README_iOS.md`) | pendiente |
 | 5 | Publicar: APK firmado, Google Play y descarga desde imgxplorer.app | pendiente |
 
@@ -171,15 +171,23 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 | Historias `.imgxstory` | Al abrir una, una portada con su título, sus créditos y ▶ Ver historia (o «Seguir en la página n»), ↻ desde el principio y 📖 Leer las páginas. La primera vez se lee con el modo con que se pensó (tira, ancho, manga) | `Reader.svelte`; `open_source` devuelve el manifiesto y el proyecto que trae dentro | Fase 2 |
 | ▶ Reproducir | La cámara animada del Modo Acción: plantillas (cómic, viñeta a viñeta…), cámara propia, transiciones (fundido, deslizar, cámara continua) y efectos (temblor, destello, onda, aberración, glitch, líneas, onomatopeyas, subtítulos y cartelas). También en cómics y álbumes, con la cámara automática | `Viewer.play` y `player.ts` del escritorio; `ui/src/lib/action/sequence.svelte.ts` (compartido) saca de su proyecto la timeline, la transición y los efectos de cada imagen | Fase 2 |
 | Controles al reproducir | ⏮ ⏸/▶ ⏭, avance de la imagen, velocidad (0,5× a 2×) y ⏹. Tocar a los lados o deslizar salta de imagen; tocar en el centro, los controles; pellizcar o arrastrar mueve la cámara a mano y al soltar vuelve sola | `PlayBar.svelte`; los gestos del visor compartido | Fase 2 |
-| 🎬 Encuadre | «Como se pensó»: el visor toma la proporción del vídeo para el que se hizo la cámara (`authoredAspect`), con bandas negras. «Pantalla completa»: las plantillas se recalculan para la pantalla del móvil | `Reader.svelte` estrecha el visor antes de empezar; se recuerda | Fase 2 |
+| 🎬 Encuadre | 🔄 «Automático» (por defecto): en horizontal, como se pensó; en vertical, toda la pantalla, y la cámara de la plantilla se acerca a cada viñeta. 🎬 «Como se pensó»: la proporción del vídeo para el que se hizo la cámara (`authoredAspect`), con bandas negras. 📱 «Pantalla completa»: las plantillas se recalculan para la pantalla del móvil. Al girar el móvil mientras se reproduce, la cámara se rehace para la pantalla nueva. Una cámara hecha a mano para 16:9 no se recalcula: en vertical puede cortar los lados | `Reader.svelte` estrecha el visor antes de empezar; se recuerda (`storyFraming`) | Fase 2 (automático, fase 3) |
+| Tamaño de los textos | En vertical, las onomatopeyas guardan su tamaño respecto al ancho y los subtítulos se miden sobre el ancho, para que quepan y se lean | `fxFit` del reproductor y `units()` del núcleo de efectos | Fase 3 |
 | Calidad | ⚙ Automática (hasta 2× y baja sola si va a menos de 40 fps), ✦ Alta (la resolución de la pantalla, 2,81× en el A52s) y 🔋 Ahorro (1,25×). Solo al reproducir; leer siempre va a la resolución de la pantalla | `playPixelRatio` del visor y `resize(maxDpr)` de `gl.ts` (sin él, el escritorio sigue igual) | Fase 2 |
 | Ajustes de imagen | Los ajustes 🎨 que trae la historia (brillo, contraste, «limpiar escaneo»…) | `adjustUniforms` y `levels` del escritorio | Fase 2 |
 | Pantalla encendida y pausa | Mientras se reproduce la pantalla no se apaga; al salir de la app o bloquear el móvil, la historia se pausa | Screen Wake Lock del WebView y `visibilitychange` | Fase 2 |
-| Sonido | Reproducir el sonido de las historias | `imgx_host::audio` e `imgx-audio` | Fase 0 (se usa en la fase 3) |
+| Sonido | Voces y sonidos propios que viajan dentro de la historia, los efectos y ambientes de serie (síntesis), los volúmenes y las pistas del proyecto, y el ambiente que baja cuando hay voz | El director del escritorio (`ui/src/lib/audio/director.ts`) manda las órdenes `audio_*` a `imgx_host::audio` e `imgx-audio`, que en Android sale por AAudio (cpal) | Fase 3 |
+| 🔊 / 🔇 | Silenciar las historias; se recuerda | `director.levels` con el silencio del móvil | Fase 3 |
+| Foco de sonido | Una llamada u otra app que empieza a sonar pausan la historia; al pausar, las demás apps pueden volver a sonar | `AudioFocusRequest` en `ImgxPlugin.kt` (orden `audioFocus`) y el evento `interrupt` que escucha la interfaz (`addPluginListener`) | Fase 3 |
+| Auriculares fuera | Al desconectarlos, la historia se pausa en vez de seguir por el altavoz | `ACTION_AUDIO_BECOMING_NOISY` en `ImgxPlugin.kt` | Fase 3 |
+| Botones de volumen | Mueven el volumen multimedia, no el del timbre | `volumeControlStream = STREAM_MUSIC` | Fase 3 |
+| Pausa en segundo plano | Al salir de la app se pausa la imagen y también el sonido (sin fotogramas, el reproductor no llegaría a avisarle) | `visibilitychange` y `audio_transport` | Fase 2 (el sonido, fase 3) |
 
 **Para probar las historias:** en el escritorio, 🎞 Exportar → 📦 Historia, variante móvil. La de la fase 2 se hizo con las viñetas de `muestras/` y un generador temporal que ya no está en el repositorio.
 
-**Permisos de Android:** ninguno de fotos ni de almacenamiento. El carrete se abre con el selector de fotos de Android y los archivos con el de documentos: el usuario elige y la app solo recibe eso. Google Play restringe el permiso de acceso a todas las fotos, y una app que no lo pide es más fácil de publicar y da más confianza. Solo está el de internet (`INTERNET`), que pone Tauri para el modo de desarrollo (la interfaz se carga desde el ordenador); el visor no se conecta a nada.
+**Permisos de Android:** ninguno de fotos ni de almacenamiento. El carrete se abre con el selector de fotos de Android y los archivos con el de documentos: el usuario elige y la app solo recibe eso. Google Play restringe el permiso de acceso a todas las fotos, y una app que no lo pide es más fácil de publicar y da más confianza. Solo está el de internet (`INTERNET`), que pone Tauri para el modo de desarrollo (la interfaz se carga desde el ordenador); el visor no se conecta a nada. El sonido no necesita permisos: ni el foco de audio ni el aviso de los auriculares los piden.
+
+**Permisos de la interfaz (Tauri):** `capabilities/default.json` añade `imgx-mobile:default`, que solo deja registrar y quitar oyentes de los avisos del complemento (`mobile/plugin/permissions/default.toml`).
 
 ## Formatos y límites
 
@@ -237,6 +245,18 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - **Botones del reproductor** como símbolos de texto (`U+FE0E`): Android pintaba ⏹ como un emoji azul.
 - **Sin sonido todavía** (fase 3): las imágenes duran lo que su voz, pero no suena nada, y la portada lo avisa.
 
+**Fase 3 (en marcha)**
+- **Sonido en el reproductor:** `Reader.svelte` le pasa el director del escritorio, con los volúmenes y las pistas del proyecto. El motor de Rust ya compilaba para Android desde la fase 0 y ahora suena por AAudio.
+- **Complemento:** foco de sonido, aviso `interrupt` (llamada, otra app, auriculares) y botones de volumen. El complemento expone ahora `register_listener` y `remove_listener` con su permiso por defecto.
+- **Interfaz:** 🔊/🔇 en los controles; se pausa con los avisos de Android y al salir de la app, y deja de pedir el foco al pausar.
+- **Encuadre 🔄 automático**, tras la primera prueba: en vertical, la banda 16:9 dejaba la historia muy pequeña. Ahora en vertical ocupa toda la pantalla y se acerca a cada viñeta, y al girar el móvil se recalcula.
+- **Onomatopeyas y subtítulos en vertical**, tras la segunda prueba: sus tamaños son porcentajes del alto de la pantalla, así que en vertical «¡BOOM!» (24 %) no cabía de lado a lado. Ahora, si la pantalla es más alta que la proporción de la historia (16:9 si no la dice):
+  - los efectos se miden sobre esa proporción puesta a lo ancho, y guardan su tamaño respecto al ancho;
+  - los subtítulos y cartelas se miden sobre el ancho.
+
+  Es `View.fit` y `units()` en `crates/imgx-core/src/fx.rs`, con la prueba `en_un_movil_en_vertical_la_onomatopeya_cabe`; `WasmFx.set_fit`, `FxTrack.of(list, fit)` y `fxFit` en el reproductor. El escritorio y los vídeos no lo usan y no cambian.
+- **Historia de prueba** «Viñetas con sonido»: una melodía propia dentro del archivo (como voz), lluvia y viento de serie como ambientes, y zas, explosión, puñetazo, campana, llamar a la puerta, pasos y trueno.
+
 ## Lista de comprobación en el móvil
 
 **Móvil de pruebas:** Samsung Galaxy A52s 5G (SM-A528B), Android 14 (One UI 6.1), ARM de 64 bits, pantalla de 1080×2400 (384×854 a 2,81×), WebView 157.
@@ -267,3 +287,10 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - [x] La pantalla no se apaga al reproducir; al salir de la app se pausa.
 - [x] ▶ Reproducir en un cómic normal (cámara automática).
 - [x] Una historia exportada desde el escritorio (variante móvil).
+
+**Fase 3**
+- [x] «Viñetas con sonido»: la melodía, la lluvia, el viento y los efectos suenan en su sitio.
+- [x] 🔄 Automático: en vertical, la historia ocupa la pantalla y se acerca a cada viñeta; en horizontal, como se pensó; al girar se recalcula.
+- [x] En vertical, «¡BOOM!» cabe entero y los subtítulos se leen bien.
+- [ ] 🔊/🔇, pausa, velocidad y los botones de volumen.
+- [ ] Se pausa al salir de la app, con una llamada o música de otra app, y al quitar los auriculares.

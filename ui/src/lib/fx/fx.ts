@@ -42,11 +42,17 @@ export class FxTrack {
     private list: Fx[],
   ) {}
 
-  /** `null` si no hay efectos (así no se calcula nada en cada fotograma). */
-  static of(list: readonly Fx[] | undefined): FxTrack | null {
+  /**
+   * `null` si no hay efectos (así no se calcula nada en cada fotograma). `fit`: proporción para la
+   * que se pensaron los tamaños; en una pantalla más alta (móvil en vertical) las onomatopeyas y
+   * los subtítulos se miden de otra forma para que quepan. Sin ella, como siempre.
+   */
+  static of(list: readonly Fx[] | undefined, fit?: number): FxTrack | null {
     if (!list?.length) return null;
     const json = JSON.stringify(list);
-    return new FxTrack(new wasm.WasmFx(json), JSON.parse(json));
+    const w = new wasm.WasmFx(json);
+    if (fit) w.set_fit(fit);
+    return new FxTrack(w, JSON.parse(json));
   }
 
   /**

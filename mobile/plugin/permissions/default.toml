@@ -1,0 +1,5 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Escuchar los avisos del complemento (sonido interrumpido por una llamada, auriculares desconectados…)."
+permissions = ["allow-register-listener", "allow-remove-listener"]

@@ -188,13 +188,19 @@ pub fn fx_warnings(list: &str, image_end: f64) -> Result<String, JsError> {
 
 /// Efectos de una imagen ya parseados, para calcular cada fotograma sin volver a leer JSON.
 #[wasm_bindgen]
-pub struct WasmFx(Vec<imgx_core::fx::Fx>);
+pub struct WasmFx(Vec<imgx_core::fx::Fx>, Option<f64>);
 
 #[wasm_bindgen]
 impl WasmFx {
     #[wasm_bindgen(constructor)]
     pub fn new(json: &str) -> Result<WasmFx, JsError> {
-        Ok(WasmFx(serde_json::from_str(json)?))
+        Ok(WasmFx(serde_json::from_str(json)?, None))
+    }
+    /// Proporción (ancho / alto) para la que se pensaron los tamaños de los efectos (0: ninguna,
+    /// siempre la altura de la pantalla). El visor móvil la pone para que en vertical las
+    /// onomatopeyas quepan; ver `imgx_core::fx::units`.
+    pub fn set_fit(&mut self, aspect: f64) {
+        self.1 = (aspect > 0.0).then_some(aspect);
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -211,7 +217,7 @@ impl WasmFx {
         if !self.0.iter().any(|f| t >= f.start && t < f.end()) {
             return Vec::new();
         }
-        let view = fx::View { img: (img_w, img_h), pose: cam(pose), vp: (vp_w, vp_h) };
+        let view = fx::View { img: (img_w, img_h), pose: cam(pose), vp: (vp_w, vp_h), fit: self.1 };
         let f = fx::frame(&self.0, t, &view);
         // Detrás de los valores del shader, los textos: `TextSprite::LEN` valores cada uno.
         let mut v = f.to_vec();

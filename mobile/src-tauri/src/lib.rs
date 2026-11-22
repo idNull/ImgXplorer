@@ -120,6 +120,12 @@ fn library_remove(app: AppHandle, id: String, lib: State<'_, Library>) -> Result
     Ok(())
 }
 
+/// Pide o suelta el foco de sonido de Android mientras suena una historia.
+#[tauri::command]
+fn audio_focus(app: AppHandle, on: bool) -> Result<(), String> {
+    app.imgx_mobile().audio_focus(on)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -154,6 +160,7 @@ pub fn run() {
             library_import_paths,
             library_progress,
             library_remove,
+            audio_focus,
             source::open_source,
             source::close_source,
             source::detect_panels,

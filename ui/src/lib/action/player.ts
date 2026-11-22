@@ -49,6 +49,8 @@ export interface PlaySpec {
   fx?(i: number): Fx[];
   /** Ambientes que suenan en la imagen i. */
   ambient?(i: number): AmbientSpec[];
+  /** Proporción para la que se pensaron los tamaños de los efectos (el móvil, en vertical). */
+  fxFit?: number;
   /** La imagen actual ha cambiado (para el contador, las miniaturas…). */
   onIndex(i: number): void;
 }
@@ -148,7 +150,7 @@ export class Player {
     const tl = await this.o.timeline(i, size, this.aspect);
     const audio = this.o.audio?.(i) ?? NO_AUDIO;
     const list = this.o.fx?.(i);
-    return { i, key, size, tl, audio, fx: FxTrack.of(list), dur: itemDuration(tl, audio, list), dead: false };
+    return { i, key, size, tl, audio, fx: FxTrack.of(list, this.o.fxFit), dur: itemDuration(tl, audio, list), dead: false };
   }
 
   /** Va a la imagen `i`, desde el principio, sin transición. */
@@ -217,7 +219,7 @@ export class Player {
           p.audio = this.o.audio?.(p.i) ?? NO_AUDIO;
           const list = this.o.fx?.(p.i);
           p.fx?.free();
-          p.fx = FxTrack.of(list);
+          p.fx = FxTrack.of(list, this.o.fxFit);
           p.dur = itemDuration(tl, p.audio, list);
           if (p === this.cur) this.soundFor(p);
         },

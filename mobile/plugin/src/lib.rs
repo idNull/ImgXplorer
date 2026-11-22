@@ -5,6 +5,9 @@
 //! - **Archivos:** el selector de documentos, conservando el nombre (la extensión dice si es un
 //!   cbz, un cbr…).
 //! - **«Abrir con imgxplorer»:** lo que otra app envía al visor (Archivos, WhatsApp…).
+//! - **Foco de sonido:** mientras suena una historia, el visor pide el foco de audio de Android. Si
+//!   lo pierde (llamada, otra app que suena) o se desconectan los auriculares, avisa a la
+//!   interfaz con el evento `interrupt` (`addPluginListener("imgx-mobile", "interrupt", …)`).
 //!
 //! Todo se copia a una carpeta que elige Rust (la de importación): Android entrega direcciones
 //! `content://`, no rutas, y el resto de imgxplorer trabaja con rutas.
@@ -35,6 +38,12 @@ struct PickedList {
 #[allow(dead_code)]
 struct DirArgs<'a> {
     dir: &'a Path,
+}
+
+#[derive(Serialize)]
+#[allow(dead_code)]
+struct FocusArgs {
+    on: bool,
 }
 
 #[cfg(target_os = "android")]
@@ -68,6 +77,17 @@ impl<R: Runtime> ImgxMobile<R> {
     /// Lo que otra app ha pedido abrir con imgxplorer y aún no se ha recogido, copiado a `dir`.
     pub fn take_opened(&self, dir: &Path) -> Result<Vec<Picked>, String> {
         self.call("takeOpened", dir)
+    }
+
+    /// Pide (`on`) o suelta el foco de sonido de Android. En el ordenador no hace nada.
+    pub fn audio_focus(&self, on: bool) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        return self.0.run_mobile_plugin::<serde::de::IgnoredAny>("audioFocus", FocusArgs { on }).map(|_| ()).map_err(|e| e.to_string());
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = on;
+            Ok(())
+        }
     }
 }
 

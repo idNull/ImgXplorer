@@ -64,14 +64,16 @@ const es = {
   replay: "Ver otra vez",
   stLoading: "Cargando…",
   stManual: "Cámara a mano",
+  fitAuto: "Encuadre automático",
   fitAuthored: "Como se pensó",
   fitScreen: "Pantalla completa",
-  fitHint: "Encuadre: el de la historia, con bandas, o adaptado a la pantalla",
+  fitHint: "Encuadre: automático (según la posición del móvil), el de la historia con bandas, o toda la pantalla",
   qualityAuto: "Calidad automática",
   qualityHigh: "Calidad alta",
   qualitySaver: "Ahorro",
   qualityHint: "Resolución de los efectos: alta, ahorro de batería o automática según la fluidez",
-  noSound: "El sonido llegará en la próxima versión",
+  mute: "Silenciar",
+  unmute: "Activar el sonido",
 };
 
 const en: typeof es = {
@@ -134,14 +136,16 @@ const en: typeof es = {
   replay: "Watch again",
   stLoading: "Loading…",
   stManual: "Manual camera",
+  fitAuto: "Auto framing",
   fitAuthored: "As intended",
   fitScreen: "Full screen",
-  fitHint: "Framing: the story's own, with bars, or fitted to the screen",
+  fitHint: "Framing: automatic (by how you hold the phone), the story's own with bars, or the whole screen",
   qualityAuto: "Auto quality",
   qualityHigh: "High quality",
   qualitySaver: "Battery saver",
   qualityHint: "Effects resolution: high, battery saver, or automatic based on smoothness",
-  noSound: "Sound is coming in the next version",
+  mute: "Mute",
+  unmute: "Unmute",
 };
 
 export type Key = keyof typeof es;

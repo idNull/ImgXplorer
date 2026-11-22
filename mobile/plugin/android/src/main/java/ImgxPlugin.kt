@@ -1,13 +1,21 @@
 // Lo que el visor móvil de imgxplorer necesita de Android: el selector de fotos (carrete), el de
 // documentos y lo que otras apps envían con «Abrir con» / «Compartir». Todo se copia a la carpeta
 // que indica Rust, con su nombre original; las fotos HEIC/HEIF pasan a JPEG (el visor no lleva
-// libheif). Ver mobile/README_Android.md.
+// libheif). Y el sonido de las historias: el foco de audio de Android (una llamada u otra app que
+// suena lo pausan), los auriculares que se desconectan y los botones de volumen. Ver
+// mobile/README_Android.md.
 
 package com.imgxplorer.plugin
 
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -18,6 +26,7 @@ import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import android.webkit.WebView
 import androidx.activity.result.ActivityResult
+import androidx.core.content.ContextCompat
 import app.tauri.Logger
 import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
@@ -35,6 +44,11 @@ class DirArgs {
   lateinit var dir: String
 }
 
+@InvokeArg
+class FocusArgs {
+  var on: Boolean = false
+}
+
 @TauriPlugin
 class ImgxPlugin(private val activity: Activity) : Plugin(activity) {
   /** Carpeta de destino de la elección en curso (los selectores responden en otra llamada). */
@@ -46,6 +60,13 @@ class ImgxPlugin(private val activity: Activity) : Plugin(activity) {
   override fun load(webView: WebView) {
     super.load(webView)
     if (isOpenIntent(activity.intent)) pending = activity.intent
+    // Los botones de volumen mueven el volumen multimedia (no el del timbre), suene algo o no.
+    activity.volumeControlStream = AudioManager.STREAM_MUSIC
+  }
+
+  override fun onDestroy() {
+    releaseFocus()
+    super.onDestroy()
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -110,6 +131,80 @@ class ImgxPlugin(private val activity: Activity) : Plugin(activity) {
       return
     }
     copyInBackground(invoke, urisOf(data), dir)
+  }
+
+  // ------------------------------------------------------------------ sonido
+
+  private val audioManager by lazy { activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+  private var focusRequest: AudioFocusRequest? = null
+
+  /** Avisa a la interfaz de que el sonido debe pararse (`reason`: focus, call, noisy). */
+  private fun interrupt(reason: String) {
+    val o = JSObject()
+    o.put("reason", reason)
+    activity.runOnUiThread { trigger("interrupt", o) }
+  }
+
+  private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+    when (change) {
+      // Otra app suena (pierde el foco para siempre) o entra una llamada (temporal): pausa.
+      AudioManager.AUDIOFOCUS_LOSS -> interrupt("focus")
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> interrupt("call")
+      // Un aviso breve (navegación, notificación): Android baja el volumen solo.
+      else -> {}
+    }
+  }
+
+  /** Auriculares desconectados (cable o Bluetooth): el sonido saldría por el altavoz. */
+  private val noisyReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) interrupt("noisy")
+    }
+  }
+  private var noisyRegistered = false
+
+  @Command
+  fun audioFocus(invoke: Invoke) {
+    val on = invoke.parseArgs(FocusArgs::class.java).on
+    if (on) takeFocus() else releaseFocus()
+    invoke.resolve()
+  }
+
+  private fun takeFocus() {
+    if (focusRequest == null) {
+      val attrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+        .build()
+      val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(attrs)
+        .setOnAudioFocusChangeListener(focusListener)
+        .build()
+      if (audioManager.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+        focusRequest = req
+      } else {
+        // Hay una llamada en curso: no se puede sonar ahora.
+        interrupt("call")
+        return
+      }
+    }
+    if (!noisyRegistered) {
+      // Aviso del sistema: no hace falta exportar el receptor a otras apps.
+      ContextCompat.registerReceiver(activity, noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
+      noisyRegistered = true
+    }
+  }
+
+  private fun releaseFocus() {
+    focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+    focusRequest = null
+    if (noisyRegistered) {
+      try {
+        activity.unregisterReceiver(noisyReceiver)
+      } catch (_: IllegalArgumentException) {
+      }
+      noisyRegistered = false
+    }
   }
 
   // ------------------------------------------------------------------ copiar
