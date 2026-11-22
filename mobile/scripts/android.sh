@@ -35,6 +35,10 @@ if ((${#missing[@]})); then
   exit 1
 fi
 
+# APK de depuración manejable: sin información de depuración de Rust (pasaba de 900 MB y tardaba en
+# instalarse por USB), pero con los nombres de las funciones para que los fallos se entiendan.
+export CARGO_PROFILE_DEV_STRIP="${CARGO_PROFILE_DEV_STRIP:-debuginfo}"
+
 # Este proyecto, no el del escritorio (el repositorio tiene dos tauri.conf.json).
 export TAURI_APP_PATH=src-tauri TAURI_FRONTEND_PATH=.
 exec ../node_modules/.bin/tauri android "$@"

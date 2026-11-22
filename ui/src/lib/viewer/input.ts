@@ -1,7 +1,7 @@
 // Traduce ratón, touchpad y gestos nativos a intenciones de alto nivel (zoom / pan).
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-export type InputSource = "rueda" | "ctrl+rueda" | "touchpad-scroll" | "pellizco-gtk" | "pellizco-mac" | "arrastre";
+export type InputSource = "rueda" | "ctrl+rueda" | "touchpad-scroll" | "pellizco-gtk" | "pellizco-mac" | "arrastre" | "pellizco-tactil";
 
 export interface InputHandlers {
   /** factor multiplicativo de zoom alrededor de (x, y) en px CSS relativos al elemento. */
@@ -24,7 +24,18 @@ export interface InputHandlers {
   press?(x: number, y: number): { move(x: number, y: number): void; up(): void } | null;
   /** Cursor sobre (x, y) cuando no se arrastra (`null`: el normal). */
   hover?(x: number, y: number): string | null;
+  /** Pantalla táctil: toque corto sin mover el dedo en (x, y). */
+  tap?(x: number, y: number): void;
+  /**
+   * Pantalla táctil: al levantar el dedo tras deslizarlo (`dx`, `dy` en px, `ms` de duración).
+   * Si devuelve `true`, se encarga él (p. ej. pasar de página).
+   */
+  swipe?(dx: number, dy: number, ms: number): boolean;
 }
+
+/** Un toque se queda en menos de esto (px) y dura menos de `TAP_MS`. */
+const TAP_SLOP = 10;
+const TAP_MS = 350;
 
 /** Heurística: la rueda de un ratón da saltos grandes y enteros; el touchpad, deltas finos. */
 function looksLikeMouseWheel(e: WheelEvent): boolean {
@@ -61,7 +72,30 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
   };
 
   let drag: { id: number; x: number; y: number; own: { move(x: number, y: number): void; up(): void } | null } | null = null;
+  // Pantalla táctil: los dedos apoyados, el pellizco de dos dedos y el gesto de un dedo (toque o
+  // deslizamiento). Con ratón y touchpad nada de esto interviene.
+  const touches = new Map<number, { x: number; y: number }>();
+  let pinch: { dist: number; mx: number; my: number } | null = null;
+  let gesture: { x0: number; y0: number; t0: number; x: number; y: number; multi: boolean } | null = null;
+  const pinchState = () => {
+    const [a, b] = [...touches.values()];
+    return { dist: Math.hypot(b.x - a.x, b.y - a.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  };
   const onDown = (e: PointerEvent) => {
+    if (e.pointerType === "touch") {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 1) gesture = { x0: e.clientX, y0: e.clientY, t0: performance.now(), x: e.clientX, y: e.clientY, multi: false };
+      if (touches.size === 2) {
+        // Segundo dedo: deja de desplazar y empieza el pellizco.
+        if (gesture) gesture.multi = true;
+        if (drag && !drag.own) drag = null;
+        pinch = pinchState();
+        el.setPointerCapture(e.pointerId);
+        h.interaction?.(true);
+        return;
+      }
+      if (touches.size > 2) return;
+    }
     if (e.button !== 0 && e.button !== 1) return;
     const own = e.button === 0 ? (h.press?.(...local(e.clientX, e.clientY)) ?? null) : null;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, own };
@@ -71,6 +105,21 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
     h.interaction?.(true);
   };
   const onMove = (e: PointerEvent) => {
+    if (e.pointerType === "touch" && touches.has(e.pointerId)) {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (gesture && touches.size === 1) {
+        gesture.x = e.clientX;
+        gesture.y = e.clientY;
+      }
+      if (pinch && touches.size >= 2) {
+        const now = pinchState();
+        const r = el.getBoundingClientRect();
+        if (pinch.dist > 0 && now.dist > 0) h.zoom(now.dist / pinch.dist, now.mx - r.left, now.my - r.top, "pellizco-tactil");
+        h.pan(now.mx - pinch.mx, now.my - pinch.my, "pellizco-tactil");
+        pinch = now;
+        return;
+      }
+    }
     if (!drag) {
       if (h.hover) el.style.cursor = h.hover(...local(e.clientX, e.clientY)) ?? "";
       return;
@@ -82,6 +131,28 @@ export function attachInput(el: HTMLElement, h: InputHandlers): () => void {
     drag.y = e.clientY;
   };
   const onUp = (e: PointerEvent) => {
+    if (e.pointerType === "touch" && touches.delete(e.pointerId)) {
+      if (pinch) {
+        // Con un dedo aún apoyado no se sigue desplazando: así el pellizco no acaba con un salto.
+        if (touches.size < 2) {
+          pinch = null;
+          h.interaction?.(false);
+        }
+        if (drag && e.pointerId === drag.id) drag = null;
+        return;
+      }
+      const g = gesture;
+      if (touches.size === 0) gesture = null;
+      if (g && !g.multi && e.type === "pointerup") {
+        const [dx, dy] = [e.clientX - g.x0, e.clientY - g.y0];
+        const ms = performance.now() - g.t0;
+        if (Math.hypot(dx, dy) < TAP_SLOP && ms < TAP_MS) {
+          h.tap?.(...local(e.clientX, e.clientY));
+        } else {
+          h.swipe?.(dx, dy, ms);
+        }
+      }
+    }
     if (!drag || e.pointerId !== drag.id) return;
     const own = drag.own;
     drag = null;

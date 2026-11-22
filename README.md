@@ -576,7 +576,7 @@ En desarrollo: un **visor para Android y para iOS** que abre las imágenes del c
 
 - **Dónde está:** en [`mobile/`](mobile/README.md). Usa los mismos crates de Rust que el escritorio y una interfaz táctil propia.
 - **Android:** [mobile/README_Android.md](mobile/README_Android.md) explica qué hace, cómo está hecho, cómo prepararlo y probarlo, y lleva un registro de cada fase.
-- **Estado:** fase 0. La app arranca y la interfaz habla con Rust; todavía no abre cómics.
+- **Estado:** fase 1 en Android. Abre fotos del carrete y cómics `cbz`, `cbr` y `cb7` con gestos táctiles (pasar página, pellizcar, modos página, ancho, tira y manga), recuerda por dónde ibas y acepta «Abrir con» y «Compartir». Las historias llegan en la fase 2.
 
 ## Instalar
 

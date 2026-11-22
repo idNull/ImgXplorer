@@ -2,7 +2,7 @@
 
 Todo lo del visor de Android: qué hace, cómo está hecho, cómo prepararlo y probarlo, y lo que se ha ido creando en cada fase. Este documento se actualiza con cada cambio.
 
-> **Estado:** fase 0 terminada. La app se instala y arranca en el móvil (probado en un Galaxy A52s con Android 14), pero todavía no abre nada: enseña una pantalla de comprobación. Todo lo que trae está en el [registro](#registro-de-lo-creado).
+> **Estado:** fase 1 hecha y probada en el móvil. La app tiene estantería y lector: abre fotos del carrete y cómics `cbz`, `cbr` y `cb7`, con gestos táctiles. Lo siguiente es la fase 2 (historias `.imgxstory`). Todo lo que trae está en el [registro](#registro-de-lo-creado).
 
 ## Qué es
 
@@ -11,7 +11,7 @@ Una app de imgxplorer para el móvil que, de momento, **solo es un visor**. El e
 | Fase | Qué trae | Estado |
 |---|---|---|
 | 0 | Preparar el terreno: código compartido con el escritorio, esqueleto de la app y herramientas | hecha |
-| 1 | Visor de imágenes del carrete y de cómics `cbz`, `cbr` y `cb7` | pendiente |
+| 1 | Visor de imágenes del carrete y de cómics `cbz`, `cbr` y `cb7` | hecha |
 | 2 | Historias `.imgxstory` con su animación, sus efectos y sus textos | pendiente |
 | 3 | Sonido de las historias (voces, efectos y ambientes) | pendiente |
 | 4 | Lo mismo en iOS (con su propio `README_iOS.md`) | pendiente |
@@ -44,10 +44,21 @@ mobile/
 ├── scripts/android.sh   lanza «tauri android …» con Java, el SDK y el NDK localizados
 ├── ui/                  interfaz (Svelte 5 + Vite, puerto 1430)
 │   └── src/
-│       ├── App.svelte   pantalla de la app (en la fase 0, la de comprobación)
-│       └── lib/i18n.ts  textos en español e inglés
+│       ├── App.svelte       pantallas (estantería, lector, comprobación) y el botón «atrás»
+│       ├── Shelf.svelte     estantería: Fotos, Archivos, «Continuar leyendo», portadas y quitar
+│       ├── Reader.svelte    lector táctil con el visor del escritorio (Viewer.svelte)
+│       ├── Check.svelte     comprobación (la pantalla de la fase 0, en ⓘ)
+│       └── lib/
+│           ├── api.ts       llamadas a Rust (biblioteca y fuente abierta)
+│           ├── reading.ts   modo de lectura y sentido manga, recordados
+│           └── i18n.ts      textos en español e inglés
+├── plugin/              complemento de Tauri «imgx-mobile» (tauri-plugin-imgx-mobile)
+│   ├── src/lib.rs       la parte de Rust: pick_images, pick_documents, take_opened
+│   └── android/         la parte de Kotlin (ImgxPlugin.kt): selectores, copiar, HEIC → JPEG
 └── src-tauri/           crate imgxplorer-mobile (miembro del workspace de Cargo)
-    ├── src/lib.rs       monta la app: estado, protocolo imgx:// y órdenes de imgx-host
+    ├── src/lib.rs       monta la app: estado, protocolo imgx://, órdenes de imgx-host y de la biblioteca
+    ├── src/library.rs   biblioteca: importar, lista con progreso, quitar
+    ├── build.rs         en Android: UnRAR (C++) enlazado con la biblioteca de C++ del NDK
     ├── tauri.conf.json  com.imgxplorer.mobile, Android 8.0 o posterior, iOS 15 o posterior
     ├── gen/android/     proyecto de Android Studio (lo crea «android init»; se guarda en git)
     └── capabilities/    permisos de la ventana
@@ -141,19 +152,33 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 
 | Característica | Para qué sirve | Con qué se hace | Desde |
 |---|---|---|---|
-| Pantalla de comprobación | Ver que la app arranca, que la interfaz habla con Rust y qué ofrece el aparato: WebGL2, tamaño máximo de textura y pantalla | Orden `app_info` (Rust) y WebGL2 (interfaz) | Fase 0 |
+| Pantalla de comprobación | Ver que la app arranca, que la interfaz habla con Rust y qué ofrece el aparato: WebGL2, tamaño máximo de textura y pantalla | Orden `app_info` (Rust) y WebGL2 (interfaz); ahora en ⓘ de la estantería | Fase 0 |
+| Estantería | Todo lo abierto, con portada, título y progreso; «Continuar leyendo» arriba; mantener pulsado para quitar (borra la copia del móvil, no el original) | `Shelf.svelte`, `library.rs`, portadas de `imgx_host::covers` | Fase 1 |
+| 📷 Fotos | Elegir fotos del carrete; entran juntas como un álbum («Fotos del 21 nov, 23:10») | Selector de fotos de Android (`ACTION_PICK_IMAGES`, sin permiso de fotos) en `ImgxPlugin.kt` | Fase 1 |
+| 📂 Archivos | Abrir cómics `cbz`, `cbr`, `cb7`, `zip`, `rar`, `7z`, historias `.imgxstory` o imágenes sueltas | Selector de documentos (`ACTION_OPEN_DOCUMENT`) con el nombre original (la extensión dice qué es) | Fase 1 |
+| «Abrir con» y «Compartir» | Abrir en imgxplorer un cómic o unas fotos desde Archivos, WhatsApp, Telegram… | `intent-filter` en `AndroidManifest.xml`; `takeOpened` recoge lo recibido al arrancar o al volver a la app | Fase 1 |
+| Biblioteca propia | Lo abierto se copia dentro de la app: Android entrega direcciones `content://`, no rutas, y UnRAR solo abre archivos | `library.rs`: `<datos>/library/<id>/` y `library.json` | Fase 1 |
+| HEIC del carrete | Las fotos HEIC/HEIF se ven aunque el móvil no lleve libheif | `ImageDecoder` de Android las pasa a JPEG (calidad 92) al copiarlas | Fase 1 |
+| CBR | Cómics en RAR | UnRAR compilado con el NDK; `build.rs` le da una `libpthread.a` vacía (en Android los hilos están en la libc) y enlaza `libc++_static` | Fase 1 |
+| Lector | Página a pantalla completa con el visor WebGL del escritorio: teselas, tira vertical, encuadre | `Reader.svelte` con `$imgx/viewer/Viewer.svelte` | Fase 1 |
+| Gestos | Tocar a los lados o deslizar: pasar página. Tocar en el centro: controles. Pellizcar: zoom. Doble toque: ampliar | `ui/src/lib/viewer/input.ts` (compartido): pellizco de dos dedos, toque y deslizamiento; `Viewer.svelte` tiene `ontap` y `onswipe` | Fase 1 |
+| Modos de lectura | 📄 Página, ↔ Ancho, 📜 Tira (webtoons) y ⇄ Manga (de derecha a izquierda); se recuerdan | `reading.ts` y el encuadre (`Framing`) y la tira (`ReadLayout`) del escritorio | Fase 1 |
+| Progreso | Cada cómic recuerda la página en la que se quedó | `library_progress`, poco después de cambiar de página y al cerrar | Fase 1 |
+| Botón «atrás» | Vuelve del lector o de la comprobación a la estantería | Historial del WebView (`history.pushState`) | Fase 1 |
 | Protocolo `imgx://` | Servir las páginas a la interfaz sin pasar por JSON, con miniaturas en caché | `imgx_host::serve`, el mismo que el escritorio | Fase 0 (se usa desde la fase 1) |
 | Abrir una fuente y analizar sus páginas | Abrir un cómic y saber sus viñetas, niveles y márgenes | `imgx_host::source` (`open_source`, `detect_panels`, `image_levels`, `content_box`) | Fase 0 (se usa desde la fase 1) |
 | Portadas | Portadas de la estantería | `imgx_host::covers` | Fase 0 (se usa desde la fase 1) |
 | Sonido | Reproducir el sonido de las historias | `imgx_host::audio` e `imgx-audio` | Fase 0 (se usa en la fase 3) |
 
-**Permisos de Android:** ninguno, por ahora. Para el carrete se usará el selector de fotos de Android, que no necesita el permiso de acceso a todas las fotos. Google Play restringe ese permiso, y una app que no lo pide es más fácil de publicar y da más confianza.
+**Permisos de Android:** ninguno de fotos ni de almacenamiento. El carrete se abre con el selector de fotos de Android y los archivos con el de documentos: el usuario elige y la app solo recibe eso. Google Play restringe el permiso de acceso a todas las fotos, y una app que no lo pide es más fácil de publicar y da más confianza. Solo está el de internet (`INTERNET`), que pone Tauri para el modo de desarrollo (la interfaz se carga desde el ordenador); el visor no se conecta a nada.
 
 ## Formatos y límites
 
 - **Sin libheif.** Es una biblioteca en C que en el escritorio abre HEIC. En el móvil, el HEIC del carrete lo convertirá a JPEG el propio Android al importarlo (fase 1). Un `.heic` metido dentro de un cómic dará el aviso «no admitido».
 - **AVIF** lo muestra el WebView de Android directamente.
-- **RAR/CBR** llega en la fase 1, con UnRAR compilado para Android.
+- **RAR/CBR** con UnRAR compilado para Android. UnRAR es *freeware*, no código abierto, igual que en el escritorio.
+- **Todo se copia al móvil:** abrir un cómic de 200 MB ocupa 200 MB más en la app hasta que se quita de la estantería.
+- **APK de depuración:** `scripts/android.sh` compila Rust sin información de depuración (`CARGO_PROFILE_DEV_STRIP=debuginfo`, conservando los nombres de las funciones). Con ella el APK pasaba de 900 MB; sin ella son unos 48 MB. Si un APK sale enorme, es que Gradle ha dejado restos dentro al reempaquetar: se borra `gen/android/app/build/outputs/apk` y se vuelve a compilar.
 - **Versión mínima:** Android 8.0 (API 26), porque la salida de sonido usa AAudio.
 
 ## Registro de lo creado
@@ -180,6 +205,19 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
   - Java 17 (`jdk17-openjdk` 17.0.21), `android-udev`, y el usuario en el grupo `adbusers`;
   - el SDK y el NDK de Android de la tabla de arriba.
 
+**Fase 1 (hecha, probada el 22 nov 2026 en el A52s)**
+- **Complemento nativo** `mobile/plugin` (Kotlin + Rust):
+  - selector de fotos, de documentos y «Abrir con»;
+  - copia con el nombre original y HEIC → JPEG.
+- **Biblioteca** (`library.rs`), con pruebas de:
+  - importar un cómic y fotos juntas como álbum;
+  - rechazar lo que no se puede abrir sin dejar restos;
+  - el progreso y quitar.
+- **Interfaz:** estantería, lector y comprobación, en español e inglés.
+- **Gestos táctiles en el visor compartido** (`input.ts`, `Viewer.svelte`): pellizco de dos dedos, toque y deslizamiento. En el escritorio, con ratón y touchpad, todo sigue igual; con pantalla táctil ahora también funciona el pellizco.
+- **«Abrir con» / «Compartir»** declarados en `AndroidManifest.xml`.
+- **CBR en Android** (UnRAR con el NDK) y un APK de depuración de 48 MB.
+
 ## Lista de comprobación en el móvil
 
 **Móvil de pruebas:** Samsung Galaxy A52s 5G (SM-A528B), Android 14 (One UI 6.1), ARM de 64 bits, pantalla de 1080×2400 (384×854 a 2,81×), WebView 157.
@@ -189,3 +227,13 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - [x] «Puente con Rust ✓». El registro del móvil dice «visor 0.1.0 en android (aarch64)».
 - [x] WebGL2 ✓, con una textura máxima de **8192 px**. Las páginas de las historias móviles (hasta 2560 px) caben enteras, y solo las imágenes más grandes usarán teselas.
 - [x] Respeta la barra de estado y la de gestos. La barra de desplazamiento que sobraba (el relleno de la muesca se sumaba a la altura) está corregida.
+
+**Fase 1**
+- [x] 📷 Fotos: elegir varias del carrete. Se crea un álbum y se abre; las HEIC se ven.
+- [x] 📂 Archivos: `comic.cbz`, `comic.cb7`, `vinetas.cbz` y un `.cbr` se abren con su portada.
+- [x] Gestos: tocar a los lados, deslizar, pellizcar, doble toque y tocar en el centro.
+- [x] Modos: 📄 Página, ↔ Ancho, 📜 Tira y ⇄ Manga.
+- [x] Al volver a abrir un cómic, sigue en su página; «Continuar leyendo» lo enseña.
+- [x] El botón «atrás» vuelve a la estantería.
+- [x] Mantener pulsado y quitar.
+- [x] «Abrir con imgxplorer» desde Archivos y «Compartir» desde la galería.

@@ -48,11 +48,15 @@
     onselect?: (box: Box | null) => void;
     /** Clic corto con el botón derecho (mantenerlo es la lupa): menú de la imagen. */
     oncontext?: (x: number, y: number) => void;
+    /** Pantalla táctil: toque corto en (x, y) del visor (el móvil pasa de página o enseña los controles). */
+    ontap?: (x: number, y: number) => void;
+    /** Pantalla táctil: deslizar un dedo y soltar; `true` si se encargó (pasar de página). */
+    onswipe?: (dx: number, dy: number, ms: number) => boolean;
   }
 
   let {
     item, prefetch = [], refAt, panels = null, onstatus, onplayer, background = "#0b0d10", wheelSpeed = 1, onmanual, editPanels = null, adjust = null,
-    layout = null, framing = null, onsize, onindex, onselect, oncontext,
+    layout = null, framing = null, onsize, onindex, onselect, oncontext, ontap, onswipe,
   }: Props = $props();
 
   interface Slot {
@@ -958,6 +962,8 @@
         if (!editPanels || !shown || player) return null;
         return cursorAt(editPanels, viewMatrix(pose, shown.size, vp), shown.size, x, y);
       },
+      tap: (x, y) => ontap?.(x, y),
+      swipe: (dx, dy, ms) => onswipe?.(dx, dy, ms) ?? false,
       doubleClick(x, y) {
         if (strip && !player) {
           if (Math.abs(strip.zoom - 1) > 0.01) strip.reset(vp);

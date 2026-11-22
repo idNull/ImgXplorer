@@ -2639,9 +2639,12 @@ dependencies = [
  "imgx-media",
  "log",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-imgx-mobile",
  "tauri-plugin-log",
+ "zip",
 ]
 
 [[package]]
@@ -5999,6 +6002,15 @@ dependencies = [
  "thiserror 2.0.21",
  "toml 1.2.1+spec-1.1.0",
  "url",
+]
+
+[[package]]
+name = "tauri-plugin-imgx-mobile"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

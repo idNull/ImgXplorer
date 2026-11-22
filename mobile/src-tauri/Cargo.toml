@@ -15,9 +15,14 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 imgx-host.workspace = true
-# Sin libheif: en el móvil el HEIC lo convierte el sistema al importarlo. RAR llega en la fase 1.
-imgx-media.workspace = true
+# Sin libheif (en el móvil el HEIC lo convierte el sistema al importarlo) y con UnRAR para .cbr.
+imgx-media = { workspace = true, features = ["rar"] }
 log = "0.4"
 serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-imgx-mobile = { path = "../plugin" }
 tauri-plugin-log = "2"
+
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate"] }

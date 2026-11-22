@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/imgx-core", "crates/imgx-media", "crates/imgx-audio", "crates/imgx-story", "crates/imgx-wasm", "crates/imgx-host", "src-tauri", "mobile/src-tauri"]
+members = ["crates/imgx-core", "crates/imgx-media", "crates/imgx-audio", "crates/imgx-story", "crates/imgx-wasm", "crates/imgx-host", "src-tauri", "mobile/src-tauri", "mobile/plugin"]
 
 [workspace.package]
 version = "1.0.0"

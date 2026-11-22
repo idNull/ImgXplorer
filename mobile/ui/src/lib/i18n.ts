@@ -1,7 +1,9 @@
-// Textos del visor móvil, en español e inglés (mismas claves en los dos: lo comprueba `pnpm check`).
+// Textos del visor móvil, en español e inglés (mismas claves en los dos: lo comprueba TypeScript,
+// porque `en` tiene el tipo de `es`). `{nombre}` se sustituye con `t(clave, { nombre })`.
 const es = {
+  // Comprobación (fase 0)
   subtitle: "Visor de cómics e historias",
-  phase: "Fase 0: la app arranca en el móvil",
+  checkTitle: "Comprobación",
   bridge: "Puente con Rust",
   version: "Versión",
   system: "Sistema",
@@ -12,11 +14,45 @@ const es = {
   yes: "sí",
   no: "no",
   waiting: "comprobando…",
+  back: "Volver",
+
+  // Estantería
+  photos: "Fotos",
+  files: "Archivos",
+  photosHint: "Elegir fotos del carrete",
+  filesHint: "Abrir cómics (cbz, cbr, cb7) o historias (imgxstory)",
+  info: "Comprobación",
+  importing: "Copiando al móvil…",
+  emptyTitle: "Tu estantería está vacía",
+  emptyText: "Abre fotos del carrete o cómics (cbz, cbr, cb7) e historias .imgxstory. También puedes «Abrir con imgxplorer» desde Archivos, WhatsApp o Telegram.",
+  continue: "Continuar leyendo",
+  pageOf: "{page} de {pages}",
+  pagesN: "{n} páginas",
+  photosN: "{n} fotos",
+  album: "Álbum",
+  story: "Historia",
+  albumTitle: "Fotos del {date}",
+  failed: "No se pudo abrir: {list}",
+  removeAsk: "¿Quitar «{title}» de la estantería?",
+  removeText: "Se borra la copia que hay en el móvil. El original no se toca.",
+  remove: "Quitar",
+  cancel: "Cancelar",
+  holdHint: "Mantén pulsado para quitar",
+
+  // Lector
+  modePage: "Página",
+  modeWidth: "Ancho",
+  modeStrip: "Tira",
+  modeHint: "Cómo se ajusta la página",
+  manga: "Manga",
+  mangaHint: "Sentido manga: de derecha a izquierda",
+  openError: "No se pudo abrir: {err}",
+  close: "Cerrar",
 };
 
 const en: typeof es = {
   subtitle: "Comic and story viewer",
-  phase: "Phase 0: the app starts on the phone",
+  checkTitle: "Check",
   bridge: "Rust bridge",
   version: "Version",
   system: "System",
@@ -27,9 +63,42 @@ const en: typeof es = {
   yes: "yes",
   no: "no",
   waiting: "checking…",
+  back: "Back",
+
+  photos: "Photos",
+  files: "Files",
+  photosHint: "Pick photos from the gallery",
+  filesHint: "Open comics (cbz, cbr, cb7) or stories (imgxstory)",
+  info: "Check",
+  importing: "Copying to the phone…",
+  emptyTitle: "Your shelf is empty",
+  emptyText: "Open photos from the gallery, or comics (cbz, cbr, cb7) and .imgxstory stories. You can also use “Open with imgxplorer” from Files, WhatsApp or Telegram.",
+  continue: "Continue reading",
+  pageOf: "{page} of {pages}",
+  pagesN: "{n} pages",
+  photosN: "{n} photos",
+  album: "Album",
+  story: "Story",
+  albumTitle: "Photos {date}",
+  failed: "Couldn't open: {list}",
+  removeAsk: "Remove “{title}” from the shelf?",
+  removeText: "The copy on the phone is deleted. The original isn't touched.",
+  remove: "Remove",
+  cancel: "Cancel",
+  holdHint: "Long-press to remove",
+
+  modePage: "Page",
+  modeWidth: "Width",
+  modeStrip: "Strip",
+  modeHint: "How the page fits",
+  manga: "Manga",
+  mangaHint: "Manga order: right to left",
+  openError: "Couldn't open: {err}",
+  close: "Close",
 };
 
 export type Key = keyof typeof es;
 export const lang: "es" | "en" = navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
 const dict = lang === "es" ? es : en;
-export const t = (k: Key) => dict[k];
+export const t = (k: Key, vars: Record<string, string | number> = {}) =>
+  dict[k].replace(/\{(\w+)\}/g, (_, v) => String(vars[v] ?? ""));

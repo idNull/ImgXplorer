@@ -8202,7 +8202,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### block2 0.6.2, brotli-decompressor 5.0.3, brotli-decompressor 6.3.1, cargo_toml 1.0.1, dasp_sample 0.11.0, dispatch2 0.3.1, dlopen2 0.8.2, dlopen2_derive 0.4.3, dpi 0.1.2, objc2 0.6.5, objc2-app-kit 0.3.2, objc2-audio-toolbox 0.3.2, objc2-core-audio 0.3.2, objc2-core-audio-types 0.3.2, objc2-core-foundation 0.3.2, objc2-core-graphics 0.3.2, objc2-encode 4.1.0, objc2-exception-helper 0.1.1, objc2-foundation 0.3.2, objc2-quartz-core 0.3.2, objc2-web-kit 0.3.2, tauri-plugin 2.7.2, tauri-plugin-clipboard-manager 2.5.0, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-log 2.10.2, unrar_sys 0.5.8, zune-inflate 0.2.54
+### block2 0.6.2, brotli-decompressor 5.0.3, brotli-decompressor 6.3.1, cargo_toml 1.0.1, dasp_sample 0.11.0, dispatch2 0.3.1, dlopen2 0.8.2, dlopen2_derive 0.4.3, dpi 0.1.2, objc2 0.6.5, objc2-app-kit 0.3.2, objc2-audio-toolbox 0.3.2, objc2-core-audio 0.3.2, objc2-core-audio-types 0.3.2, objc2-core-foundation 0.3.2, objc2-core-graphics 0.3.2, objc2-encode 4.1.0, objc2-exception-helper 0.1.1, objc2-foundation 0.3.2, objc2-quartz-core 0.3.2, objc2-web-kit 0.3.2, tauri-plugin 2.7.2, tauri-plugin-clipboard-manager 2.5.0, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-imgx-mobile 0.1.0, tauri-plugin-log 2.10.2, unrar_sys 0.5.8, zune-inflate 0.2.54
 
 ```text
 MIT License
@@ -11033,6 +11033,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 | [tauri-plugin-clipboard-manager](https://github.com/tauri-apps/plugins-workspace) | 2.5.0 | Apache-2.0 OR MIT | Rust |
 | [tauri-plugin-dialog](https://github.com/tauri-apps/plugins-workspace) | 2.8.4 | Apache-2.0 OR MIT | Rust |
 | [tauri-plugin-fs](https://github.com/tauri-apps/plugins-workspace) | 2.7.1 | Apache-2.0 OR MIT | Rust |
+| [tauri-plugin-imgx-mobile](https://crates.io/crates/tauri-plugin-imgx-mobile) | 0.1.0 | MIT | Rust |
 | [tauri-plugin-log](https://github.com/tauri-apps/plugins-workspace) | 2.10.2 | Apache-2.0 OR MIT | Rust |
 | [tauri-runtime](https://github.com/tauri-apps/tauri) | 2.12.2 | Apache-2.0 OR MIT | Rust |
 | [tauri-runtime-wry](https://github.com/tauri-apps/tauri) | 2.12.3 | Apache-2.0 OR MIT | Rust |
