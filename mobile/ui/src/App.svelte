@@ -1,6 +1,7 @@
 <script lang="ts">
   // Pantallas del visor: estantería, lector y comprobación. El botón «atrás» de Android vuelve a
   // la estantería (cada pantalla abierta es una entrada del historial del WebView).
+  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import Check from "./Check.svelte";
   import Reader from "./Reader.svelte";
@@ -55,7 +56,10 @@
     if (r?.items.length === 1) show({ kind: "reader", item: r.items[0] });
   }
 
-  /** Lo que otra app pidió abrir con imgxplorer (al arrancar o al volver a la app). */
+  /**
+   * Lo que otra app pidió abrir con imgxplorer: al arrancar, al volver a la app y, en iOS, en
+   * cuanto llega (evento `imgx-opened`).
+   */
   async function takeOpened() {
     if (busy) return;
     const r = await library.takeOpened().catch(() => null);
@@ -77,7 +81,9 @@
     const onVisible = () => document.visibilityState === "visible" && takeOpened();
     window.addEventListener("popstate", onPop);
     document.addEventListener("visibilitychange", onVisible);
+    const unlisten = listen("imgx-opened", () => takeOpened()).catch(() => () => {});
     return () => {
+      void unlisten.then((u) => u());
       window.removeEventListener("popstate", onPop);
       document.removeEventListener("visibilitychange", onVisible);
     };

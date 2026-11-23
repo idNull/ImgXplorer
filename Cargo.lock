@@ -6010,6 +6010,7 @@ dependencies = [
 name = "tauri-plugin-imgx-mobile"
 version = "0.1.0"
 dependencies = [
+ "log",
  "serde",
  "tauri",
  "tauri-plugin",

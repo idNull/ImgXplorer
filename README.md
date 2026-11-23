@@ -576,12 +576,13 @@ En desarrollo: un **visor para Android y para iOS** que abre las imágenes del c
 
 - **Dónde está:** en [`mobile/`](mobile/README.md). Usa los mismos crates de Rust que el escritorio y una interfaz táctil propia.
 - **Android:** [mobile/README_Android.md](mobile/README_Android.md) explica qué hace, cómo está hecho, cómo prepararlo y probarlo, y lleva un registro de cada fase.
-- **Estado:** fase 3 en Android.
+- **iOS:** [mobile/README_iOS.md](mobile/README_iOS.md), con lo propio de iOS y cómo compilar en un Mac e instalar en el iPhone.
+- **Estado:** fase 3 en Android; fase 4 (iOS) en marcha, ya funcionando en el iPhone.
   - Abre fotos del carrete y cómics `cbz`, `cbr` y `cb7` con gestos táctiles (pasar página, pellizcar, modos página, ancho, tira y manga), recuerda por dónde ibas y acepta «Abrir con» y «Compartir».
   - Reproduce las historias `.imgxstory` con su cámara, sus transiciones, sus efectos y sus textos: encuadre «como se pensó» o a pantalla completa y calidad automática, alta o ahorro.
   - Con su sonido (voces, efectos y ambientes), que se pausa con las llamadas, con otra app que suena o al quitar los auriculares.
   - En vertical, la historia ocupa la pantalla y se acerca a cada viñeta; en horizontal, como se pensó.
-  - Lo siguiente es iOS (fase 4).
+  - En iOS se instala desde un Mac con un Apple ID gratuito: abre fotos del carrete (sin pedir permiso), cómics e historias desde la app Archivos y reproduce las historias. Falta probar con detalle el sonido, las pausas y «Abrir con».
 
 ## Instalar
 
@@ -680,7 +681,7 @@ crates/imgx-story   Historias .imgxstory: leer, comprobar y escribir el archivo 
 crates/imgx-audio   Sonido: decodificación (symphonia), mezclador por pistas (en directo y para exportar), efectos de audio (fx), sonidos de serie por síntesis, salida y micrófono (cpal)
 crates/imgx-wasm    Enlace de imgx-core para la interfaz
 crates/imgx-host    Capa Tauri común al escritorio y al visor móvil: fuente abierta, protocolo imgx://, portadas, archivos .imgx y biblioteca de sonidos con sus órdenes
-mobile              Visor para Android e iOS (Tauri 2): interfaz táctil (mobile/ui), crate imgxplorer-mobile (mobile/src-tauri); ver mobile/README_Android.md
+mobile              Visor para Android e iOS (Tauri 2): interfaz táctil (mobile/ui), crate imgxplorer-mobile (mobile/src-tauri); ver mobile/README_Android.md y mobile/README_iOS.md
 src-tauri           App Tauri 2 de escritorio (usa imgx-host): gestos, diagnóstico, archivos .imgx, ajustes, recientes, biblioteca, paquetes .imgxpack, historias .imgxstory, listado de carpetas del selector propio, exportación a vídeo con ffmpeg, biblioteca de sonidos y servidor MCP para las IAs (src-tauri/src/mcp)
 ui                  Interfaz Svelte 5 + TypeScript: visor WebGL2, miniaturas, ajustes y atajos, Modo Acción (ui/src/lib/action), editor (ui/src/lib/editor), selector de archivos (ui/src/lib/files), exportar vídeo (ui/src/lib/export), sonido (ui/src/lib/audio), efectos especiales (ui/src/lib/fx), ajustes de imagen (ui/src/lib/adjust), lectura (ui/src/lib/reading), herramientas de la IA (ui/src/lib/mcp)
 docs                Especificación de los formatos .imgx e .imgxstory, y cómo crear los instaladores

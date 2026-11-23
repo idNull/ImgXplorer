@@ -8,6 +8,7 @@ links = "tauri-plugin-imgx-mobile"
 
 [dependencies]
 serde.workspace = true
+log = "0.4"
 tauri = { version = "2", features = [] }
 
 [build-dependencies]

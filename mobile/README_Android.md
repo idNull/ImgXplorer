@@ -14,7 +14,7 @@ Una app de imgxplorer para el móvil que, de momento, **solo es un visor**. El e
 | 1 | Visor de imágenes del carrete y de cómics `cbz`, `cbr` y `cb7` | hecha |
 | 2 | Historias `.imgxstory` con su animación, sus efectos y sus textos | hecha |
 | 3 | Sonido de las historias (voces, efectos y ambientes) | en marcha |
-| 4 | Lo mismo en iOS (con su propio `README_iOS.md`) | pendiente |
+| 4 | Lo mismo en iOS ([README_iOS.md](README_iOS.md)) | en marcha: ya funciona en el iPhone |
 | 5 | Publicar: APK firmado, Google Play y descarga desde imgxplorer.app | pendiente |
 
 ## Cómo está hecho
@@ -53,8 +53,9 @@ mobile/
 │           ├── reading.ts   modo de lectura y sentido manga, recordados
 │           └── i18n.ts      textos en español e inglés
 ├── plugin/              complemento de Tauri «imgx-mobile» (tauri-plugin-imgx-mobile)
-│   ├── src/lib.rs       la parte de Rust: pick_images, pick_documents, take_opened
-│   └── android/         la parte de Kotlin (ImgxPlugin.kt): selectores, copiar, HEIC → JPEG
+│   ├── src/lib.rs       la parte de Rust: pick_images, pick_documents, take_opened, audio_focus
+│   ├── android/         la parte de Kotlin (ImgxPlugin.kt): selectores, copiar, HEIC → JPEG, sonido
+│   └── ios/             la parte de Swift (ver README_iOS.md)
 └── src-tauri/           crate imgxplorer-mobile (miembro del workspace de Cargo)
     ├── src/lib.rs       monta la app: estado, protocolo imgx://, órdenes de imgx-host y de la biblioteca
     ├── src/library.rs   biblioteca: importar, lista con progreso, quitar
@@ -256,6 +257,10 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 
   Es `View.fit` y `units()` en `crates/imgx-core/src/fx.rs`, con la prueba `en_un_movil_en_vertical_la_onomatopeya_cabe`; `WasmFx.set_fit`, `FxTrack.of(list, fit)` y `fxFit` en el reproductor. El escritorio y los vídeos no lo usan y no cambian.
 - **Historia de prueba** «Viñetas con sonido»: una melodía propia dentro del archivo (como voz), lluvia y viento de serie como ambientes, y zas, explosión, puñetazo, campana, llamar a la puerta, pasos y trueno.
+
+**Fase 4 (iOS, en marcha; lo de iOS está en [README_iOS.md](README_iOS.md))**
+- **Complemento compartido:** `mobile/plugin` tiene ahora también la parte de Swift. En Android funciona igual que antes: mismas órdenes y mismo Kotlin; solo cambia cómo se guarda por dentro el acceso al complemento en Rust. Comprobado que compila para Android.
+- **Interfaz:** la estantería también recoge lo abierto con «Abrir con» cuando llega el evento `imgx-opened`. Solo lo manda iOS; en Android lo sigue recogiendo al volver a la app.
 
 ## Lista de comprobación en el móvil
 
