@@ -161,11 +161,61 @@ pub struct Audio {
     index: Mutex<Option<Vec<SoundEntry>>>,
     cache: Mutex<Cache>,
     out: Mutex<Option<Result<Output, String>>>,
+    /// Lo último que se mandó al motor, para rehacerlo si hay que volver a abrir la salida.
+    memo: Mutex<Memo>,
     /// Última escena pedida: una decodificación lenta no pisa una escena más nueva.
     scene_seq: AtomicU64,
     ambient_seq: AtomicU64,
     pub recorder: Mutex<Option<imgx_audio::device::Recorder>>,
     story: Mutex<Option<StorySounds>>,
+}
+
+/// El estado del motor en directo, tal como se le fue mandando (ver [`Audio::reopen`]).
+#[derive(Default)]
+struct Memo {
+    scene: Option<Command>,
+    ambient: Option<Command>,
+    transport: Option<Command>,
+    tracks: Option<Command>,
+    levels: Option<Command>,
+    master: Option<Command>,
+    mute: Option<Command>,
+}
+
+impl Memo {
+    fn note(&mut self, c: &Command) {
+        let slot = match c {
+            Command::Scene(_) => &mut self.scene,
+            Command::Ambient(_) => &mut self.ambient,
+            Command::Transport { .. } => &mut self.transport,
+            Command::Tracks { .. } => &mut self.tracks,
+            Command::Levels(_) => &mut self.levels,
+            Command::Master(_) => &mut self.master,
+            Command::Mute(_) => &mut self.mute,
+            Command::Preview(_) => return,
+            Command::Silence => {
+                self.scene = None;
+                self.ambient = None;
+                self.transport = None;
+                return;
+            }
+        };
+        *slot = Some(c.clone());
+    }
+
+    /// En el orden en que hay que volver a mandarlo: primero pistas y niveles, después lo que
+    /// suena y por último el reloj (saltando a donde iba).
+    fn replay(&self) -> Vec<Command> {
+        let mut out: Vec<Command> = [&self.tracks, &self.levels, &self.master, &self.mute, &self.scene, &self.ambient]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect();
+        if let Some(Command::Transport { t, playing, running, rate, .. }) = self.transport {
+            out.push(Command::Transport { t, playing, running, rate, seek: true });
+        }
+        out
+    }
 }
 
 fn now() -> u64 {
@@ -260,9 +310,33 @@ impl Audio {
 
     /// Manda una orden al motor. Sin dispositivo, no hace nada.
     pub fn send(&self, c: Command) {
+        self.memo.lock().unwrap().note(&c);
         if let Some(Ok(o)) = self.output().as_ref() {
             o.send(c);
         }
+    }
+
+    /// Cierra la salida de sonido y abre otra, con lo que estaba sonando. Para iOS: al soltar la
+    /// sesión de audio (pausa, salir de la app, una llamada) el sistema para la salida, y cpal no
+    /// la vuelve a poner en marcha. Si aún no se había abierto, no hace nada (se abrirá al usarla).
+    pub fn reopen(&self) {
+        let mut g = self.out.lock().unwrap();
+        if g.is_none() {
+            return;
+        }
+        // La vieja se suelta antes de abrir la nueva: es el mismo dispositivo.
+        *g = None;
+        let out = Output::start().map_err(|e| {
+            log::warn!("audio: sin salida de sonido: {e}");
+            e.to_string()
+        });
+        if let Ok(o) = &out {
+            for c in self.memo.lock().unwrap().replay() {
+                o.send(c);
+            }
+            log::info!("audio: salida de sonido abierta de nuevo");
+        }
+        *g = Some(out);
     }
 
     /// Importa un archivo: lo valida decodificándolo y lo copia (si no estaba ya).
@@ -648,6 +722,26 @@ pub fn audio_status(audio: State<'_, Audio>) -> AudioStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn al_reabrir_se_rehace_lo_que_sonaba() {
+        let mut m = Memo::default();
+        m.note(&Command::Mute(true));
+        m.note(&Command::Scene(Vec::new()));
+        m.note(&Command::Transport { t: 1.5, playing: true, running: true, rate: 1.0, seek: false });
+        m.note(&Command::Preview(None));
+        let r = m.replay();
+        assert!(matches!(r[0], Command::Mute(true)));
+        assert!(matches!(r[1], Command::Scene(_)));
+        // El reloj va al final y salta a donde iba.
+        assert!(matches!(r[2], Command::Transport { t: 1.5, playing: true, seek: true, .. }));
+        assert_eq!(r.len(), 3);
+        // Al callar, lo que sonaba se olvida; el volumen se queda.
+        m.note(&Command::Silence);
+        let r = m.replay();
+        assert_eq!(r.len(), 1);
+        assert!(matches!(r[0], Command::Mute(true)));
+    }
 
     #[test]
     fn lee_pistas_y_efectos_como_los_manda_la_interfaz() {

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 480" width="1040" height="480" role="img" aria-labelledby="t d">
+  <title id="t">imgXplorer en el móvil: Android e iPhone</title>
+  <desc id="d">Dos móviles. En el de la izquierda, una página de cómic con la cámara enfocando una viñeta y un «¡BOOM!»; en el de la derecha, un pase de fotos fundiéndose de una a otra con los controles de reproducción.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1724"/>
+      <stop offset="1" stop-color="#1b2740"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.55" r="0.6">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <clipPath id="scrA"><rect x="182" y="96" width="196" height="352" rx="18"/></clipPath>
+    <clipPath id="scrB"><rect x="582" y="96" width="196" height="352" rx="26"/></clipPath>
+  </defs>
+
+  <rect width="1040" height="480" rx="28" fill="url(#bg)"/>
+  <rect width="1040" height="480" rx="28" fill="url(#glow)"/>
+
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="520" y="46" font-size="28" font-weight="700" fill="#f8fafc">imgXplorer en tu móvil</text>
+    <text x="520" y="74" font-size="15" fill="#94a3b8">Cómics animados con su cámara, sus efectos y su sonido · Android e iPhone · en desarrollo</text>
+  </g>
+
+  <!-- Android: cómic animado -->
+  <g transform="translate(120 0)">
+    <rect x="170" y="84" width="220" height="376" rx="28" fill="#0b0f16" stroke="#334155" stroke-width="3"/>
+    <g clip-path="url(#scrA)">
+      <rect x="182" y="96" width="196" height="352" fill="#fdf6e3"/>
+      <rect x="194" y="112" width="172" height="92" fill="#fcd34d" stroke="#1f2937" stroke-width="3"/>
+      <rect x="194" y="214" width="82" height="118" fill="#86efac" stroke="#1f2937" stroke-width="3"/>
+      <rect x="284" y="214" width="82" height="118" fill="url(#sky)" stroke="#1f2937" stroke-width="3"/>
+      <rect x="194" y="342" width="172" height="92" fill="#a5b4fc" stroke="#1f2937" stroke-width="3"/>
+      <!-- explosión en la viñeta enfocada -->
+      <polygon points="325,236 333,256 352,250 341,268 360,280 339,284 345,304 326,292 316,310 309,290 289,296 300,279 284,266 304,262 300,243 316,255" fill="#fde047" stroke="#7c2d12" stroke-width="2"/>
+      <text x="324" y="283" font-family="Impact, 'Arial Black', sans-serif" font-size="17" font-weight="900" fill="#b91c1c" text-anchor="middle" transform="rotate(-8 324 278)">¡BOOM!</text>
+      <ellipse cx="226" cy="134" rx="18" ry="10" fill="#fff" stroke="#1f2937" stroke-width="2"/>
+      <ellipse cx="216" cy="236" rx="14" ry="8" fill="#fff" stroke="#1f2937" stroke-width="2"/>
+      <!-- la cámara enfoca una viñeta -->
+      <rect x="278" y="208" width="94" height="130" rx="6" fill="none" stroke="#3b82f6" stroke-width="4"/>
+      <path d="M278 226 v-18 h18 M354 208 h18 v18 M372 320 v18 h-18 M296 338 h-18 v-18" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <rect x="250" y="440" width="60" height="5" rx="2.5" fill="#475569"/>
+  </g>
+
+  <!-- iPhone: pase de fotos -->
+  <g transform="translate(-10 0)">
+    <rect x="570" y="84" width="220" height="376" rx="36" fill="#0b0f16" stroke="#334155" stroke-width="3"/>
+    <g clip-path="url(#scrB)">
+      <rect x="582" y="96" width="196" height="352" fill="#000"/>
+      <!-- foto que se va -->
+      <g opacity="0.45">
+        <rect x="582" y="150" width="196" height="196" fill="url(#sky)"/>
+        <circle cx="690" cy="236" r="34" fill="#fef3c7"/>
+        <path d="M582 346 L640 270 L690 320 L740 260 L778 300 V346 Z" fill="#7c2d12"/>
+      </g>
+      <!-- foto que llega (fundido) -->
+      <g opacity="0.75">
+        <rect x="582" y="150" width="196" height="196" fill="url(#sea)"/>
+        <path d="M582 300 Q630 280 680 300 T778 296 V346 H582 Z" fill="#0ea5e9"/>
+        <circle cx="620" cy="196" r="18" fill="#fef9c3"/>
+      </g>
+      <!-- barra del pase -->
+      <rect x="582" y="372" width="196" height="76" fill="#111827"/>
+      <rect x="598" y="386" width="164" height="4" rx="2" fill="#334155"/>
+      <rect x="598" y="386" width="96" height="4" rx="2" fill="#3b82f6"/>
+      <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#e2e8f0" text-anchor="middle">
+        <rect x="604" y="402" width="152" height="28" rx="14" fill="#1e293b"/>
+        <text x="680" y="421">✨ Fundido · 4 s</text>
+      </g>
+      <rect x="638" y="104" width="84" height="22" rx="11" fill="#000"/>
+    </g>
+  </g>
+
+  <!-- rótulos -->
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="14" fill="#cbd5e1">
+    <g transform="translate(44 170)">
+      <text font-weight="700" fill="#f8fafc" font-size="16">Historias .imgxstory</text>
+      <text y="26">🎥 Cámara viñeta a viñeta</text>
+      <text y="50">💥 Efectos y onomatopeyas</text>
+      <text y="74">🔊 Voces, efectos y ambientes</text>
+      <text y="98">📖 cbz · cbr · cb7</text>
+    </g>
+    <g transform="translate(830 170)">
+      <text font-weight="700" fill="#f8fafc" font-size="16">Tus fotos</text>
+      <text y="26">✨ Pase de fotos</text>
+      <text y="50">🎞 7 transiciones</text>
+      <text y="74">⏱ De 1 a 30 s</text>
+      <text y="98">♿ Accesible</text>
+    </g>
+    <g text-anchor="middle" font-size="13" fill="#94a3b8">
+      <text x="400" y="476">Android</text>
+      <text x="670" y="476">iPhone</text>
+    </g>
+  </g>
+</svg>

@@ -120,10 +120,17 @@ fn library_remove(app: AppHandle, id: String, lib: State<'_, Library>) -> Result
     Ok(())
 }
 
-/// Pide o suelta el foco de sonido de Android mientras suena una historia.
+/// Pide o suelta el foco de sonido (Android) o la sesión de audio (iOS) mientras suena una
+/// historia.
 #[tauri::command]
 fn audio_focus(app: AppHandle, on: bool) -> Result<(), String> {
-    app.imgx_mobile().audio_focus(on)
+    app.imgx_mobile().audio_focus(on)?;
+    // En iOS, la salida de sonido se para al soltar la sesión y no vuelve sola: se abre otra.
+    #[cfg(target_os = "ios")]
+    if on {
+        app.state::<audio::Audio>().reopen();
+    }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

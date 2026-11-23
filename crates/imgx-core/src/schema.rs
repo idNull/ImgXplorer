@@ -253,6 +253,11 @@ pub struct Transition {
 pub enum TransitionKind {
     Cut,
     Fade,
+    /// Fundido a negro: la imagen se apaga y la siguiente se enciende.
+    Dip,
+    /// Acercar: las dos avanzan hacia la cámara mientras se funden (la saliente crece y se va;
+    /// la entrante llega de un poco más lejos).
+    Zoom,
     /// `dir`: lado por el que llega la siguiente imagen.
     Slide { dir: Direction },
     /// Las páginas se colocan contiguas y la cámara viaja de una a otra. Sin `dir`, se deduce

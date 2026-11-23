@@ -6,7 +6,8 @@
   // Reproducir (▶) usa el reproductor del Modo Acción del escritorio: la cámara, las transiciones y
   // los efectos de una historia `.imgxstory` (o, en un cómic, la cámara automática), con su sonido
   // por el motor de Rust (el mismo director que en el escritorio). Con la historia se abre una
-  // portada con su título y sus créditos.
+  // portada con su título y sus créditos. En un álbum de fotos, ▶ es un pase de fotos con la
+  // transición, el tiempo y el movimiento que se eligen en ✨ (SlideshowSheet.svelte).
   import { onDestroy, onMount, tick } from "svelte";
   import Viewer from "$imgx/viewer/Viewer.svelte";
   import type { Framing, ReadLayout } from "$imgx/reading/layout";
@@ -19,8 +20,10 @@
   import { director } from "$imgx/audio/director";
   import { trackSpecs } from "$imgx/audio/tracks";
   import PlayBar from "./PlayBar.svelte";
+  import SlideshowSheet from "./SlideshowSheet.svelte";
+  import { reducedMotion, show, showSequence } from "./lib/slideshow";
   import { audioFocus, audioPause, closeSource, detectPanels, library, onInterrupt, openSource, pictureRef, type Item, type SourceInfo } from "./lib/api";
-  import { t } from "./lib/i18n";
+  import { t, type Key } from "./lib/i18n";
   import { reading, saveReading, type Mode, type Quality, type StoryFit } from "./lib/reading";
 
   let { item, onclose }: { item: Item; onclose: () => void } = $props();
@@ -199,9 +202,37 @@
 
   const sequence = $derived(source ? projectSequence(store, source.entries.map((e) => e.name), (i) => detectPanels(source!.generation, i)) : null);
 
+  // ── Pase de fotos (álbumes) ──
+  const album = $derived(item.kind === "album" && !story);
+  let showOpen = $state(false);
+  /** Sube cada vez que cambia un ajuste del pase (está fuera de Svelte, en `show`). */
+  let showRev = $state(0);
+  const playSequence = $derived.by(() => {
+    void showRev;
+    if (!sequence) return null;
+    return album ? showSequence(sequence, { ...show }, rtl, reducedMotion()) : sequence;
+  });
+  const showSummary = $derived.by(() => {
+    void showRev;
+    return album ? t("showSummary", { tr: t(`tr_${show.transition}` as Key), n: show.seconds }) : null;
+  });
+  function openShow() {
+    showOpen = true;
+    clearTimeout(hideTimer);
+  }
+  function closeShow() {
+    showOpen = false;
+    if (playing) showBars();
+  }
+  function showChanged() {
+    showRev++;
+    // Mientras suena, el cambio se ve ya: la foto actual vuelve a empezar con el pase nuevo.
+    if (playing) void restart();
+  }
+
   /** Empieza a reproducir desde la imagen `from` (por defecto, la actual). */
   async function play(from = index) {
-    if (!source || !sequence || !count) return;
+    if (!source || !playSequence || !count) return;
     intro = false;
     playing = true;
     // El visor cambia de tamaño (encuadre «como se pensó») antes de que el reproductor mire su proporción.
@@ -213,7 +244,7 @@
     director.tracks(trackSpecs($state.snapshot(store.tracks)), []);
     // Los tamaños de las onomatopeyas y los subtítulos se pensaron para la proporción de la historia
     // (16:9 si no la dice): en vertical se miden sobre ella para que quepan.
-    viewer.play({ ...sequence, start: from, count, onIndex: (i) => (index = i), sound: director, fxFit: authored ?? 16 / 9 });
+    viewer.play({ ...playSequence!, start: from, count, onIndex: (i) => (index = i), sound: director, fxFit: authored ?? 16 / 9 });
     bars = false;
     void holdWake();
   }
@@ -244,6 +275,12 @@
       clearTimeout(hideTimer);
       releaseWake();
       void audioFocus(false);
+      // Pase de fotos con «Repetir al acabar»: vuelve a la primera foto.
+      if (p.state === "ended" && album && show.loop && p.index >= count - 1 && !showOpen) {
+        window.setTimeout(() => {
+          if (playing && playerInfo?.state === "ended") void replay();
+        }, 300);
+      }
     } else if (p.state !== was && p.state === "playing") {
       void holdWake();
       void audioFocus(true);
@@ -402,6 +439,8 @@
           onfit={toggleFit}
           onquality={nextQuality}
           onreplay={replay}
+          show={showSummary}
+          onshow={openShow}
         />
       {:else}
         {#if count > 1}
@@ -419,11 +458,26 @@
         {/if}
         <div class="row">
           <button class="play" onclick={() => play()} title={t("playHint")}>▶ {t("play")}</button>
+          {#if album}
+            <button onclick={openShow} title={t("showHint")} aria-haspopup="dialog">✨ {t("showOpen")}</button>
+          {/if}
           <button onclick={nextMode} title={t("modeHint")}>{modeLabel[mode]()}</button>
           <button class:on={rtl} onclick={toggleRtl} title={t("mangaHint")}>⇄ {t("manga")}</button>
         </div>
       {/if}
     </div>
+  {/if}
+
+  {#if showOpen && source}
+    <SlideshowSheet
+      {playing}
+      onchange={showChanged}
+      onplay={() => {
+        showOpen = false;
+        void play();
+      }}
+      onclose={closeShow}
+    />
   {/if}
 </div>
 

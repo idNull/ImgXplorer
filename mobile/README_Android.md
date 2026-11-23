@@ -183,6 +183,8 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 | Auriculares fuera | Al desconectarlos, la historia se pausa en vez de seguir por el altavoz | `ACTION_AUDIO_BECOMING_NOISY` en `ImgxPlugin.kt` | Fase 3 |
 | Botones de volumen | Mueven el volumen multimedia, no el del timbre | `volumeControlStream = STREAM_MUSIC` | Fase 3 |
 | Pausa en segundo plano | Al salir de la app se pausa la imagen y también el sonido (sin fotogramas, el reproductor no llegaría a avisarle) | `visibilitychange` y `audio_transport` | Fase 2 (el sonido, fase 3) |
+| ✨ Pase de fotos | En un álbum de fotos, ▶ pasa de una foto a otra con la transición, el tiempo y el movimiento elegidos. **Transición:** fundido, fundido a negro, deslizar (por el lado hacia el que se lee, manga incluido), acercar, viaje de cámara, corte o variada (una distinta en cada foto). **Tiempo por foto:** de 1 a 30 s, con − / +, un deslizador y atajos de 2, 3, 5, 8 y 10 s. **Velocidad de la transición:** rápida (0,4 s), normal (0,8 s) o lenta (1,5 s). **Movimiento de la foto:** fija o suave (acercamiento lento tipo Ken Burns, distinto en cada foto). **Repetir al acabar.** Se abre con ✨ junto a ▶ o, mientras se reproduce, con el botón que resume el pase («Fundido · 4 s»); los cambios se ven al momento. Se recuerda para todos los álbumes. Las historias y los cómics siguen con su propia animación | `SlideshowSheet.svelte` y `lib/slideshow.ts`, que cambia la timeline (plantillas `full` y `ken-burns` del núcleo) y la transición de cada foto. «Fundido a negro» y «Acercar» son transiciones nuevas del núcleo compartido (`dip` y `zoom` en `crates/imgx-core/src/transition.rs`) | Pase de fotos |
+| Accesibilidad del pase | Con «Reducir movimiento» del sistema, lo predeterminado no se mueve (fundido y foto fija), las opciones que mueven la imagen lo indican y «Variada» solo mezcla fundidos; se puede elegir otra cosa igual. Es un diálogo de verdad (el foco entra al abrirlo y vuelve al botón al cerrarlo; ✕, «Listo», tocar fuera o Escape lo cierran). Todo son controles nativos (botones de opción con su nombre y su explicación, deslizador con «4 segundos» para el lector de pantalla, casilla de repetir), de al menos 48 px, con el foco bien visible y sin depender del color | `prefers-reduced-motion`, `role="dialog"`, `aria-modal`, `aria-valuetext` | Pase de fotos |
 
 **Para probar las historias:** en el escritorio, 🎞 Exportar → 📦 Historia, variante móvil. La de la fase 2 se hizo con las viñetas de `muestras/` y un generador temporal que ya no está en el repositorio.
 
@@ -262,6 +264,11 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - **Complemento compartido:** `mobile/plugin` tiene ahora también la parte de Swift. En Android funciona igual que antes: mismas órdenes y mismo Kotlin; solo cambia cómo se guarda por dentro el acceso al complemento en Rust. Comprobado que compila para Android.
 - **Interfaz:** la estantería también recoge lo abierto con «Abrir con» cuando llega el evento `imgx-opened`. Solo lo manda iOS; en Android lo sigue recogiendo al volver a la app.
 
+**Pase de fotos (álbumes, Android e iOS)**
+- **Qué:** ✨ Pase de fotos en los álbumes del carrete: transición, tiempo por foto, velocidad de la transición, movimiento de la foto y repetir. Ver la tabla de características.
+- **Núcleo:** dos transiciones nuevas, `dip` (fundido a negro) y `zoom` (acercar), con sus pruebas (`fundido_a_negro_pasa_por_negro`, `acercar_acaba_en_la_pose_de_la_siguiente`, `las_transiciones_nuevas_se_leen_del_proyecto`). Se añaden a las de siempre; el Modo Acción del escritorio todavía no las ofrece y no cambia.
+- **Interfaz:** `mobile/ui/src/lib/slideshow.ts` (ajustes, que se guardan en `imgx.slideshow`, y la secuencia del pase) y `SlideshowSheet.svelte` (el diálogo). `Reader.svelte` usa el pase solo si lo abierto es un álbum; `PlayBar.svelte` enseña su resumen.
+
 ## Lista de comprobación en el móvil
 
 **Móvil de pruebas:** Samsung Galaxy A52s 5G (SM-A528B), Android 14 (One UI 6.1), ARM de 64 bits, pantalla de 1080×2400 (384×854 a 2,81×), WebView 157.
@@ -299,3 +306,12 @@ Para ver los errores de la app en el móvil: `adb logcat | grep -i imgx`.
 - [x] En vertical, «¡BOOM!» cabe entero y los subtítulos se leen bien.
 - [ ] 🔊/🔇, pausa, velocidad y los botones de volumen.
 - [ ] Se pausa al salir de la app, con una llamada o música de otra app, y al quitar los auriculares.
+
+**Pase de fotos**
+- [x] En un álbum, ✨ Pase de fotos abre el diálogo; ▶ Reproducir el pase empieza.
+- [x] Cada transición: fundido, fundido a negro, deslizar (y con ⇄ Manga, por el otro lado), acercar, viaje de cámara, corte y variada.
+- [ ] Tiempo por foto (− / +, deslizador y atajos) y velocidad de la transición.
+- [ ] Movimiento fijo y suave; repetir al acabar.
+- [ ] Cambiar el pase mientras se reproduce: se ve al momento.
+- [ ] Con «Quitar animaciones» (Accesibilidad), lo predeterminado es fundido y foto fija, y sale el aviso.
+- [ ] TalkBack: lee cada opción con su explicación y el tiempo en segundos.

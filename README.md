@@ -2,11 +2,26 @@
 
 <p align="center"><img src="src-tauri/icons/svg/icono.svg" width="160" alt="Icono de imgXplorer: una página de cómic con la cámara enfocando una viñeta"></p>
 
-**imgXplorer — tu cómic, viñeta a viñeta.**
+<h3 align="center">imgXplorer — tu cómic, viñeta a viñeta.</h3>
 
-Visor de imágenes y cómics para **Linux y macOS** con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4.
+<p align="center">
+  <a href="https://imgxplorer.app"><img alt="Linux" src="https://img.shields.io/badge/Linux-disponible-2ea44f?logo=linux&logoColor=white"></a>
+  <a href="https://imgxplorer.app"><img alt="macOS" src="https://img.shields.io/badge/macOS-disponible-2ea44f?logo=apple&logoColor=white"></a>
+  <a href="#versiones-móviles"><img alt="Android" src="https://img.shields.io/badge/Android-en%20desarrollo-f59e0b?logo=android&logoColor=white"></a>
+  <a href="#versiones-móviles"><img alt="iPhone" src="https://img.shields.io/badge/iPhone-en%20desarrollo-f59e0b?logo=apple&logoColor=white"></a>
+  <br>
+  <a href="https://github.com/idNull/ImgXplorer/releases/latest"><img alt="Versión" src="https://img.shields.io/github/v/release/idNull/ImgXplorer?label=versi%C3%B3n&color=3b82f6"></a>
+  <img alt="Hecho con Rust" src="https://img.shields.io/badge/Rust-motor-b7410e?logo=rust&logoColor=white">
+  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white">
+  <a href="LICENSE"><img alt="Licencia MIT" src="https://img.shields.io/badge/licencia-MIT-64748b"></a>
+</p>
+
+Visor de imágenes y cómics para **Linux y macOS**, y pronto también para **Android e iPhone**, con un **Modo Acción**: animaciones de cámara (paneo, zoom, rotación) por imagen sobre una línea de tiempo, pensadas para leer cómics viñeta a viñeta y exportarlos a MP4 o compartirlos como cómic animado.
 
 > Estado: **versión 1.0.0 publicada** el 21 de noviembre de 2026. Se descarga en [imgxplorer.app](https://imgxplorer.app) y en [GitHub Releases](https://github.com/idNull/ImgXplorer/releases/latest). Lo que trae está en [CHANGELOG.md](CHANGELOG.md) y lo que falta comprobar en los tres equipos, en [docs/lista-comprobacion.md](docs/lista-comprobacion.md). Este README se actualiza con cada cambio.
+
+> [!TIP]
+> **📱 imgXplorer llega al móvil.** Estamos preparando el visor para **Android e iPhone**: los cómics animados que preparas en el ordenador (historias [`.imgxstory`](docs/imgxstory.md)) se ven en el móvil con su cámara viñeta a viñeta, sus efectos, sus onomatopeyas y su sonido, dibujados en directo y sin pasarlos a vídeo. También abre cómics `cbz`, `cbr` y `cb7` y hace pases de fotos con transiciones. Ya funciona en los móviles de prueba; [ver el estado →](#versiones-móviles)
 
 ![Qué hace imgXplorer](docs/img/infografia.svg)
 
@@ -272,7 +287,7 @@ En la misma ventana de 🎞 Exportar, pestaña **📦 Historia** (o `Ctrl+Mayús
   - las páginas;
   - la animación (cámara, transiciones, efectos, onomatopeyas y subtítulos);
   - **todos los sonidos y voces** que usa: grabaciones, importados y los de ElevenLabs. Los de serie no hacen falta, porque los fabrica la app.
-- **Para qué**: dos variantes del **mismo formato**; las dos se abren en el escritorio y, en el futuro, en el móvil.
+- **Para qué**: dos variantes del **mismo formato**; las dos se abren en el escritorio y en el [visor móvil](#versiones-móviles) (en desarrollo).
   - **🖥 Escritorio**: páginas con su calidad original. Las que están en formatos que un móvil no sabe abrir (HEIC, RAW, PSD, TIFF…) se convierten sin pérdida.
   - **📱 Móvil**: páginas de 2.560 px como mucho, así que pesa mucho menos.
 - **Qué exportar**: todo, la imagen actual o un rango (los ambientes se recortan a ese rango).
@@ -287,7 +302,7 @@ En la misma ventana de 🎞 Exportar, pestaña **📦 Historia** (o `Ctrl+Mayús
   - Sus sonidos suenan desde dentro del archivo, sin copiarse a tu biblioteca. En el editor salen con 📦, y **⤓ Guardar en mi biblioteca** copia el que quieras.
   - **Se puede retocar**: los cambios se guardan al lado (`<historia>.imgxstory.imgx`), y la historia original no cambia.
 - **También desde la estantería**: clic derecho → «📦 Compartir historia…».
-- **El formato** está explicado en [docs/imgxstory.md](docs/imgxstory.md), y es el que usará la futura versión para el móvil.
+- **El formato** está explicado en [docs/imgxstory.md](docs/imgxstory.md), y es el que abre el [visor para Android e iPhone](#versiones-móviles).
 
 ### Sonido
 
@@ -547,6 +562,14 @@ Con el editor abierto (tienen prioridad sobre las del visor):
   - [ ] Pruebas en CachyOS, Ubuntu con Nvidia y Mac (con ElevenLabs de verdad).
   - [x] Documento [«imgXplorer, la historia detrás»](docs/imgXplorer-la-historia.docx) (Word, 17 páginas): el nombre, cómo empezó, qué hace, por qué Rust, cada tecnología, cómo funciona por dentro, programar con una IA, anécdotas, cifras y glosario.
 - [x] **Código abierto**: licencia MIT, licencias de terceros en el «Acerca de» y en `THIRD-PARTY.md` (generadas solas), y RAR opcional para paquetes 100 % libres.
+- [ ] **Visor móvil para Android e iPhone** (en desarrollo; ver [Versiones móviles](#versiones-móviles)).
+  - [x] Fase 0: motor compartido con el escritorio (`imgx-host`) y app de Android que arranca.
+  - [x] Fase 1: estantería, fotos del carrete y cómics `cbz`, `cbr` y `cb7` con gestos táctiles.
+  - [x] Fase 2: historias `.imgxstory` con su cámara, sus transiciones y sus efectos.
+  - [x] Fase 3: sonido de las historias, encuadre automático y textos legibles en vertical.
+  - [x] ✨ Pase de fotos con transiciones, tiempo por foto y accesibilidad.
+  - [ ] Fase 4: iPhone. Ya funciona en el iPhone de pruebas; faltan algunas comprobaciones.
+  - [ ] Fase 5: publicar en Google Play y en la App Store, y descarga del APK en imgxplorer.app.
 
 ### Propuestas de mejora
 
@@ -559,12 +582,7 @@ El plan del primer lanzamiento, con todas las mejoras por fases, está en [docs/
   - Lo que se pida en el mensaje manda sobre el cuadro.
   - Límite de unos 2.000 caracteres.
   - Más adelante: un estilo propio para cada proyecto.
-- **imgXplorer en el móvil** (en estudio, sin decidir todavía):
-  - Abrir en el móvil el cómic con la animación preparada en el ordenador y verla en vertical, a pantalla completa, sin pasarla a vídeo.
-  - Con todo: cámara viñeta a viñeta, efectos, onomatopeyas, subtítulos, sonidos, música y voces.
-  - A tu ritmo: tocar para pasar de viñeta, deslizar para cambiar de página, volver atrás, pausar o dejar que avance sola.
-  - Más ligero que un vídeo: lleva el cómic, la animación y los sonidos, y el móvil lo dibuja en directo. El archivo ya existe: la historia [`.imgxstory`](docs/imgxstory.md) en su variante para móvil.
-  - Dos caminos en estudio: seguir con Tauri, que también funciona en iOS y Android, adaptando la interfaz al tacto; o hacerla nativa en cada plataforma (Swift y Kotlin). En los dos se podría reutilizar el motor en Rust.
+- **imgXplorer en el móvil**: ya no es una idea, está en desarrollo. Se hizo con Tauri, reutilizando el motor en Rust y la interfaz del escritorio; el estado está en la [hoja de ruta](#hoja-de-ruta) y en [Versiones móviles](#versiones-móviles).
 
 El formato de animaciones está especificado en [docs/format.md](docs/format.md), y el de las historias para compartir en [docs/imgxstory.md](docs/imgxstory.md).
 
@@ -572,17 +590,45 @@ La historia del proyecto, para todos los públicos, está en [docs/imgXplorer-la
 
 ## Versiones móviles
 
-En desarrollo: un **visor para Android y para iOS** que abre las imágenes del carrete, cómics (`cbz`, `cbr`, `cb7`) y las historias `.imgxstory` con su animación, sus efectos y su sonido. El editor y la exportación se quedan en el escritorio.
+<p align="center"><img src="docs/img/movil.svg" width="760" alt="Dos móviles: en Android, una página de cómic con la cámara enfocando una viñeta y un «¡BOOM!»; en el iPhone, un pase de fotos fundiéndose de una a otra"></p>
 
-- **Dónde está:** en [`mobile/`](mobile/README.md). Usa los mismos crates de Rust que el escritorio y una interfaz táctil propia.
+**En desarrollo:** un visor para **Android y iPhone**. Prepara la animación en el ordenador, expórtala como historia y mírala en el móvil, en vertical y a pantalla completa, con todo lo que le pusiste. El editor y la exportación se quedan en el escritorio; el móvil es para **ver y disfrutar**.
+
+- **Con todo:** cámara viñeta a viñeta, transiciones, efectos, onomatopeyas, subtítulos, voces, efectos de sonido, ambientes y música.
+- **A tu ritmo:** toca para pasar de viñeta, desliza para cambiar de página, vuelve atrás, pausa o deja que avance sola. Pellizca para mover la cámara a mano y, al soltar, vuelve sola.
+- **Más ligero que un vídeo:** la historia [`.imgxstory`](docs/imgxstory.md) lleva el cómic, la animación y los sonidos, y el móvil lo dibuja en directo con el mismo motor en Rust que el escritorio.
+
+### Qué hace ya
+
+| | Android | iPhone |
+|---|:---:|:---:|
+| 📷 Fotos del carrete (sin pedir permiso a todas tus fotos) | ✅ | ✅ |
+| 📖 Cómics `cbz`, `cbr` y `cb7` con gestos táctiles y modos página, ancho, tira y manga | ✅ | ✅¹ |
+| 🎬 Historias `.imgxstory` con su cámara, transiciones, efectos y textos | ✅ | ✅ |
+| 🔊 Sonido: voces, efectos y ambientes | ✅ | ✅ |
+| 🔇 Silencio y botones de volumen | 🧪 | 🧪² |
+| ⏸ Pausa sola al salir de la app, con una llamada, con otra música o al quitar los auriculares | 🧪 | 🧪³ |
+| 📱 Encuadre automático: en vertical, la cámara se acerca a cada viñeta; en horizontal, como se pensó | ✅ | 🧪 |
+| ✨ Pase de fotos con 7 transiciones, de 1 a 30 s por foto, foto fija o con movimiento suave | ✅ | ✅ |
+| ♿ Accesible: «Reducir movimiento», VoiceOver y TalkBack, botones de 48 px | 🧪 | 🧪 |
+| 📤 «Abrir con» y «Compartir» desde otras apps | ✅ | 🧪 |
+| 🏪 En la tienda | ⏳ Google Play | ⏳ App Store |
+
+✅ funciona en el móvil de pruebas · 🧪 hecho, falta comprobarlo · ⏳ pendiente<br>
+<sub>¹ Falta probar un `cbr` en el iPhone. ² El botón 🔇 ya funciona; faltan los botones de volumen. ³ Salir de la app y volver ya está comprobado; faltan las llamadas, la música y los auriculares.</sub>
+
+### Más detalle
+
+- **Dónde está:** en [`mobile/`](mobile/README.md), dentro de este repositorio. Usa los mismos crates de Rust que el escritorio y una interfaz táctil propia (Tauri 2 + Svelte 5).
 - **Android:** [mobile/README_Android.md](mobile/README_Android.md) explica qué hace, cómo está hecho, cómo prepararlo y probarlo, y lleva un registro de cada fase.
-- **iOS:** [mobile/README_iOS.md](mobile/README_iOS.md), con lo propio de iOS y cómo compilar en un Mac e instalar en el iPhone.
-- **Estado:** fase 3 en Android; fase 4 (iOS) en marcha, ya funcionando en el iPhone.
+- **iPhone:** [mobile/README_iOS.md](mobile/README_iOS.md), con lo propio de iOS y cómo compilar en un Mac e instalar en el iPhone.
+- **Estado:** fases 0 a 3 hechas en Android; fase 4 (iPhone) en marcha, ya funcionando en el iPhone de pruebas.
   - Abre fotos del carrete y cómics `cbz`, `cbr` y `cb7` con gestos táctiles (pasar página, pellizcar, modos página, ancho, tira y manga), recuerda por dónde ibas y acepta «Abrir con» y «Compartir».
   - Reproduce las historias `.imgxstory` con su cámara, sus transiciones, sus efectos y sus textos: encuadre «como se pensó» o a pantalla completa y calidad automática, alta o ahorro.
   - Con su sonido (voces, efectos y ambientes), que se pausa con las llamadas, con otra app que suena o al quitar los auriculares.
   - En vertical, la historia ocupa la pantalla y se acerca a cada viñeta; en horizontal, como se pensó.
-  - En iOS se instala desde un Mac con un Apple ID gratuito: abre fotos del carrete (sin pedir permiso), cómics e historias desde la app Archivos y reproduce las historias. Falta probar con detalle el sonido, las pausas y «Abrir con».
+  - ✨ Pase de fotos en los álbumes: transición (fundido, fundido a negro, deslizar, acercar, viaje de cámara, corte o variada), tiempo por foto de 1 a 30 s, velocidad de la transición, foto fija o con acercamiento suave, y repetir. Respeta «Reducir movimiento» y funciona con VoiceOver y TalkBack.
+  - En iOS se instala desde un Mac con un Apple ID gratuito: abre fotos del carrete (sin pedir permiso), cómics e historias desde la app Archivos y reproduce las historias con su sonido, que vuelve al salir de la app y regresar. Falta probar el modo silencio, las demás pausas y «Abrir con».
 
 ## Instalar
 

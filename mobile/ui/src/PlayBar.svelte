@@ -1,12 +1,12 @@
 <script lang="ts">
   // Controles de la reproducción en el móvil: anterior, pausa, siguiente, el avance de la imagen
-  // actual, la velocidad y parar. Debajo, el silencio, el encuadre (si la historia lo trae) y la
-  // calidad.
+  // actual, la velocidad y parar. Debajo, el silencio, el pase de fotos (en un álbum), el encuadre
+  // (si la historia lo trae) y la calidad.
   import { SPEEDS, type Player, type PlayerInfo } from "$imgx/action/player";
   import { t } from "./lib/i18n";
   import type { Quality, StoryFit } from "./lib/reading";
 
-  let { info, count, player, fit, quality, muted, onstop, onfit, onquality, onreplay, onmute }: {
+  let { info, count, player, fit, quality, muted, onstop, onfit, onquality, onreplay, onmute, show = null, onshow }: {
     info: PlayerInfo;
     count: number;
     player: () => Player | null;
@@ -19,6 +19,9 @@
     onquality: () => void;
     onreplay: () => void;
     onmute: () => void;
+    /** Resumen del pase de fotos («Fundido · 4 s») en un álbum; `null` en historias y cómics. */
+    show?: string | null;
+    onshow?: () => void;
   } = $props();
 
   const progress = $derived(info.duration > 0 ? Math.min(1, info.t / info.duration) : 0);
@@ -54,6 +57,9 @@
     {#if chip}<span class="chip">{chip}</span>{/if}
     {#if info.state === "ended" && info.index >= count - 1}<span class="chip end">{t("ended")}</span>{/if}
     <button class="pill" class:off={muted} onclick={onmute} aria-label={muted ? t("unmute") : t("mute")}>{muted ? "🔇" : "🔊"}</button>
+    {#if show}
+      <button class="pill" onclick={onshow} title={t("showHint")} aria-haspopup="dialog">✨ {show}</button>
+    {/if}
     {#if fit}
       <button class="pill" onclick={onfit} title={t("fitHint")}>{fitLabel[fit]()}</button>
     {/if}

@@ -14,7 +14,8 @@ import type { Effect } from "../audio/effects";
 import { newTrackId, resolveTrack, withDefaults, type SoundBus, type Track } from "../audio/tracks";
 import { errorText } from "../errors";
 
-export type TransitionType = "cut" | "fade" | "slide" | "continuous-camera";
+// `dip` y `zoom` los usa el pase de fotos del móvil (el Modo Acción del escritorio aún no los ofrece).
+export type TransitionType = "cut" | "fade" | "slide" | "continuous-camera" | "dip" | "zoom";
 export type Dir = "left" | "right" | "up" | "down";
 
 export interface Transition {

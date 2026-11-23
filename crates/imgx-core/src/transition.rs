@@ -58,6 +58,16 @@ pub fn frame(tr: &Transition, fallback: Direction, u: f64, a: &View, b: &View, v
     match tr.kind {
         TransitionKind::Cut => Frame { a: layer(ma, 0.0), b: layer(mb, 1.0), mix: false },
         TransitionKind::Fade => Frame { a: layer(ma, 1.0), b: layer(mb, e), mix: true },
+        TransitionKind::Dip => {
+            // Primera mitad: A se apaga; segunda: B se enciende (sobre el fondo negro).
+            let (fa, fb) = if u < 0.5 { (1.0 - Easing::EaseInOut.apply(u * 2.0), 0.0) } else { (0.0, Easing::EaseInOut.apply(u * 2.0 - 1.0)) };
+            Frame { a: layer(ma, fa), b: layer(mb, fb), mix: false }
+        }
+        TransitionKind::Zoom => {
+            let a_scale = 1.0 + ZOOM_OUT * e;
+            let b_scale = ZOOM_IN + (1.0 - ZOOM_IN) * e;
+            Frame { a: layer(scaled(ma, a_scale, vp), 1.0), b: layer(scaled(mb, b_scale, vp), e), mix: true }
+        }
         TransitionKind::Slide { dir } => {
             let (dx, dy) = offset(dir, vp);
             Frame {
@@ -68,6 +78,16 @@ pub fn frame(tr: &Transition, fallback: Direction, u: f64, a: &View, b: &View, v
         }
         TransitionKind::ContinuousCamera { dir } => continuous(dir.unwrap_or(fallback), e, a, b, vp),
     }
+}
+
+/// Acercar: cuánto crece la saliente y de qué tamaño llega la entrante.
+const ZOOM_OUT: f64 = 0.3;
+const ZOOM_IN: f64 = 0.8;
+
+/// `m` escalada `s` veces desde el centro de la pantalla.
+fn scaled(m: Affine, s: f64, vp: (f64, f64)) -> Affine {
+    let (cx, cy) = (vp.0 / 2.0, vp.1 / 2.0);
+    compose([s, 0.0, 0.0, s, cx * (1.0 - s), cy * (1.0 - s)], m)
 }
 
 /// Desplazamiento de pantalla completa hacia el lado por el que llega la siguiente imagen.
@@ -134,6 +154,40 @@ mod tests {
             View { img: (2000.0, 3000.0), pose: Camera { cx: 0.2, cy: 0.8, zoom: 2.5, rot: 0.0 } },
             View { img: (1000.0, 1600.0), pose: Camera { cx: 0.7, cy: 0.1, zoom: 3.0, rot: 0.0 } },
         )
+    }
+
+    #[test]
+    fn fundido_a_negro_pasa_por_negro() {
+        let (a, b) = views();
+        let tr = Transition { kind: TransitionKind::Dip, duration: 1.0 };
+        let at = |u| frame(&tr, Direction::Right, u, &a, &b, VP);
+        assert_eq!((at(0.0).a.alpha, at(0.0).b.alpha), (1.0, 0.0));
+        assert!(at(0.5).a.alpha < 1e-9 && at(0.5).b.alpha < 1e-9);
+        assert_eq!((at(1.0).a.alpha, at(1.0).b.alpha), (0.0, 1.0));
+        assert!(!at(0.3).mix);
+    }
+
+    #[test]
+    fn acercar_acaba_en_la_pose_de_la_siguiente() {
+        let (a, b) = views();
+        let tr = Transition { kind: TransitionKind::Zoom, duration: 1.0 };
+        let start = frame(&tr, Direction::Right, 0.0, &a, &b, VP);
+        let end = frame(&tr, Direction::Right, 1.0, &a, &b, VP);
+        assert!(close(start.a.m, a.pose.to_viewport(a.img, VP)));
+        assert!(close(end.b.m, b.pose.to_viewport(b.img, VP)));
+        assert_eq!((start.b.alpha, end.b.alpha), (0.0, 1.0));
+        assert!(start.mix);
+        // A mitad, la saliente ya es más grande que al empezar.
+        let mid = frame(&tr, Direction::Right, 0.5, &a, &b, VP);
+        assert!(mid.a.m[0] > start.a.m[0]);
+    }
+
+    #[test]
+    fn las_transiciones_nuevas_se_leen_del_proyecto() {
+        let dip: Transition = serde_json::from_str(r#"{"type":"dip","duration":0.8}"#).unwrap();
+        let zoom: Transition = serde_json::from_str(r#"{"type":"zoom","duration":0.6}"#).unwrap();
+        assert_eq!(dip.kind, TransitionKind::Dip);
+        assert_eq!(zoom.kind, TransitionKind::Zoom);
     }
 
     #[test]

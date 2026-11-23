@@ -2,7 +2,7 @@
 
 Todo lo del visor de iOS: qué hace, cómo está hecho, cómo prepararlo y probarlo, y lo que se ha ido creando. Este documento se actualiza con cada cambio. Lo que es igual que en Android (la interfaz, el lector, las historias, el sonido) está explicado en [README_Android.md](README_Android.md); aquí va lo propio de iOS.
 
-> **Estado:** fase 4 en marcha. La app se instala y funciona en el iPhone: fotos del carrete, cómics y historias desde la app Archivos, y la reproducción de las historias. Faltan por probar el sonido con detalle, las pausas automáticas y «Abrir con».
+> **Estado:** fase 4 en marcha. La app se instala y funciona en el iPhone: fotos del carrete, cómics y historias desde la app Archivos, y la reproducción de las historias. El sonido también funciona, incluso al salir de la app y volver. Faltan por probar el modo silencio, las demás pausas automáticas (llamadas, música, auriculares) y «Abrir con».
 
 ## Qué es
 
@@ -149,6 +149,8 @@ Lo mismo, con la interfaz cargada desde el Mac (los cambios se ven al momento). 
 
 **Modo silencio:** con el interruptor (o el botón de acción) en silencio, las historias no suenan, como los juegos y la mayoría de apps que no son de música o vídeo. Si se prefiere que suenen siempre, como un reproductor de vídeo, basta cambiar `soloAmbient` por `playback` en `ImgxPlugin.swift`.
 
+**✨ Pase de fotos:** igual que en Android (ver la tabla de [README_Android.md](README_Android.md)). «Reducir movimiento» está en Ajustes → Accesibilidad → Movimiento, y la app lo respeta (`prefers-reduced-motion` del WKWebView).
+
 ## Formatos y límites
 
 Los mismos que en Android ([README_Android.md](README_Android.md#formatos-y-límites)): sin libheif (el HEIC del carrete lo convierte iOS), RAR/CBR con UnRAR, y todo lo abierto se copia a la app hasta que se quita de la estantería. Versión mínima: **iOS 15**, por WebGL2 en WKWebView.
@@ -163,6 +165,7 @@ Los mismos que en Android ([README_Android.md](README_Android.md#formatos-y-lím
 - **Proyecto de Xcode** (`gen/apple`) creado con `tauri ios init` en el Mac (Xcode 27.2, SDK de iOS 27.2) y guardado en git sin el equipo de firma.
 - **Primera instalación en el iPhone**: fotos, archivos y lectura funcionan a la primera.
 - **Arreglo: ▶ se paraba al instante.** La sesión de audio pedía la categoría `soloAmbient` con el modo `moviePlayback`, que iOS solo admite con `playback`; el error se tomaba como «hay una llamada» y la historia se pausaba nada más empezar (en el registro: «sonido interrumpido (call)»). Ahora se pide la categoría sin modo y solo se pausa si el error es que otra cosa tiene el sonido (`insufficientPriority`, `cannotInterruptOthers`). Con eso, la reproducción funciona en el iPhone.
+- **Arreglo: sin sonido al volver.** Al pausar, salir de la app o cerrar la historia se suelta la sesión de audio, e iOS para entonces la salida de sonido de la app; cpal no la vuelve a poner en marcha, así que todo seguía en silencio hasta cerrar la app. Ahora, cada vez que una historia empieza a sonar, `audio_focus` cierra la salida y abre otra (`Audio::reopen` en `imgx-host`), y le vuelve a mandar lo que estaba sonando: pistas, niveles, silencio 🔇, escena, ambientes y el reloj. Lo recuerda `Memo`, con su prueba `al_reabrir_se_rehace_lo_que_sonaba`. Solo en iOS: ni Android ni el escritorio cambian.
 
 ## Lista de comprobación en el iPhone
 
@@ -174,7 +177,12 @@ Los mismos que en Android ([README_Android.md](README_Android.md#formatos-y-lím
 - [ ] Lector: gestos, modos de lectura, manga, progreso y quitar de la estantería.
 - [x] Historia y álbumes: ▶ reproduce (cámara, paso de imagen a imagen).
 - [ ] Historia: efectos, textos, encuadre al girar y calidad.
-- [ ] Sonido: voces, efectos y ambientes; 🔊/🔇; botones de volumen.
+- [x] Sonido: voces, efectos y ambientes; 🔊/🔇.
+- [ ] Botones de volumen del iPhone.
 - [ ] Modo silencio: la historia no suena; al quitarlo, sí.
-- [ ] Pausas: salir de la app, una llamada, poner música en otra app, desconectar los auriculares.
+- [x] Salir de la app y volver: la historia se pausa y, al darle a ▶, vuelve a sonar.
+- [ ] Pausas: una llamada o un aviso, poner música en otra app, desconectar los auriculares.
 - [ ] Pantalla de comprobación (ⓘ): WebGL2 y tamaño de textura.
+- [x] ✨ Pase de fotos en un álbum: transiciones y tiempo por foto.
+- [ ] Pase de fotos: movimiento, repetir y cambios mientras suena.
+- [ ] Con «Reducir movimiento» activado, lo predeterminado no se mueve y sale el aviso; VoiceOver lee las opciones y el tiempo.
