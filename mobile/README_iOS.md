@@ -36,8 +36,11 @@ mobile/
     └── gen/apple/           proyecto de Xcode (lo crea «ios init»; se guarda en git)
         ├── project.yml      descripción del proyecto (XcodeGen)
         ├── imgxplorer-mobile.xcodeproj
-        └── imgxplorer-mobile_iOS/Info.plist   el Info.plist final, ya mezclado
+        ├── imgxplorer-mobile_iOS/Info.plist   el Info.plist final, ya mezclado
+        └── Assets.xcassets/AppIcon.appiconset   iconos de la app (los genera scripts/ios-icons.sh)
 ```
+
+**Icono:** es el oficial de imgxplorer. `src-tauri/icons/svg/icono-ios.svg` es el mismo dibujo que `icono.svg`, pero cuadrado y a sangre, porque iOS pone él las esquinas redondeadas. `mobile/scripts/ios-icons.sh` saca de ahí todos los tamaños del catálogo de iconos, sin transparencia (la App Store no los admite). Hace falta `rsvg-convert` (librsvg) e ImageMagick. Se ejecuta en Linux y después se copia al Mac con el resto.
 
 ## Preparar el Mac
 
@@ -166,6 +169,7 @@ Los mismos que en Android ([README_Android.md](README_Android.md#formatos-y-lím
 - **Primera instalación en el iPhone**: fotos, archivos y lectura funcionan a la primera.
 - **Arreglo: ▶ se paraba al instante.** La sesión de audio pedía la categoría `soloAmbient` con el modo `moviePlayback`, que iOS solo admite con `playback`; el error se tomaba como «hay una llamada» y la historia se pausaba nada más empezar (en el registro: «sonido interrumpido (call)»). Ahora se pide la categoría sin modo y solo se pausa si el error es que otra cosa tiene el sonido (`insufficientPriority`, `cannotInterruptOthers`). Con eso, la reproducción funciona en el iPhone.
 - **Arreglo: sin sonido al volver.** Al pausar, salir de la app o cerrar la historia se suelta la sesión de audio, e iOS para entonces la salida de sonido de la app; cpal no la vuelve a poner en marcha, así que todo seguía en silencio hasta cerrar la app. Ahora, cada vez que una historia empieza a sonar, `audio_focus` cierra la salida y abre otra (`Audio::reopen` en `imgx-host`), y le vuelve a mandar lo que estaba sonando: pistas, niveles, silencio 🔇, escena, ambientes y el reloj. Lo recuerda `Memo`, con su prueba `al_reabrir_se_rehace_lo_que_sonaba`. Solo en iOS: ni Android ni el escritorio cambian.
+- **Icono oficial.** `tauri ios init` había dejado el icono genérico de Tauri. Ahora es el de imgxplorer, generado con `mobile/scripts/ios-icons.sh` desde `src-tauri/icons/svg/icono-ios.svg`.
 
 ## Lista de comprobación en el iPhone
 
